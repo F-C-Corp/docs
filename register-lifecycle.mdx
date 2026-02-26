@@ -11,22 +11,18 @@ Registers have their own lifecycle, separate from the operations they process. U
 
 ## Fiscal state machine
 
-```
-                    activate         deactivate
-  ┌─────────┐  ────────────►┌────────┐  ──────────────►┌──────────┐
-  │ pending  │               │ active │                 │ inactive │
-  └─────────┘               └───┬────┘                 └──────────┘
-                                │
-                                │ fiscal device failure
-                                │
-                                ▼
-                           ┌─────────┐   activate
-                           │  error  ├──────────────►┌────────┐
-                           └─────────┘               │ active │
-                                                     └────────┘
+```mermaid
+stateDiagram-v2
+    [*] --> pending
+    pending --> active : activate
+    active --> inactive : deactivate
+    active --> error : fiscal device failure
+    error --> active : activate
 
-  Terminal state: inactive (decommissioned — cannot be undone)
+    inactive --> [*]
 ```
+
+> **Terminal state:** `inactive` (decommissioned — cannot be undone)
 
 - **pending**: The register has been created but not yet fiscally registered. It cannot accept operations.
 - **active**: The fiscal device is initialized and the register is ready to process operations. This is the only state that accepts sales, refunds, closings, and other fiscal events.

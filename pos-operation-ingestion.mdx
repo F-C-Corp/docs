@@ -35,27 +35,17 @@ A POS operation is anything that happens at a register that has fiscal relevance
 
 Every operation moves through these states:
 
+```mermaid
+stateDiagram-v2
+    [*] --> open : start ■
+    open --> open : mutate
+    open --> completed : complete ■
+    open --> abandoned : abandon
+    open --> failed : fault
+    completed --> voided : void ■
 ```
-                          mutate
-                       ┌──────────┐
-                       │          │
-                       ▼          │
-        start    ┌──────────┐  complete    ┌───────────┐  void     ┌────────┐
-    ───────────►│   open   ├────────────►│ completed  ├────────►│ voided │
-       ■        └──┬──┬───┘      ■       └───────────┘    ■     └────────┘
-                   │  │
-                   │  └──────────── fault ───────────────────────►┌────────┐
-                   │                                              │ failed │
-                   │ abandon                                      └────────┘
-                   │
-                   ▼
-             ┌───────────┐
-             │ abandoned  │
-             └───────────┘
 
-  ■ = fiscal event (signed by the fiscal security device)
-  Terminal states: completed, abandoned, failed, voided
-```
+> **■** = fiscal event (signed by the fiscal security device). Terminal states: `completed`, `abandoned`, `failed`, `voided`.
 
 - **start → open**: The fiscal device signs the start event. The POS receives a signature and transaction counter. This is irreversible — once started, the operation must be completed or explicitly abandoned.
 - **open → open** *(mutate)*: Line items, discounts, and customer data can be added or changed freely. Mutations are not fiscal events — no signatures are produced.
