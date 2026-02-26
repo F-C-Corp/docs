@@ -64,7 +64,6 @@ info:
         [*] --> open : POST /registers/:id/sales\nPOST /registers/:id/refunds\n🔏 fiscal start signed
         open --> completed : POST .../complete\n🔏 fiscal end signed
         open --> abandoned : POST .../abandon\n(no fiscal document)
-        open --> failed : fiscalization fails\n(no fiscal document)
         completed --> voided : POST /registers/:id/voids\n🔏 fiscal reversal signed\n(before closing)
 
         note right of open : PATCH mutations are free here\n(items, discounts, customer)
@@ -189,7 +188,7 @@ tags:
     description: |
       Standard sale operations. The most common operation type.
 
-      **Lifecycle:** `open` → `completed` (or `abandoned` / `failed`)
+      **Lifecycle:** `open` → `completed` (or `abandoned`)
 
       Both the start and end are fiscal events. In Germany, both are TSE-signed.
   - name: Refunds
@@ -3152,7 +3151,6 @@ components:
         - open
         - completed
         - abandoned
-        - failed
         - voided
       description: |
         The current lifecycle state of the operation. Transitions are
@@ -3165,7 +3163,6 @@ components:
             [*] --> open : POST /registers/:id/sales\n🔏 fiscal start signed
             open --> completed : POST .../complete\n🔏 fiscal end signed
             open --> abandoned : POST .../abandon
-            open --> failed : fiscalization fault
             completed --> voided : POST /voids\n🔏 fiscal reversal\n(before closing)
 
             note right of open : PATCH mutations free here
@@ -3173,12 +3170,15 @@ components:
 
         ### Terminal states
 
-        | State | Fiscal document | Retryable |
-        |-------|----------------|-----------|
-        | `completed` | ✅ Yes | — |
-        | `abandoned` | ❌ No | N/A |
-        | `voided` | ✅ (reversal) | — |
-        | `failed` | ❌ No | Start new operation |
+        | State | Fiscal document |
+        |-------|----------------|
+        | `completed` | ✅ Yes |
+        | `abandoned` | ❌ No |
+        | `voided` | ✅ (reversal) |
+
+        If a fiscalization fault occurs (e.g. the fiscal device is
+        unreachable), the API returns an error — the operation stays
+        in its current state and the POS can retry.
 
         ### Valid transitions
 
@@ -3186,7 +3186,6 @@ components:
         |------|-------|----|
         | `open` | `POST .../complete` | `completed` |
         | `open` | `POST .../abandon` | `abandoned` |
-        | `open` | fiscalization fault | `failed` |
         | `completed` | `POST /voids` (before closing) | `voided` |
 
     # ── Operation envelope ─────────────────────────

@@ -36,45 +36,37 @@ A POS operation is anything that happens at a register that has fiscal relevance
 Every operation moves through these states:
 
 ```
-           start ■
-             │
-           [open] ─── mutate (not fiscal)
-           / │ \
-  complete ■ │  abandon    fault
-         │   │      │        │
-  [completed] [abandoned] [failed]
-         │
-     void ■
-         │
-     [voided]
+start ■ ──► [open] ──► complete ■ ──► [completed] ──► void ■ ──► [voided]
+              │
+              └──► abandon ──► [abandoned]
 ```
 
-> **■** = fiscal event (signed by the fiscal security device). While `open`, the operation can be **mutated** freely (add items, discounts, customer data) — mutations are not fiscal events. Terminal states: `completed`, `abandoned`, `failed`, `voided`.
+> **■** = fiscal event (signed by the fiscal security device). While `open`, the operation can be **mutated** freely (add items, discounts, customer data) — mutations are not fiscal events. Terminal states: `completed`, `abandoned`, `voided`.
 
 - **start → open**: The fiscal device signs the start event. The POS receives a signature and transaction counter. This is irreversible — once started, the operation must be completed or explicitly abandoned.
 - **open → open** *(mutate)*: Line items, discounts, and customer data can be added or changed freely. Mutations are not fiscal events — no signatures are produced.
 - **open → completed**: The POS submits final payment data and the fiscal device signs the end event. A fiscal document is generated and returned.
-- **open → failed**: A fiscalization fault occurs (e.g. the fiscal device is unreachable during signing).
 - **open → abandoned**: The POS explicitly cancels the operation. No end signature is produced. Abandoned operations still appear in the audit trail because the start was already signed.
 - **completed → voided**: A reversal before the daily closing. A void is a separate fiscal operation that references the original and produces its own fiscal reversal document. After the closing, use a refund instead.
 
-```mermaid
-sequenceDiagram
-    participant POS
-    participant OpenFiskal
-    participant Fiscal Device
+<Info>
+  If a fiscalization fault occurs (e.g. the fiscal device is unreachable), the API returns an error — the operation stays in its current state and the POS can retry. There is no `failed` state.
+</Info>
 
-    POS->>OpenFiskal: POST /registers/:id/sales
-    OpenFiskal->>Fiscal Device: Sign start event
-    Fiscal Device-->>OpenFiskal: start signature + counter
-    OpenFiskal-->>POS: operation created (state: open)
-
-    Note over POS,OpenFiskal: PATCH /sales/:id — add items, discounts, customer
-
-    POS->>OpenFiskal: POST /sales/:id/complete (with payments)
-    OpenFiskal->>Fiscal Device: Sign end event
-    Fiscal Device-->>OpenFiskal: end signature + counter
-    OpenFiskal-->>POS: operation completed + fiscal document
+```
+POS                    OpenFiskal              Fiscal Device
+ │                         │                        │
+ ├── POST /sales ─────────►│                        │
+ │                         ├── sign start ─────────►│
+ │                         │◄── signature + counter ┤
+ │◄── operation (open) ────┤                        │
+ │                         │                        │
+ │  PATCH /sales/:id ─────►│  (add items, discounts)│
+ │                         │                        │
+ ├── POST /sales/:id/complete ►│                    │
+ │                         ├── sign end ───────────►│
+ │                         │◄── signature + counter ┤
+ │◄── completed + fiscal ──┤                        │
 ```
 
 ## Operation types

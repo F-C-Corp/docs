@@ -180,7 +180,7 @@ curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/activate \
 Activation is idempotent. If the underlying device issue has been resolved, the register returns to `active`. If the device is still unreachable, the call will fail and the register remains in `error`.
 
 <Warning>
-  Operations that were in-flight when the device failed may be in `failed` state. Check `GET /registers/:id/status` for open operations and start new ones as needed. Failed operations cannot be retried — start fresh.
+  Operations that were in-flight when the device failed remain in `open` state. Check `GET /registers/:id/status` for open operations and either complete or abandon them once the device recovers.
 </Warning>
 
 ## Decommissioning a register
