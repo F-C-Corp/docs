@@ -84,6 +84,7 @@
       {
         "tab": "Fiscalization API",
         "pages": [
+          "getting-started",
           "auth",
           "pos-operation-ingestion",
           {

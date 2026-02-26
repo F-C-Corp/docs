@@ -340,6 +340,45 @@ paths:
   # AUTH
   # ─────────────────────────────────────────────
 
+  /auth/bootstrap:
+    post:
+      tags: [Authentication]
+      operationId: bootstrapPlatform
+      summary: Exchange a setup token for platform credentials
+      description: |
+        One-time credential exchange. After signing a partnership agreement,
+        OpenFiskal emails a setup token (`ofk_setup_...`) to the POS vendor's
+        technical contact. POST it here to receive your first `client_id` and
+        `client_secret`.
+
+        This endpoint is unauthenticated — the setup token is the sole proof
+        of identity. It can only be used once. After successful exchange, use
+        `POST /auth/token` with the returned credentials to obtain a Bearer
+        token.
+
+        If the token has already been consumed or has expired, the endpoint
+        returns `401`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BootstrapRequest'
+      responses:
+        '200':
+          description: Platform credentials issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BootstrapResponse'
+        '401':
+          description: Setup token is invalid, expired, or already consumed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /auth/token:
     post:
       tags: [Authentication]
@@ -3142,7 +3181,6 @@ components:
       type: string
       enum:
         - open
-        - pending_payment
         - completed
         - abandoned
         - failed
@@ -3157,11 +3195,8 @@ components:
             direction TB
             [*] --> open : POST /registers/:id/sales\n🔏 fiscal start signed
             open --> completed : POST .../complete\n🔏 fiscal end signed
-            open --> pending_payment : POST .../complete\n(async payment)
             open --> abandoned : POST .../abandon
             open --> failed : fiscalization fault
-            pending_payment --> completed : payment confirmed
-            pending_payment --> failed : payment declined/timeout
             completed --> voided : POST /voids\n🔏 fiscal reversal\n(same-day, before closing)
 
             note right of open : PATCH mutations free here
@@ -3180,12 +3215,9 @@ components:
 
         | From | Event | To |
         |------|-------|----|
-        | `open` | `POST .../complete` (sync payment) | `completed` |
-        | `open` | `POST .../complete` (async payment) | `pending_payment` |
+        | `open` | `POST .../complete` | `completed` |
         | `open` | `POST .../abandon` | `abandoned` |
         | `open` | fiscalization fault | `failed` |
-        | `pending_payment` | payment confirmed | `completed` |
-        | `pending_payment` | payment failed/timeout | `failed` |
         | `completed` | `POST /voids` (same-day) | `voided` |
 
     # ── Operation envelope ─────────────────────────
@@ -4994,6 +5026,42 @@ components:
         expires_in:
           type: integer
           example: 3600
+
+    BootstrapRequest:
+      type: object
+      required: [setup_token]
+      properties:
+        setup_token:
+          type: string
+          description: |
+            One-time setup token received via email from OpenFiskal after
+            partnership agreement. Prefixed with `ofk_setup_`.
+          example: ofk_setup_abc123def456
+        label:
+          type: string
+          description: Human-readable label for the credential being created
+          example: Production
+
+    BootstrapResponse:
+      type: object
+      properties:
+        object:
+          type: string
+          const: platform_credential
+        client_id:
+          type: string
+          example: pf_client_01HXYZ
+        client_secret:
+          type: string
+          description: |
+            Returned once only. Store immediately in a secrets manager —
+            it cannot be retrieved again.
+          example: pf_secret_live_...
+        label:
+          type: string
+        created_at:
+          type: string
+          format: date-time
 
     # ── Organizations ─────────────────────────────
 

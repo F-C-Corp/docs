@@ -42,18 +42,11 @@ Every operation moves through these states:
                        ▼          │
         start    ┌──────────┐  complete    ┌───────────┐  void     ┌────────┐
     ───────────►│   open   ├────────────►│ completed  ├────────►│ voided │
-       ■        └──┬──┬──┬─┘     ■       └───────────┘    ■     └────────┘
-                   │  │  │                     ▲
-                   │  │  │ complete             │
-                   │  │  │ (async)              │ confirmed
-                   │  │  │                     │
-                   │  │  │  ┌─────────────────┬┘
-                   │  │  └─►│ pending_payment ├──── declined ───►┌────────┐
-                   │  │     └─────────────────┘    / timeout     │ failed │
-                   │  │                                          └────────┘
-                   │  └──────────── fault ─────────────────────────►▲
-                   │
-                   │ abandon
+       ■        └──┬──┬───┘      ■       └───────────┘    ■     └────────┘
+                   │  │
+                   │  └──────────── fault ───────────────────────►┌────────┐
+                   │                                              │ failed │
+                   │ abandon                                      └────────┘
                    │
                    ▼
              ┌───────────┐
@@ -67,9 +60,6 @@ Every operation moves through these states:
 - **start → open**: The fiscal device signs the start event. The POS receives a signature and transaction counter. This is irreversible — once started, the operation must be completed or explicitly abandoned.
 - **open → open** *(mutate)*: Line items, discounts, and customer data can be added or changed freely. Mutations are not fiscal events — no signatures are produced.
 - **open → completed**: The POS submits final payment data and the fiscal device signs the end event. A fiscal document is generated and returned.
-- **open → pending_payment**: The POS submits a completion request with an async payment method (e.g. card terminal). The operation waits for payment confirmation.
-- **pending_payment → completed**: The payment provider confirms settlement. The fiscal end event is signed and the fiscal document is returned.
-- **pending_payment → failed**: The payment is declined or times out. No fiscal end event is produced.
 - **open → failed**: A fiscalization fault occurs (e.g. the fiscal device is unreachable during signing).
 - **open → abandoned**: The POS explicitly cancels the operation. No end signature is produced. Abandoned operations still appear in the audit trail because the start was already signed.
 - **completed → voided**: A same-day reversal before the daily closing. A void is a separate fiscal operation that references the original and produces its own fiscal document.

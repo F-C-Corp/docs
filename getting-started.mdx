@@ -1,0 +1,509 @@
+---
+title: 'Getting Started'
+description: 'From setup token to first fiscalized sale in under an hour'
+---
+
+This guide walks you through a complete integration — from receiving your setup token to completing a fiscalized sale and printing a receipt. The examples use a German merchant (TSE jurisdiction) with sandbox URLs.
+
+<Info>
+  All examples use `https://sandbox.api.openfiskal.com/v1`. Replace with `https://api.openfiskal.com/v1` when you go live.
+</Info>
+
+## Prerequisites
+
+- A partnership agreement signed with OpenFiskal
+- The setup token (`ofk_setup_...`) received via email
+- `curl` or an HTTP client
+
+## Integration overview
+
+```mermaid
+sequenceDiagram
+    participant Vendor
+    participant OpenFiskal
+
+    Vendor->>OpenFiskal: POST /auth/bootstrap (setup token)
+    OpenFiskal-->>Vendor: client_id + client_secret
+
+    Vendor->>OpenFiskal: POST /auth/token (client credentials)
+    OpenFiskal-->>Vendor: Bearer token
+
+    Vendor->>OpenFiskal: POST /organizations
+    Vendor->>OpenFiskal: POST /organizations/:id/locations
+    Vendor->>OpenFiskal: POST /locations/:id/registers
+    Vendor->>OpenFiskal: POST /registers/:id/activate
+
+    Note over Vendor,OpenFiskal: Merchant hierarchy ready
+
+    Vendor->>OpenFiskal: POST /registers/:id/sales
+    OpenFiskal-->>Vendor: Fiscal start signed ■
+    Vendor->>OpenFiskal: PATCH /sales/:id (line items)
+    Vendor->>OpenFiskal: POST /sales/:id/complete (payments)
+    OpenFiskal-->>Vendor: Fiscal document + receipt data ■
+```
+
+## Step-by-step
+
+<Steps>
+  <Step title="Bootstrap your credentials">
+    After signing a partnership agreement, OpenFiskal emails a one-time setup token to your technical contact. Exchange it for your first platform credential.
+
+    ```bash
+    curl -X POST https://sandbox.api.openfiskal.com/v1/auth/bootstrap \
+      -H "Content-Type: application/json" \
+      -d '{
+        "setup_token": "ofk_setup_abc123def456",
+        "label": "Production"
+      }'
+    ```
+
+    ```json
+    {
+      "object": "platform_credential",
+      "client_id": "pf_client_01HXYZ",
+      "client_secret": "pf_secret_live_abc123...",
+      "label": "Production",
+      "created_at": "2026-02-26T10:00:00Z"
+    }
+    ```
+
+    <Warning>
+      Store `client_secret` immediately in a secrets manager. It is returned **once** and cannot be retrieved again. The setup token is now consumed — it cannot be reused.
+    </Warning>
+  </Step>
+
+  <Step title="Obtain a Bearer token">
+    Exchange your client credentials for a short-lived Bearer token.
+
+    ```bash
+    curl -X POST https://sandbox.api.openfiskal.com/v1/auth/token \
+      -H "Content-Type: application/json" \
+      -d '{
+        "grant_type": "client_credentials",
+        "client_id": "pf_client_01HXYZ",
+        "client_secret": "pf_secret_live_abc123..."
+      }'
+    ```
+
+    ```json
+    {
+      "object": "token",
+      "access_token": "ofk_live_eyJhbGciOiJS...",
+      "token_type": "bearer",
+      "expires_in": 3600
+    }
+    ```
+
+    All subsequent requests use `Authorization: Bearer <access_token>`.
+
+    <Tip>
+      The token is valid for 1 hour. There is no refresh token — request a new one when the current one expires.
+    </Tip>
+  </Step>
+
+  <Step title="Create an organization">
+    An organization represents the merchant — the legal entity operating the POS.
+
+    ```bash
+    curl -X POST https://sandbox.api.openfiskal.com/v1/organizations \
+      -H "Authorization: Bearer ofk_live_eyJhbGciOiJS..." \
+      -H "Content-Type: application/json" \
+      -d '{
+        "legal_name": "Mustermann GmbH",
+        "country": "DE",
+        "tax_id": "DE123456789",
+        "address": {
+          "line1": "Friedrichstraße 42",
+          "city": "Berlin",
+          "postal_code": "10117",
+          "country": "DE"
+        }
+      }'
+    ```
+
+    ```json
+    {
+      "id": "org_01HXYZ",
+      "object": "organization",
+      "legal_name": "Mustermann GmbH",
+      "country": "DE",
+      "tax_id": "DE123456789",
+      "address": {
+        "line1": "Friedrichstraße 42",
+        "city": "Berlin",
+        "postal_code": "10117",
+        "country": "DE"
+      },
+      "created_at": "2026-02-26T10:01:00Z"
+    }
+    ```
+
+    Note the returned `id` — use it as the `OpenFiskal-Organization` header on all subsequent requests scoped to this merchant.
+  </Step>
+
+  <Step title="Create a location">
+    A location is a physical point of sale — a store, restaurant, or kiosk.
+
+    ```bash
+    curl -X POST https://sandbox.api.openfiskal.com/v1/organizations/org_01HXYZ/locations \
+      -H "Authorization: Bearer ofk_live_eyJhbGciOiJS..." \
+      -H "Content-Type: application/json" \
+      -d '{
+        "name": "Berlin Mitte",
+        "address": {
+          "line1": "Friedrichstraße 42",
+          "city": "Berlin",
+          "postal_code": "10117",
+          "country": "DE"
+        },
+        "timezone": "Europe/Berlin"
+      }'
+    ```
+
+    ```json
+    {
+      "id": "loc_01HXYZ",
+      "object": "location",
+      "name": "Berlin Mitte",
+      "organization_id": "org_01HXYZ",
+      "timezone": "Europe/Berlin",
+      "created_at": "2026-02-26T10:02:00Z"
+    }
+    ```
+  </Step>
+
+  <Step title="Create a register">
+    A register is the fiscal unit — in Germany, it maps to a TSE-bound device.
+
+    ```bash
+    curl -X POST https://sandbox.api.openfiskal.com/v1/locations/loc_01HXYZ/registers \
+      -H "Authorization: Bearer ofk_live_eyJhbGciOiJS..." \
+      -H "OpenFiskal-Organization: org_01HXYZ" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "label": "Kasse 1",
+        "jurisdiction": "DE"
+      }'
+    ```
+
+    ```json
+    {
+      "id": "reg_01HXYZ",
+      "object": "register",
+      "label": "Kasse 1",
+      "jurisdiction": "DE",
+      "fiscal_state": "pending",
+      "location_id": "loc_01HXYZ",
+      "created_at": "2026-02-26T10:03:00Z"
+    }
+    ```
+
+    The register starts in `pending` fiscal state. It must be activated before it can accept operations.
+  </Step>
+
+  <Step title="Activate the register">
+    Activation initializes the fiscal security device. For Germany, this sets up the TSE and establishes the signature chain. The call is idempotent — safe to retry.
+
+    ```bash
+    curl -X POST https://sandbox.api.openfiskal.com/v1/registers/reg_01HXYZ/activate \
+      -H "Authorization: Bearer ofk_live_eyJhbGciOiJS..." \
+      -H "OpenFiskal-Organization: org_01HXYZ"
+    ```
+
+    ```json
+    {
+      "object": "register_activation",
+      "register": {
+        "id": "reg_01HXYZ",
+        "object": "register",
+        "label": "Kasse 1",
+        "jurisdiction": "DE",
+        "fiscal_state": "active",
+        "fiscal_registration": { "tse_serial": "abc123def456", "client_id": "Kasse 1" }
+      },
+      "register_api_key": null,
+      "credential_issued": false
+    }
+    ```
+
+    <Info>
+      For server-side integrations, the platform Bearer token already authorizes all register operations. Only pass `issue_register_credential: true` for device-direct integrations (EV chargers, unattended kiosks).
+    </Info>
+  </Step>
+
+  <Step title="Start a sale">
+    Opening a sale is a **fiscal event**. The TSE signs the start immediately. Store the returned signature and transaction counter — they must appear on the final receipt.
+
+    ```bash
+    curl -X POST https://sandbox.api.openfiskal.com/v1/registers/reg_01HXYZ/sales \
+      -H "Authorization: Bearer ofk_live_eyJhbGciOiJS..." \
+      -H "OpenFiskal-Organization: org_01HXYZ" \
+      -H "Idempotency-Key: sale-table3-order42-start" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "external_id": "table-3-order-42",
+        "cashier": {
+          "id": "cashier_01",
+          "display_name": "Maria R."
+        }
+      }'
+    ```
+
+    ```json
+    {
+      "id": "op_01HXYZ",
+      "object": "operation",
+      "type": "sale",
+      "state": "open",
+      "register_id": "reg_01HXYZ",
+      "external_id": "table-3-order-42",
+      "started_at": "2026-02-26T12:00:00Z",
+      "fiscal": {
+        "regime": "tse",
+        "tse_serial": "abc123def456",
+        "start_event": {
+          "signed_at": "2026-02-26T12:00:00Z",
+          "transaction_counter": 1,
+          "signature": "base64encodedStartSignature=="
+        }
+      }
+    }
+    ```
+
+    <Warning>
+      The `fiscal.start_event` data is required on the printed receipt. Do not discard it.
+    </Warning>
+  </Step>
+
+  <Step title="Add line items">
+    While the sale is open, add items via PATCH. This is **not** a fiscal event — no signatures are produced. The `line_items` array replaces the current list entirely.
+
+    All monetary amounts are integers in the **minor currency unit** (cents for EUR). Tax rates are decimal strings (`"0.19"` for 19%).
+
+    ```bash
+    curl -X PATCH https://sandbox.api.openfiskal.com/v1/sales/op_01HXYZ \
+      -H "Authorization: Bearer ofk_live_eyJhbGciOiJS..." \
+      -H "OpenFiskal-Organization: org_01HXYZ" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "line_items": [
+          {
+            "description": "Wiener Schnitzel",
+            "quantity": 2,
+            "unit_price_gross": 1800,
+            "tax": { "rate": "0.19", "category": "standard" }
+          },
+          {
+            "description": "Apfelschorle",
+            "quantity": 2,
+            "unit_price_gross": 350,
+            "tax": { "rate": "0.19", "category": "standard" }
+          }
+        ]
+      }'
+    ```
+
+    The response includes the resolved line items with computed totals:
+
+    ```json
+    {
+      "id": "op_01HXYZ",
+      "state": "open",
+      "data": {
+        "line_items": [
+          {
+            "description": "Wiener Schnitzel",
+            "quantity": 2,
+            "unit_price_gross": 1800,
+            "total_gross": 3600,
+            "tax": { "rate": "0.19", "category": "standard", "amount": 575 }
+          },
+          {
+            "description": "Apfelschorle",
+            "quantity": 2,
+            "unit_price_gross": 350,
+            "total_gross": 700,
+            "tax": { "rate": "0.19", "category": "standard", "amount": 112 }
+          }
+        ],
+        "totals": {
+          "total_gross": 4300,
+          "total_net": 3613,
+          "total_tax": 687
+        }
+      }
+    }
+    ```
+
+    <Tip>
+      To add an item to an existing list, include all current items plus the new one. The array is a full replacement, not an append.
+    </Tip>
+  </Step>
+
+  <Step title="Complete with payment">
+    Completing the sale is a **fiscal event**. The TSE signs the end, and OpenFiskal generates the fiscal document. At least one payment is required.
+
+    <Tabs>
+      <Tab title="Card payment">
+        ```bash
+        curl -X POST https://sandbox.api.openfiskal.com/v1/sales/op_01HXYZ/complete \
+          -H "Authorization: Bearer ofk_live_eyJhbGciOiJS..." \
+          -H "OpenFiskal-Organization: org_01HXYZ" \
+          -H "Idempotency-Key: sale-table3-order42-complete" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "payments": [
+              {
+                "method": "card",
+                "direction": "inbound",
+                "amount": 4300,
+                "card": { "scheme": "visa", "last4": "4242" }
+              }
+            ]
+          }'
+        ```
+      </Tab>
+      <Tab title="Cash payment">
+        Cash tendered and change are modeled as two separate payment lines with opposite directions.
+
+        ```bash
+        curl -X POST https://sandbox.api.openfiskal.com/v1/sales/op_01HXYZ/complete \
+          -H "Authorization: Bearer ofk_live_eyJhbGciOiJS..." \
+          -H "OpenFiskal-Organization: org_01HXYZ" \
+          -H "Idempotency-Key: sale-table3-order42-complete" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "payments": [
+              {
+                "method": "cash",
+                "direction": "inbound",
+                "amount": 5000,
+                "cash": { "amount_tendered": 5000 }
+              },
+              {
+                "method": "cash",
+                "direction": "outbound",
+                "amount": 700
+              }
+            ]
+          }'
+        ```
+      </Tab>
+    </Tabs>
+
+    The response includes the completed operation with the full fiscal document:
+
+    ```json
+    {
+      "id": "op_01HXYZ",
+      "state": "completed",
+      "completed_at": "2026-02-26T12:14:55Z",
+      "fiscal": {
+        "regime": "tse",
+        "document_number": "2026-000001",
+        "document_type": "Kassenbeleg",
+        "tse_serial": "abc123def456",
+        "start_event": {
+          "signed_at": "2026-02-26T12:00:00Z",
+          "transaction_counter": 1,
+          "signature": "base64encodedStartSignature=="
+        },
+        "end_event": {
+          "signed_at": "2026-02-26T12:14:55Z",
+          "transaction_counter": 2,
+          "signature": "base64encodedEndSignature==",
+          "process_type": "Kassenbeleg-V1",
+          "process_data": "Beleg^43.00_0.00_0.00_0.00_0.00^43.00:Bar"
+        },
+        "verification": {
+          "qr_data": "V0;Kasse 1;ecdsa-plain-SHA384;2026-02-26T12:00:00;2026-02-26T12:14:55;43.00;2;base64encodedEndSignature=="
+        }
+      }
+    }
+    ```
+  </Step>
+
+  <Step title="Retrieve the receipt">
+    The receipt is available as JSON or PDF immediately after completion.
+
+    ```bash
+    # JSON receipt
+    curl https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ/receipt \
+      -H "Authorization: Bearer ofk_live_eyJhbGciOiJS..." \
+      -H "OpenFiskal-Organization: org_01HXYZ"
+    ```
+
+    ```bash
+    # PDF receipt
+    curl https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ/receipt.pdf \
+      -H "Authorization: Bearer ofk_live_eyJhbGciOiJS..." \
+      -H "OpenFiskal-Organization: org_01HXYZ" \
+      -o receipt.pdf
+    ```
+
+    The JSON receipt is self-contained — it includes issuer details, line items, totals, payments, and the full fiscal document with QR data:
+
+    ```json
+    {
+      "object": "receipt",
+      "issuer": {
+        "legal_name": "Mustermann GmbH",
+        "tax_id": "DE123456789",
+        "location_name": "Berlin Mitte",
+        "address": {
+          "line1": "Friedrichstraße 42",
+          "city": "Berlin",
+          "postal_code": "10117",
+          "country": "DE"
+        }
+      },
+      "operation": {
+        "id": "op_01HXYZ",
+        "type": "sale",
+        "external_id": "table-3-order-42",
+        "cashier": { "id": "cashier_01", "display_name": "Maria R." },
+        "started_at": "2026-02-26T12:00:00Z",
+        "completed_at": "2026-02-26T12:14:55Z"
+      },
+      "line_items": ["..."],
+      "totals": {
+        "total_gross": 4300,
+        "total_net": 3613,
+        "total_tax": 687
+      },
+      "payments": ["..."],
+      "fiscal": {
+        "regime": "tse",
+        "verification": {
+          "qr_data": "V0;Kasse 1;ecdsa-plain-SHA384;..."
+        }
+      },
+      "links": {
+        "self": "https://api.openfiskal.com/v1/operations/op_01HXYZ/receipt",
+        "pdf": "https://api.openfiskal.com/v1/operations/op_01HXYZ/receipt.pdf"
+      }
+    }
+    ```
+
+    <Info>
+      Print the `fiscal.verification.qr_data` value as a QR code on the receipt. In Germany, this is legally required.
+    </Info>
+  </Step>
+</Steps>
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="key" href="/auth">
+    Credential types, token flows, and organization scoping.
+  </Card>
+  <Card title="POS Operations" icon="cash-register" href="/pos-operation-ingestion">
+    The full operation lifecycle — start, mutate, complete, abandon.
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference/introduction">
+    Explore every endpoint, schema, and response.
+  </Card>
+  <Card title="Schemas" icon="database" href="/api-reference/schemas/sale-operation">
+    Detailed schema definitions for operations, line items, and payments.
+  </Card>
+</CardGroup>
