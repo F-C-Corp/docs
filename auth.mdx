@@ -110,10 +110,10 @@ Standard server-side integrations (where your backend proxies API calls) should 
 
 ### Issuing a register API key
 
-A register API key is issued when creating a fiscal binding by setting `issue_register_credential: true`:
+A register API key is issued when creating a fiscal unit by setting `issue_register_credential: true`:
 
 ```bash
-curl -X POST https://api.openfiskal.com/v1/registers/reg_01ABC/fiscal-bindings \
+curl -X POST https://api.openfiskal.com/v1/registers/reg_01ABC/fiscal-units \
   -H "Authorization: Bearer ofk_live_eyJhbGciOiJS..." \
   -H "OpenFiskal-Organization: org_01HXYZ" \
   -H "Content-Type: application/json" \
@@ -122,8 +122,8 @@ curl -X POST https://api.openfiskal.com/v1/registers/reg_01ABC/fiscal-bindings \
 
 ```json
 {
-  "object": "fiscal_binding_response",
-  "fiscal_binding": { "id": "fb_01HXYZ", "state": "active", "...": "..." },
+  "object": "fiscal_unit_response",
+  "fiscal_unit": { "id": "fu_01HXYZ", "state": "active", "...": "..." },
   "register": { "...": "..." },
   "register_api_key": "ofk_reg_live_..."
 }

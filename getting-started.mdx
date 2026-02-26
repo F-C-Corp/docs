@@ -162,29 +162,29 @@ This guide walks you through a complete integration — from receiving your setu
       "label": "Kasse 1",
       "jurisdiction": "DE",
       "state": "active",
-      "active_fiscal_binding": null,
+      "active_fiscal_unit": null,
       "location_id": "loc_01HXYZ",
       "created_at": "2026-02-26T10:03:00Z"
     }
     ```
 
-    The register is `active` but has no fiscal binding yet — it cannot process operations until one is provisioned.
+    The register is `active` but has no fiscal unit yet — it cannot process operations until one is provisioned.
   </Step>
-  <Step title="Create a fiscal binding">
-    A fiscal binding initializes the fiscal security device. For Germany, this sets up the TSE and establishes the signature chain.
+  <Step title="Create a fiscal unit">
+    A fiscal unit initializes the fiscal security device. For Germany, this sets up the TSE and establishes the signature chain.
 
     ```bash
-    curl -X POST https://sandbox.api.openfiskal.com/v1/registers/reg_01HXYZ/fiscal-bindings \
+    curl -X POST https://sandbox.api.openfiskal.com/v1/registers/reg_01HXYZ/fiscal-units \
       -H "Authorization: Bearer ofk_live_eyJhbGciOiJS..." \
       -H "OpenFiskal-Organization: org_01HXYZ"
     ```
 
     ```json
     {
-      "object": "fiscal_binding_response",
-      "fiscal_binding": {
-        "id": "fb_01HXYZ",
-        "object": "fiscal_binding",
+      "object": "fiscal_unit_response",
+      "fiscal_unit": {
+        "id": "fu_01HXYZ",
+        "object": "fiscal_unit",
         "register_id": "reg_01HXYZ",
         "state": "active",
         "jurisdiction": "DE",
@@ -202,14 +202,14 @@ This guide walks you through a complete integration — from receiving your setu
       "register": {
         "id": "reg_01HXYZ",
         "state": "active",
-        "active_fiscal_binding": { "id": "fb_01HXYZ", "state": "active" }
+        "active_fiscal_unit": { "id": "fu_01HXYZ", "state": "active" }
       },
       "register_api_key": null,
       "credential_issued": false
     }
     ```
 
-    The register now has an active fiscal binding and is ready to accept operations.
+    The register now has an active fiscal unit and is ready to accept operations.
 
     <Info>
       For server-side integrations, the platform Bearer token already authorizes all register operations. Only pass `issue_register_credential: true` for device-direct integrations (EV chargers, unattended kiosks).
@@ -244,7 +244,7 @@ This guide walks you through a complete integration — from receiving your setu
       "started_at": "2026-02-26T12:00:00Z",
       "fiscal": {
         "regime": "tse",
-        "fiscal_binding_id": "fb_01HXYZ",
+        "fiscal_unit_id": "fu_01HXYZ",
         "tse_serial": "abc123def456",
         "start_event": {
           "signed_at": "2026-02-26T12:00:00Z",
@@ -382,7 +382,7 @@ This guide walks you through a complete integration — from receiving your setu
       "completed_at": "2026-02-26T12:14:55Z",
       "fiscal": {
         "regime": "tse",
-        "fiscal_binding_id": "fb_01HXYZ",
+        "fiscal_unit_id": "fu_01HXYZ",
         "document_number": "2026-000001",
         "document_type": "Kassenbeleg",
         "tse_serial": "abc123def456",
@@ -456,7 +456,7 @@ This guide walks you through a complete integration — from receiving your setu
       "payments": ["..."],
       "fiscal": {
         "regime": "tse",
-        "fiscal_binding_id": "fb_01HXYZ",
+        "fiscal_unit_id": "fu_01HXYZ",
         "verification": {
           "qr_data": "V0;Kasse 1;ecdsa-plain-SHA384;..."
         }

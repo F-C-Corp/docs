@@ -1,13 +1,13 @@
 ---
 title: 'Register Lifecycle'
-description: 'How registers and fiscal bindings are commissioned, monitored, and decommissioned'
+description: 'How registers and fiscal units are commissioned, monitored, and decommissioned'
 ---
 
 ## Overview
 
-A **register** is a POS device in OpenFiskal — a terminal, kiosk, or logical endpoint that processes operations. A **fiscal binding** is the link between that register and a fiscal compliance capability (TSE in Germany, RKSV certificate in Austria, RT device in Italy).
+A **register** is a POS device in OpenFiskal — a terminal, kiosk, or logical endpoint that processes operations. A **fiscal unit** is the link between that register and a fiscal compliance capability (TSE in Germany, RKSV certificate in Austria, RT device in Italy).
 
-Creating a register is cheap — it's just metadata. Provisioning a fiscal binding is what initializes the expensive fiscal device. This separation lets you:
+Creating a register is cheap — it's just metadata. Provisioning a fiscal unit is what initializes the expensive fiscal device. This separation lets you:
 
 - Manage the fiscal device independently from the POS device
 - Replace a fiscal device without creating a new register
@@ -21,14 +21,14 @@ Registers have two states:
 [active] ──► [archived]
 ```
 
-- **active**: The register exists and can accept operations (when it has an active fiscal binding).
+- **active**: The register exists and can accept operations (when it has an active fiscal unit).
 - **archived**: Permanently retired. Cannot be undone.
 
-A register starts in `active` state with no fiscal binding (`active_fiscal_binding: null`). It becomes fiscally operational once a binding is provisioned.
+A register starts in `active` state with no fiscal unit (`active_fiscal_unit: null`). It becomes fiscally operational once a binding is provisioned.
 
-## Fiscal binding lifecycle
+## Fiscal unit lifecycle
 
-A fiscal binding tracks the provisioning, operation, and retirement of a single fiscal device instance:
+A fiscal unit tracks the provisioning, operation, and retirement of a single fiscal device instance:
 
 ```
 provisioning ──► active ──► decommissioned
@@ -40,7 +40,7 @@ provisioning ──► active ──► decommissioned
 
 - **provisioning**: The fiscal device is being initialized (TSE setup, RT activation, RKSV key registration). Automatic — transitions to `active` on success.
 - **active**: The fiscal device is initialized and ready to sign operations. This is the only state that accepts sales, refunds, closings, and other fiscal events.
-- **error**: The fiscal device encountered a failure (e.g. TSE hardware fault, RT communication error). Recoverable via `POST /fiscal-bindings/:id/recover`.
+- **error**: The fiscal device encountered a failure (e.g. TSE hardware fault, RT communication error). Recoverable via `POST /fiscal-units/:id/recover`.
 - **decommissioned**: The binding has been permanently retired. Fiscal deregistration has been triggered with the relevant authority. Cannot be undone.
 
 ## Commissioning
@@ -67,34 +67,34 @@ provisioning ──► active ──► decommissioned
       "label": "Kasse 2",
       "jurisdiction": "DE",
       "state": "active",
-      "active_fiscal_binding": null,
+      "active_fiscal_unit": null,
       "location_id": "loc_01HXYZ",
       "created_at": "2026-02-26T10:00:00Z"
     }
     ```
 
-    The register is `active` but has no fiscal binding — it cannot process operations yet.
+    The register is `active` but has no fiscal unit — it cannot process operations yet.
   </Step>
 
-  <Step title="Create a fiscal binding">
-    Provisioning a fiscal binding initializes the jurisdiction-specific fiscal device:
+  <Step title="Create a fiscal unit">
+    Provisioning a fiscal unit initializes the jurisdiction-specific fiscal device:
 
     - **Germany**: Initializes the TSE, establishes the signature chain
     - **Italy**: Activates the RT device with the Agenzia delle Entrate
     - **Austria**: Establishes the RKSV signature chain, registers the AES key with FinanzOnline
 
     ```bash
-    curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/fiscal-bindings \
+    curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/fiscal-units \
       -H "Authorization: Bearer $TOKEN" \
       -H "OpenFiskal-Organization: org_01HXYZ"
     ```
 
     ```json
     {
-      "object": "fiscal_binding_response",
-      "fiscal_binding": {
-        "id": "fb_01HXYZ",
-        "object": "fiscal_binding",
+      "object": "fiscal_unit_response",
+      "fiscal_unit": {
+        "id": "fu_01HXYZ",
+        "object": "fiscal_unit",
         "register_id": "reg_01HXYZ",
         "state": "active",
         "jurisdiction": "DE",
@@ -116,7 +116,7 @@ provisioning ──► active ──► decommissioned
         "id": "reg_01HXYZ",
         "object": "register",
         "state": "active",
-        "active_fiscal_binding": { "..." : "..." }
+        "active_fiscal_unit": { "..." : "..." }
       },
       "register_api_key": null,
       "credential_issued": false
@@ -206,12 +206,12 @@ This returns the status of every register at the location — useful for dashboa
 
 ## Error recovery
 
-If a fiscal device fails (TSE hardware fault, RT communication error), the fiscal binding transitions to `error`. Operations on the register will be rejected until the binding is recovered.
+If a fiscal device fails (TSE hardware fault, RT communication error), the fiscal unit transitions to `error`. Operations on the register will be rejected until the binding is recovered.
 
 To recover, call the recover endpoint:
 
 ```bash
-curl -X POST https://api.openfiskal.com/v1/fiscal-bindings/fb_01HXYZ/recover \
+curl -X POST https://api.openfiskal.com/v1/fiscal-units/fu_01HXYZ/recover \
   -H "Authorization: Bearer $TOKEN" \
   -H "OpenFiskal-Organization: org_01HXYZ"
 ```
@@ -222,12 +222,12 @@ If the underlying device issue has been resolved, the binding returns to `active
   Operations that were in-flight when the device failed remain in `open` state. Check `GET /registers/:id/status` for open operations and either complete or abandon them once the device recovers.
 </Warning>
 
-## Replacing a fiscal binding
+## Replacing a fiscal unit
 
 When a fiscal device reaches end-of-life, is replaced, or needs to be swapped — use the atomic replace endpoint. The register ID stays the same, so POS routing is unaffected.
 
 ```bash
-curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/fiscal-bindings/replace \
+curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/fiscal-units/replace \
   -H "Authorization: Bearer $TOKEN" \
   -H "OpenFiskal-Organization: org_01HXYZ" \
   -H "Content-Type: application/json" \
@@ -238,23 +238,23 @@ curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/fiscal-bindings/
 
 ```json
 {
-  "object": "fiscal_binding_replacement",
+  "object": "fiscal_unit_replacement",
   "old_binding": {
-    "id": "fb_01HXYZ",
+    "id": "fu_01HXYZ",
     "state": "decommissioned",
-    "replaced_by": "fb_02HXYZ",
+    "replaced_by": "fu_02HXYZ",
     "decommissioned_at": "2026-02-26T15:00:00Z"
   },
   "new_binding": {
-    "id": "fb_02HXYZ",
+    "id": "fu_02HXYZ",
     "state": "active",
-    "replaces": "fb_01HXYZ",
+    "replaces": "fu_01HXYZ",
     "provisioned_at": "2026-02-26T15:00:01Z"
   },
   "register": {
     "id": "reg_01HXYZ",
     "state": "active",
-    "active_fiscal_binding": { "id": "fb_02HXYZ", "..." : "..." }
+    "active_fiscal_unit": { "id": "fu_02HXYZ", "..." : "..." }
   }
 }
 ```
@@ -266,19 +266,19 @@ All open operations must be completed or abandoned before replacing. The old bin
 To see all bindings (past and present) for a register:
 
 ```bash
-curl https://api.openfiskal.com/v1/registers/reg_01HXYZ/fiscal-bindings \
+curl https://api.openfiskal.com/v1/registers/reg_01HXYZ/fiscal-units \
   -H "Authorization: Bearer $TOKEN" \
   -H "OpenFiskal-Organization: org_01HXYZ"
 ```
 
 ## Decommissioning
 
-### Decommissioning a fiscal binding
+### Decommissioning a fiscal unit
 
-To permanently retire a fiscal binding without replacing it:
+To permanently retire a fiscal unit without replacing it:
 
 ```bash
-curl -X POST https://api.openfiskal.com/v1/fiscal-bindings/fb_01HXYZ/decommission \
+curl -X POST https://api.openfiskal.com/v1/fiscal-units/fu_01HXYZ/decommission \
   -H "Authorization: Bearer $TOKEN" \
   -H "OpenFiskal-Organization: org_01HXYZ" \
   -H "Content-Type: application/json" \
@@ -299,7 +299,7 @@ curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/deactivate \
   -H "OpenFiskal-Organization: org_01HXYZ"
 ```
 
-This archives the register and decommissions any active fiscal binding. The register transitions to `archived` state.
+This archives the register and decommissions any active fiscal unit. The register transitions to `archived` state.
 
 <Warning>
   Archiving is permanent and cannot be undone. Any active register API key is automatically revoked. All open operations must be completed or abandoned first — the call returns `409 Conflict` otherwise.
@@ -323,9 +323,9 @@ The previous key is revoked immediately. The new key is returned in the response
 
 ## Backward compatibility
 
-The `POST /registers/:id/activate` endpoint is deprecated but continues to work. Under the hood, it creates a fiscal binding. The register response includes deprecated `fiscal_state` and `fiscal_registration` fields derived from the active binding.
+The `POST /registers/:id/activate` endpoint is deprecated but continues to work. Under the hood, it creates a fiscal unit. The register response includes deprecated `fiscal_state` and `fiscal_registration` fields derived from the active binding.
 
-New integrations should use the fiscal bindings API directly.
+New integrations should use the fiscal units API directly.
 
 ## Next steps
 
