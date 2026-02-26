@@ -18,8 +18,8 @@ This guide walks you through a complete integration — from receiving your setu
 ## Step-by-step
 
 <Steps>
-  <Step title="Bootstrap your credentials">
-    After signing a partnership agreement, OpenFiskal emails a one-time setup token to your technical contact. Exchange it for your first platform credential.
+  <Step title="Bootstrap your API key">
+    After signing a partnership agreement, OpenFiskal emails a one-time setup token to your technical contact. Exchange it for your platform API key.
 
     ```bash
     curl -X POST https://sandbox.api.openfiskal.com/v1/auth/bootstrap \
@@ -32,52 +32,26 @@ This guide walks you through a complete integration — from receiving your setu
 
     ```json
     {
-      "object": "platform_credential",
-      "client_id": "pf_client_01HXYZ",
-      "client_secret": "pf_secret_live_abc123...",
+      "object": "platform_api_key",
+      "id": "key_01HXYZ",
+      "api_key": "ofk_platform_live_abc123...",
       "label": "Production",
       "created_at": "2026-02-26T10:00:00Z"
     }
     ```
 
+    All subsequent requests use `Authorization: Bearer <api_key>`.
+
     <Warning>
-      Store `client_secret` immediately in a secrets manager. It is returned **once** and cannot be retrieved again. The setup token is now consumed — it cannot be reused.
+      Store `api_key` immediately in a secrets manager. It is returned **once** and cannot be retrieved again. The setup token is now consumed — it cannot be reused.
     </Warning>
-  </Step>
-  <Step title="Obtain a Bearer token">
-    Exchange your client credentials for a short-lived Bearer token.
-
-    ```bash
-    curl -X POST https://sandbox.api.openfiskal.com/v1/auth/token \
-      -H "Content-Type: application/json" \
-      -d '{
-        "grant_type": "client_credentials",
-        "client_id": "pf_client_01HXYZ",
-        "client_secret": "pf_secret_live_abc123..."
-      }'
-    ```
-
-    ```json
-    {
-      "object": "token",
-      "access_token": "ofk_live_eyJhbGciOiJS...",
-      "token_type": "bearer",
-      "expires_in": 3600
-    }
-    ```
-
-    All subsequent requests use `Authorization: Bearer <access_token>`.
-
-    <Tip>
-      The token is valid for 1 hour. There is no refresh token — request a new one when the current one expires.
-    </Tip>
   </Step>
   <Step title="Create an organization">
     An organization represents the merchant — the legal entity operating the POS.
 
     ```bash
     curl -X POST https://sandbox.api.openfiskal.com/v1/organizations \
-      -H "Authorization: Bearer ofk_live_eyJhbGciOiJS..." \
+      -H "Authorization: Bearer ofk_platform_live_abc123..." \
       -H "Content-Type: application/json" \
       -d '{
         "legal_name": "Mustermann GmbH",
@@ -116,7 +90,7 @@ This guide walks you through a complete integration — from receiving your setu
 
     ```bash
     curl -X POST https://sandbox.api.openfiskal.com/v1/organizations/org_01HXYZ/locations \
-      -H "Authorization: Bearer ofk_live_eyJhbGciOiJS..." \
+      -H "Authorization: Bearer ofk_platform_live_abc123..." \
       -H "Content-Type: application/json" \
       -d '{
         "name": "Berlin Mitte",
@@ -146,7 +120,7 @@ This guide walks you through a complete integration — from receiving your setu
 
     ```bash
     curl -X POST https://sandbox.api.openfiskal.com/v1/locations/loc_01HXYZ/registers \
-      -H "Authorization: Bearer ofk_live_eyJhbGciOiJS..." \
+      -H "Authorization: Bearer ofk_platform_live_abc123..." \
       -H "OpenFiskal-Organization: org_01HXYZ" \
       -H "Content-Type: application/json" \
       -d '{
@@ -175,7 +149,7 @@ This guide walks you through a complete integration — from receiving your setu
 
     ```bash
     curl -X POST https://sandbox.api.openfiskal.com/v1/registers/reg_01HXYZ/fiscal-units \
-      -H "Authorization: Bearer ofk_live_eyJhbGciOiJS..." \
+      -H "Authorization: Bearer ofk_platform_live_abc123..." \
       -H "OpenFiskal-Organization: org_01HXYZ"
     ```
 
@@ -212,7 +186,7 @@ This guide walks you through a complete integration — from receiving your setu
     The register now has an active fiscal unit and is ready to accept operations.
 
     <Info>
-      For server-side integrations, the platform Bearer token already authorizes all register operations. Only pass `issue_register_credential: true` for device-direct integrations (EV chargers, unattended kiosks).
+      For server-side integrations, the platform API key already authorizes all register operations. Only pass `issue_register_credential: true` for device-direct integrations (EV chargers, unattended kiosks).
     </Info>
   </Step>
   <Step title="Start a sale">
@@ -220,7 +194,7 @@ This guide walks you through a complete integration — from receiving your setu
 
     ```bash
     curl -X POST https://sandbox.api.openfiskal.com/v1/registers/reg_01HXYZ/sales \
-      -H "Authorization: Bearer ofk_live_eyJhbGciOiJS..." \
+      -H "Authorization: Bearer ofk_platform_live_abc123..." \
       -H "OpenFiskal-Organization: org_01HXYZ" \
       -H "Idempotency-Key: sale-table3-order42-start" \
       -H "Content-Type: application/json" \
@@ -266,7 +240,7 @@ This guide walks you through a complete integration — from receiving your setu
 
     ```bash
     curl -X PATCH https://sandbox.api.openfiskal.com/v1/sales/op_01HXYZ \
-      -H "Authorization: Bearer ofk_live_eyJhbGciOiJS..." \
+      -H "Authorization: Bearer ofk_platform_live_abc123..." \
       -H "OpenFiskal-Organization: org_01HXYZ" \
       -H "Content-Type: application/json" \
       -d '{
@@ -330,7 +304,7 @@ This guide walks you through a complete integration — from receiving your setu
       <Tab title="Card payment">
         ```bash
         curl -X POST https://sandbox.api.openfiskal.com/v1/sales/op_01HXYZ/complete \
-          -H "Authorization: Bearer ofk_live_eyJhbGciOiJS..." \
+          -H "Authorization: Bearer ofk_platform_live_abc123..." \
           -H "OpenFiskal-Organization: org_01HXYZ" \
           -H "Idempotency-Key: sale-table3-order42-complete" \
           -H "Content-Type: application/json" \
@@ -351,7 +325,7 @@ This guide walks you through a complete integration — from receiving your setu
 
         ```bash
         curl -X POST https://sandbox.api.openfiskal.com/v1/sales/op_01HXYZ/complete \
-          -H "Authorization: Bearer ofk_live_eyJhbGciOiJS..." \
+          -H "Authorization: Bearer ofk_platform_live_abc123..." \
           -H "OpenFiskal-Organization: org_01HXYZ" \
           -H "Idempotency-Key: sale-table3-order42-complete" \
           -H "Content-Type: application/json" \
@@ -411,14 +385,14 @@ This guide walks you through a complete integration — from receiving your setu
     ```bash
     # JSON receipt
     curl https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ/receipt \
-      -H "Authorization: Bearer ofk_live_eyJhbGciOiJS..." \
+      -H "Authorization: Bearer ofk_platform_live_abc123..." \
       -H "OpenFiskal-Organization: org_01HXYZ"
     ```
 
     ```bash
     # PDF receipt
     curl https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ/receipt.pdf \
-      -H "Authorization: Bearer ofk_live_eyJhbGciOiJS..." \
+      -H "Authorization: Bearer ofk_platform_live_abc123..." \
       -H "OpenFiskal-Organization: org_01HXYZ" \
       -o receipt.pdf
     ```
@@ -478,7 +452,7 @@ This guide walks you through a complete integration — from receiving your setu
 
 <CardGroup cols={2}>
   <Card icon="key" href="/auth" title="Authentication">
-    Credential types, token flows, and organization scoping.
+    API key types, organization scoping, and key management.
   </Card>
   <Card icon="microchip" href="/register-lifecycle" title="Register Lifecycle">
     Fleet management — commissioning, monitoring, and decommissioning registers.

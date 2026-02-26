@@ -19,7 +19,7 @@ Receipts are available immediately after an operation reaches `completed` state.
 
 ```bash
 curl https://api.openfiskal.com/v1/operations/op_01HXYZ/receipt \
-  -H "Authorization: Bearer ofk_live_eyJhbGciOiJS..." \
+  -H "Authorization: Bearer ofk_platform_live_abc123..." \
   -H "OpenFiskal-Organization: org_01HXYZ"
 ```
 
@@ -247,7 +247,7 @@ OpenFiskal renders jurisdiction-appropriate PDFs. The layout adapts automaticall
 
 ```bash
 curl https://api.openfiskal.com/v1/operations/op_01HXYZ/receipt.pdf \
-  -H "Authorization: Bearer ofk_live_eyJhbGciOiJS..." \
+  -H "Authorization: Bearer ofk_platform_live_abc123..." \
   -H "OpenFiskal-Organization: org_01HXYZ" \
   -o receipt.pdf
 ```
@@ -260,7 +260,7 @@ Deliver a digital receipt to the customer via email or SMS:
 
 ```bash
 curl -X POST https://api.openfiskal.com/v1/operations/op_01HXYZ/receipt/send \
-  -H "Authorization: Bearer ofk_live_eyJhbGciOiJS..." \
+  -H "Authorization: Bearer ofk_platform_live_abc123..." \
   -H "OpenFiskal-Organization: org_01HXYZ" \
   -H "Content-Type: application/json" \
   -d '{

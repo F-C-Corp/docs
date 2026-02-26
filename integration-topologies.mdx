@@ -18,20 +18,20 @@ The right choice depends on whether your devices have a backend they can route t
 
 ## Server-side
 
-Your backend server holds a platform credential (`client_id` + `client_secret`), exchanges it for a short-lived Bearer token, and makes all API calls on behalf of registers. The registers themselves never talk to OpenFiskal.
+Your backend server holds a platform API key and sends it directly in the `Authorization: Bearer` header on every request. The registers themselves never talk to OpenFiskal.
 
 ```mermaid
 flowchart LR
     R1[Register 1] --> B[POS Backend]
     R2[Register 2] --> B
     R3[Register 3] --> B
-    B -- "Bearer token\n+ OpenFiskal-Organization" --> O[OpenFiskal API]
+    B -- "Platform API key\n+ OpenFiskal-Organization" --> O[OpenFiskal API]
 ```
 
 **How it works:**
 
-1. Your backend calls `POST /auth/token` to get a Bearer token (valid 1 hour, refresh before expiry).
-2. When a register reports a sale, your backend calls `POST /registers/:id/sales` with the Bearer token and the `OpenFiskal-Organization` header.
+1. Your backend includes the platform API key in the `Authorization: Bearer` header on every request.
+2. When a register reports a sale, your backend calls `POST /registers/:id/sales` with the API key and the `OpenFiskal-Organization` header.
 3. OpenFiskal returns the fiscal document. Your backend passes the receipt data back to the register.
 
 **When to use it:**
@@ -42,9 +42,9 @@ flowchart LR
 
 **Advantages:**
 
-- One credential to manage — no per-device key distribution.
-- The `client_secret` stays on your server, never on hardware that could be physically compromised.
-- Single token works across all organizations and registers.
+- One API key to manage — no per-device key distribution.
+- The API key stays on your server, never on hardware that could be physically compromised.
+- Single key works across all organizations and registers.
 - Backend can add business logic (validation, enrichment) before calling OpenFiskal.
 
 **Disadvantages:**
@@ -92,7 +92,7 @@ flowchart LR
 
 | Factor | Server-side | Device-direct |
 |---|---|---|
-| Credential management | One platform credential | One API key per device |
+| Credential management | One platform API key | One API key per device |
 | Backend required | Yes | Only for provisioning |
 | Credential exposure risk | Low (server only) | Higher (on physical hardware) |
 | Offline queuing | At the backend (if OpenFiskal is unreachable) or at the register (if your backend is unreachable) | At the register (if OpenFiskal is unreachable) |
@@ -104,11 +104,11 @@ flowchart LR
 
 ## Hybrid approach
 
-Some integrations use both. The backend handles provisioning, fleet management, and monitoring (using platform credentials), while the registers handle real-time fiscal operations directly (using register API keys).
+Some integrations use both. The backend handles provisioning, fleet management, and monitoring (using platform API keys), while the registers handle real-time fiscal operations directly (using register API keys).
 
 ```mermaid
 flowchart LR
-    B[Backend] -- "Bearer token\n(provisioning, monitoring)" --> O[OpenFiskal API]
+    B[Backend] -- "Platform API key\n(provisioning, monitoring)" --> O[OpenFiskal API]
     R1[Register 1] -- "X-Register-Api-Key\n(sales, heartbeats)" --> O
     R2[Register 2] -- "X-Register-Api-Key\n(sales, heartbeats)" --> O
 ```
@@ -117,13 +117,13 @@ This is common for EV charging networks: a fleet management platform provisions 
 
 ## Provisioning device-direct registers
 
-For device-direct integrations, provisioning involves three steps — all done from your backend using platform credentials:
+For device-direct integrations, provisioning involves three steps — all done from your backend using platform API keys:
 
 <Steps>
   <Step title="Create the register">
     ```bash
     curl -X POST https://api.openfiskal.com/v1/locations/loc_01HXYZ/registers \
-      -H "Authorization: Bearer $TOKEN" \
+      -H "Authorization: Bearer $API_KEY" \
       -H "OpenFiskal-Organization: org_01HXYZ" \
       -H "Content-Type: application/json" \
       -d '{
@@ -137,7 +137,7 @@ For device-direct integrations, provisioning involves three steps — all done f
 
     ```bash
     curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/fiscal-units \
-      -H "Authorization: Bearer $TOKEN" \
+      -H "Authorization: Bearer $API_KEY" \
       -H "OpenFiskal-Organization: org_01HXYZ" \
       -H "Content-Type: application/json" \
       -d '{ "issue_register_credential": true }'
@@ -171,7 +171,7 @@ If a device is compromised, lost, or replaced, rotate the API key immediately fr
 
 ```bash
 curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/credentials/rotate \
-  -H "Authorization: Bearer $TOKEN" \
+  -H "Authorization: Bearer $API_KEY" \
   -H "OpenFiskal-Organization: org_01HXYZ"
 ```
 
@@ -181,7 +181,7 @@ The old key is revoked instantly. Push the new key to the replacement device bef
 
 <CardGroup cols={2}>
   <Card title="Authentication" icon="key" href="/auth">
-    Credential details, token flows, and the full auth API.
+    API key types, organization scoping, and key management.
   </Card>
   <Card title="Register Lifecycle" icon="microchip" href="/register-lifecycle">
     Commissioning, monitoring, and decommissioning registers.

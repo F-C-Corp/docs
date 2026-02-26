@@ -129,16 +129,16 @@ info:
 
     ## Authentication
 
-    All API requests require a Bearer token obtained via OAuth2 client credentials.
+    All API requests require a platform API key sent as a Bearer token.
     Platform integrators (POS vendors acting on behalf of merchants) pass an additional
     `OpenFiskal-Organization` header to scope requests to a specific merchant.
 
     ```
-    Authorization: Bearer <platform_token>
+    Authorization: Bearer ofk_platform_...
     OpenFiskal-Organization: org_01HXYZ
     ```
 
-    Register devices use a lightweight long-lived API key for heartbeat-only auth.
+    Register devices use a separate long-lived API key via the `X-Register-Api-Key` header.
 
     ## Idempotency
 
@@ -171,7 +171,7 @@ security:
 tags:
   - name: Authentication
     description: |
-      Platform credentials, access tokens, and register credential management.
+      Platform API keys, credential bootstrapping, and register credential management.
       See the Security Model section in the API overview for a full guide on
       which credential type to use for your integration topology.
   - name: Organizations
@@ -374,17 +374,15 @@ paths:
     post:
       tags: [Authentication]
       operationId: bootstrapPlatform
-      summary: Exchange a setup token for platform credentials
+      summary: Exchange a setup token for a platform API key
       description: |
         One-time credential exchange. After signing a partnership agreement,
         OpenFiskal emails a setup token (`ofk_setup_...`) to the POS vendor's
-        technical contact. POST it here to receive your first `client_id` and
-        `client_secret`.
+        technical contact. POST it here to receive your first platform API key.
 
         This endpoint is unauthenticated — the setup token is the sole proof
         of identity. It can only be used once. After successful exchange, use
-        `POST /auth/token` with the returned credentials to obtain a Bearer
-        token.
+        the returned API key as a Bearer token on all subsequent requests.
 
         If the token has already been consumed or has expired, the endpoint
         returns `401`.
@@ -397,7 +395,7 @@ paths:
               $ref: '#/components/schemas/BootstrapRequest'
       responses:
         '200':
-          description: Platform credentials issued
+          description: Platform API key issued
           content:
             application/json:
               schema:
@@ -409,134 +407,70 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /auth/token:
-    post:
-      tags: [Authentication]
-      operationId: createToken
-      summary: Obtain a platform access token
-      description: |
-        Exchange your platform `client_id` and `client_secret` for a short-lived
-        Bearer token (1 hour TTL). Use this token on all subsequent API requests.
-
-        **This endpoint must only be called from your server.** Never expose
-        your `client_secret` to devices or client-side code.
-
-        To scope requests to a specific merchant organization, include the
-        `OpenFiskal-Organization` header on downstream requests. You do not
-        need a separate token per organization.
-
-        ```http
-        Authorization: Bearer <token>
-        OpenFiskal-Organization: org_01HXYZ
-        ```
-
-        See the Security Model section in the API overview for full guidance
-        on credential types and integration topologies.
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/TokenRequest'
-      responses:
-        '200':
-          description: Access token issued
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TokenResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-
-  /auth/token/introspect:
-    post:
-      tags: [Authentication]
-      operationId: introspectToken
-      summary: Introspect a token
-      description: |
-        Validate a token and retrieve its claims — expiry and associated
-        organization (if scoped). Useful for debugging credential issues.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/TokenIntrospectionRequest'
-      responses:
-        '200':
-          description: Token introspection result
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TokenIntrospection'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-
-  /auth/platform-credentials:
+  /auth/api-keys:
     get:
       tags: [Authentication]
-      operationId: listPlatformCredentials
-      summary: List platform credentials
+      operationId: listApiKeys
+      summary: List platform API keys
       description: |
-        Returns all active `client_id` entries for your platform account.
-        Client secrets are never returned after initial issuance.
+        Returns all active API keys for your platform account.
+        Key values are masked — only the prefix and last four characters are shown.
       responses:
         '200':
-          description: List of platform credentials
+          description: List of platform API keys
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PlatformCredentialList'
+                $ref: '#/components/schemas/ApiKeyList'
         '401':
           $ref: '#/components/responses/Unauthorized'
 
     post:
       tags: [Authentication]
-      operationId: createPlatformCredential
-      summary: Create a platform credential
+      operationId: createApiKey
+      summary: Create a platform API key
       description: |
-        Issue a new `client_id` / `client_secret` pair. Use this to rotate
-        credentials or issue separate credentials per environment.
+        Issue a new platform API key. Use this to rotate keys or issue
+        separate keys per environment.
 
-        The `client_secret` is returned only once at creation time.
+        The `api_key` value is returned only once at creation time.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PlatformCredentialCreate'
+              $ref: '#/components/schemas/ApiKeyCreate'
       responses:
         '201':
-          description: Platform credential created
+          description: Platform API key created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PlatformCredential'
+                $ref: '#/components/schemas/ApiKey'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
 
-  /auth/platform-credentials/{clientId}:
+  /auth/api-keys/{keyId}:
     delete:
       tags: [Authentication]
-      operationId: revokePlatformCredential
-      summary: Revoke a platform credential
+      operationId: revokeApiKey
+      summary: Revoke a platform API key
       description: |
-        Permanently revokes a platform credential. All tokens issued from
-        this credential are immediately invalidated.
+        Permanently revokes a platform API key. Any request using the
+        revoked key will immediately return `401`.
 
-        Ensure a replacement credential is active before revoking.
+        Ensure a replacement key is active before revoking.
       parameters:
-        - name: clientId
+        - name: keyId
           in: path
           required: true
           schema:
             type: string
       responses:
         '204':
-          description: Credential revoked
+          description: API key revoked
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -3215,17 +3149,17 @@ components:
     BearerAuth:
       type: http
       scheme: bearer
-      bearerFormat: JWT
       description: |
-        OAuth2 access token from `/auth/token`. Platform integrators also pass
-        `OpenFiskal-Organization: org_xxx` to act on behalf of a merchant.
+        Platform API key sent as `Authorization: Bearer ofk_platform_...`.
+        Platform integrators also pass `OpenFiskal-Organization: org_xxx`
+        to act on behalf of a merchant.
     RegisterApiKey:
       type: apiKey
       in: header
       name: X-Register-Api-Key
       description: |
-        Long-lived API key issued per register. Used for heartbeat authentication
-        on resource-constrained hardware that cannot run a full OAuth flow.
+        Long-lived API key issued per register. Used for device-direct
+        integrations where hardware calls the API without a backend.
 
   parameters:
     organizationId:
@@ -3843,14 +3777,6 @@ components:
           type: string
           description: Human-readable reason for cancellation
           example: Duplicate invoice issued in error
-
-    TokenIntrospectionRequest:
-      type: object
-      required: [token]
-      properties:
-        token:
-          type: string
-          description: The Bearer token or register API key to introspect
 
     SaleStart:
       type: object
@@ -5622,33 +5548,6 @@ components:
 
     # ── Auth ──────────────────────────────────────
 
-    TokenRequest:
-      type: object
-      required: [client_id, client_secret, grant_type]
-      properties:
-        grant_type:
-          type: string
-          const: client_credentials
-        client_id:
-          type: string
-        client_secret:
-          type: string
-
-    TokenResponse:
-      type: object
-      properties:
-        object:
-          type: string
-          const: token
-        access_token:
-          type: string
-        token_type:
-          type: string
-          const: bearer
-        expires_in:
-          type: integer
-          example: 3600
-
     BootstrapRequest:
       type: object
       required: [setup_token]
@@ -5669,16 +5568,16 @@ components:
       properties:
         object:
           type: string
-          const: platform_credential
-        client_id:
+          const: platform_api_key
+        id:
           type: string
-          example: pf_client_01HXYZ
-        client_secret:
+          example: key_01HXYZ
+        api_key:
           type: string
           description: |
             Returned once only. Store immediately in a secrets manager —
             it cannot be retrieved again.
-          example: pf_secret_live_...
+          example: ofk_platform_live_abc123...
         label:
           type: string
         created_at:
@@ -5786,53 +5685,32 @@ components:
             $ref: '#/components/schemas/Location'
 
 
-    TokenIntrospection:
-      type: object
-      properties:
-        object:
-          type: string
-          const: token_introspection
-        active:
-          type: boolean
-          description: Whether the token is valid and unexpired
-        client_id:
-          type: string
-        organization_id:
-          type: [string, "null"]
-          description: Present if the token was scoped to a specific organization
-        expires_at:
-          type: string
-          format: date-time
-        issued_at:
-          type: string
-          format: date-time
-
-    PlatformCredentialCreate:
+    ApiKeyCreate:
       type: object
       required: [label]
       properties:
         label:
           type: string
-          description: Human-readable label to identify this credential
+          description: Human-readable label to identify this API key
           example: Production
         description:
           type: [string, "null"]
 
-    PlatformCredential:
+    ApiKey:
       type: object
       properties:
         object:
           type: string
-          const: platform_credential
-        client_id:
+          const: platform_api_key
+        id:
           type: string
-          example: pf_client_01HXYZ
-        client_secret:
+          example: key_01HXYZ
+        api_key:
           type: [string, "null"]
           description: |
             Only returned at creation time. Store immediately — cannot be
             retrieved again.
-          example: pf_secret_...
+          example: ofk_platform_live_...
         label:
           type: string
         description:
@@ -5844,7 +5722,7 @@ components:
           type: [string, "null"]
           format: date-time
 
-    PlatformCredentialList:
+    ApiKeyList:
       type: object
       properties:
         object:
@@ -5853,7 +5731,7 @@ components:
         data:
           type: array
           items:
-            $ref: '#/components/schemas/PlatformCredential'
+            $ref: '#/components/schemas/ApiKey'
 
     RegisterActivationResponse:
       type: object

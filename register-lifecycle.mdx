@@ -51,7 +51,7 @@ provisioning ──► active ──► decommissioned
 
     ```bash
     curl -X POST https://api.openfiskal.com/v1/locations/loc_01HXYZ/registers \
-      -H "Authorization: Bearer $TOKEN" \
+      -H "Authorization: Bearer $API_KEY" \
       -H "OpenFiskal-Organization: org_01HXYZ" \
       -H "Content-Type: application/json" \
       -d '{
@@ -85,7 +85,7 @@ provisioning ──► active ──► decommissioned
 
     ```bash
     curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/fiscal-units \
-      -H "Authorization: Bearer $TOKEN" \
+      -H "Authorization: Bearer $API_KEY" \
       -H "OpenFiskal-Organization: org_01HXYZ"
     ```
 
@@ -126,7 +126,7 @@ provisioning ──► active ──► decommissioned
     The binding is now `active` and the register is ready to accept operations.
 
     <Info>
-      For device-direct integrations (EV chargers, unattended kiosks), pass `issue_register_credential: true` to receive a register-scoped API key. For server-side integrations, the platform Bearer token already covers all register operations.
+      For device-direct integrations (EV chargers, unattended kiosks), pass `issue_register_credential: true` to receive a register-scoped API key. For server-side integrations, the platform API key already covers all register operations.
     </Info>
   </Step>
 
@@ -135,7 +135,7 @@ provisioning ──► active ──► decommissioned
 
     ```bash
     curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/heartbeat \
-      -H "Authorization: Bearer $TOKEN" \
+      -H "Authorization: Bearer $API_KEY" \
       -H "OpenFiskal-Organization: org_01HXYZ" \
       -H "Content-Type: application/json" \
       -d '{
@@ -170,7 +170,7 @@ The status endpoint provides liveness information and the authoritative list of 
 
 ```bash
 curl https://api.openfiskal.com/v1/registers/reg_01HXYZ/status \
-  -H "Authorization: Bearer $TOKEN" \
+  -H "Authorization: Bearer $API_KEY" \
   -H "OpenFiskal-Organization: org_01HXYZ"
 ```
 
@@ -199,7 +199,7 @@ To check all registers at a location in one call:
 
 ```bash
 curl https://api.openfiskal.com/v1/locations/loc_01HXYZ/registers/status \
-  -H "Authorization: Bearer $TOKEN"
+  -H "Authorization: Bearer $API_KEY"
 ```
 
 This returns the status of every register at the location — useful for dashboards and alerting.
@@ -212,7 +212,7 @@ To recover, call the recover endpoint:
 
 ```bash
 curl -X POST https://api.openfiskal.com/v1/fiscal-units/fu_01HXYZ/recover \
-  -H "Authorization: Bearer $TOKEN" \
+  -H "Authorization: Bearer $API_KEY" \
   -H "OpenFiskal-Organization: org_01HXYZ"
 ```
 
@@ -228,7 +228,7 @@ When a fiscal device reaches end-of-life, is replaced, or needs to be swapped �
 
 ```bash
 curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/fiscal-units/replace \
-  -H "Authorization: Bearer $TOKEN" \
+  -H "Authorization: Bearer $API_KEY" \
   -H "OpenFiskal-Organization: org_01HXYZ" \
   -H "Content-Type: application/json" \
   -d '{
@@ -267,7 +267,7 @@ To see all bindings (past and present) for a register:
 
 ```bash
 curl https://api.openfiskal.com/v1/registers/reg_01HXYZ/fiscal-units \
-  -H "Authorization: Bearer $TOKEN" \
+  -H "Authorization: Bearer $API_KEY" \
   -H "OpenFiskal-Organization: org_01HXYZ"
 ```
 
@@ -279,7 +279,7 @@ To permanently retire a fiscal unit without replacing it:
 
 ```bash
 curl -X POST https://api.openfiskal.com/v1/fiscal-units/fu_01HXYZ/decommission \
-  -H "Authorization: Bearer $TOKEN" \
+  -H "Authorization: Bearer $API_KEY" \
   -H "OpenFiskal-Organization: org_01HXYZ" \
   -H "Content-Type: application/json" \
   -d '{
@@ -295,7 +295,7 @@ When a register is permanently retired — hardware replaced, location closed, o
 
 ```bash
 curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/deactivate \
-  -H "Authorization: Bearer $TOKEN" \
+  -H "Authorization: Bearer $API_KEY" \
   -H "OpenFiskal-Organization: org_01HXYZ"
 ```
 
@@ -311,7 +311,7 @@ For device-direct integrations, register API keys may need rotation:
 
 ```bash
 curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/credentials/rotate \
-  -H "Authorization: Bearer $TOKEN" \
+  -H "Authorization: Bearer $API_KEY" \
   -H "OpenFiskal-Organization: org_01HXYZ"
 ```
 
@@ -337,6 +337,6 @@ New integrations should use the fiscal units API directly.
     The operation lifecycle — start, mutate, complete, abandon.
   </Card>
   <Card title="Authentication" icon="key" href="/auth">
-    Credential types, token flows, and device-direct vs server-side topologies.
+    API key types, organization scoping, and key management.
   </Card>
 </CardGroup>
