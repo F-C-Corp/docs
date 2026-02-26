@@ -15,33 +15,6 @@ This guide walks you through a complete integration — from receiving your setu
 - The setup token (`ofk_setup_...`) received via email
 - `curl` or an HTTP client
 
-## Integration overview
-
-```mermaid
-sequenceDiagram
-    participant Vendor
-    participant OpenFiskal
-
-    Vendor->>OpenFiskal: POST /auth/bootstrap (setup token)
-    OpenFiskal-->>Vendor: client_id + client_secret
-
-    Vendor->>OpenFiskal: POST /auth/token (client credentials)
-    OpenFiskal-->>Vendor: Bearer token
-
-    Vendor->>OpenFiskal: POST /organizations
-    Vendor->>OpenFiskal: POST /organizations/:id/locations
-    Vendor->>OpenFiskal: POST /locations/:id/registers
-    Vendor->>OpenFiskal: POST /registers/:id/activate
-
-    Note over Vendor,OpenFiskal: Merchant hierarchy ready
-
-    Vendor->>OpenFiskal: POST /registers/:id/sales
-    OpenFiskal-->>Vendor: Fiscal start signed ■
-    Vendor->>OpenFiskal: PATCH /sales/:id (line items)
-    Vendor->>OpenFiskal: POST /sales/:id/complete (payments)
-    OpenFiskal-->>Vendor: Fiscal document + receipt data ■
-```
-
 ## Step-by-step
 
 <Steps>
