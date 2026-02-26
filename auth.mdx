@@ -148,7 +148,7 @@ Register API keys are scoped to a single register and support a limited set of o
 If a device is compromised or replaced, rotate the key immediately:
 
 ```bash
-curl -X POST https://api.openfiskal.com/v1/registers/reg_01ABC/rotate-credential \
+curl -X POST https://api.openfiskal.com/v1/registers/reg_01ABC/credentials/rotate \
   -H "Authorization: Bearer ofk_live_eyJhbGciOiJS..." \
   -H "OpenFiskal-Organization: org_01HXYZ"
 ```
@@ -215,10 +215,10 @@ If a request with the same idempotency key has already been processed, the origi
 ## Next steps
 
 <CardGroup cols={2}>
+  <Card title="Getting Started" icon="rocket" href="/getting-started">
+    End-to-end walkthrough from setup token to first sale.
+  </Card>
   <Card title="POS Operations" icon="cash-register" href="/pos-operation-ingestion">
     Learn how to report register activity and handle the operation lifecycle.
-  </Card>
-  <Card title="API Reference" icon="code" href="/api-reference/introduction">
-    Explore the full API surface — endpoints, schemas, and examples.
   </Card>
 </CardGroup>

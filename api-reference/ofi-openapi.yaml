@@ -1247,8 +1247,8 @@ paths:
           "transmission_status": "not_required",
           "tse_serial": "TSE0123456789ABCDEF",
           "client_id": "Kasse1",
-          "signature_algorithm": "ecdsa-plain-SHA256",
-          "time_format": "unixTime",
+          "signature_algorithm": "ecdsa-plain-SHA384",
+          "time_format": "utcTime",
           "start_event": {
             "signed_at": "2026-02-25T19:02:11Z",
             "transaction_counter": 4821,
@@ -1262,7 +1262,7 @@ paths:
             "process_data": "Beleg^42.50_0.00_0.00_0.00_0.00^42.50:Bar"
           },
           "verification": {
-            "qr_data": "V0;Kasse1;ecdsa-plain-SHA256;2026-02-25T19:02:11.000Z;2026-02-25T20:14:55.000Z;42.50;4822;base64encodedEndSignature=="
+            "qr_data": "V0;Kasse1;ecdsa-plain-SHA384;2026-02-25T19:02:11;2026-02-25T20:14:55;42.50;4822;base64encodedEndSignature=="
           }
         }
         ```
@@ -1481,6 +1481,7 @@ paths:
         settle the net difference. A single fiscal document covers the exchange.
       parameters:
         - $ref: '#/components/parameters/registerId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
@@ -1509,6 +1510,7 @@ paths:
       summary: Retrieve an exchange
       parameters:
         - $ref: '#/components/parameters/operationId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       responses:
         '200':
           description: Exchange retrieved
@@ -1530,6 +1532,7 @@ paths:
         Not a fiscal event. Only available for exchanges in `open` state.
       parameters:
         - $ref: '#/components/parameters/operationId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       requestBody:
         required: true
         content:
@@ -1559,6 +1562,7 @@ paths:
       summary: Complete an exchange
       parameters:
         - $ref: '#/components/parameters/operationId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
@@ -1589,6 +1593,7 @@ paths:
       summary: Abandon an exchange
       parameters:
         - $ref: '#/components/parameters/operationId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       requestBody:
         content:
           application/json:
@@ -1622,6 +1627,7 @@ paths:
         amount is collected upfront and can later be captured via a deposit capture.
       parameters:
         - $ref: '#/components/parameters/registerId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
@@ -1650,6 +1656,7 @@ paths:
       summary: Retrieve a deposit
       parameters:
         - $ref: '#/components/parameters/operationId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       responses:
         '200':
           description: Deposit retrieved
@@ -1669,6 +1676,7 @@ paths:
       summary: Complete a deposit
       parameters:
         - $ref: '#/components/parameters/operationId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
@@ -1699,6 +1707,7 @@ paths:
       summary: Abandon a deposit
       parameters:
         - $ref: '#/components/parameters/operationId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       requestBody:
         content:
           application/json:
@@ -1732,6 +1741,7 @@ paths:
         the original deposit operation and settles the remaining balance.
       parameters:
         - $ref: '#/components/parameters/registerId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
@@ -1760,6 +1770,7 @@ paths:
       summary: Retrieve a deposit capture
       parameters:
         - $ref: '#/components/parameters/operationId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       responses:
         '200':
           description: Deposit capture retrieved
@@ -1779,6 +1790,7 @@ paths:
       summary: Complete a deposit capture
       parameters:
         - $ref: '#/components/parameters/operationId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
@@ -1809,6 +1821,7 @@ paths:
       summary: Abandon a deposit capture
       parameters:
         - $ref: '#/components/parameters/operationId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       requestBody:
         content:
           application/json:
@@ -1843,6 +1856,7 @@ paths:
         generate fiscal documents or signatures.
       parameters:
         - $ref: '#/components/parameters/registerId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
@@ -1871,6 +1885,7 @@ paths:
       summary: Retrieve a training operation
       parameters:
         - $ref: '#/components/parameters/operationId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       responses:
         '200':
           description: Training operation retrieved
@@ -1890,6 +1905,7 @@ paths:
       summary: Complete a training operation
       parameters:
         - $ref: '#/components/parameters/operationId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         content:
@@ -1917,6 +1933,7 @@ paths:
       summary: Abandon a training operation
       parameters:
         - $ref: '#/components/parameters/operationId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       requestBody:
         content:
           application/json:

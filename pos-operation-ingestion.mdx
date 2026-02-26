@@ -103,7 +103,7 @@ As the POS vendor, your integration must:
 
 4. **Complete or abandon every operation.** Any operation that has been started must eventually be completed or explicitly abandoned. Open operations block the daily closing.
 
-5. **Trigger the daily closing.** At the end of the business day or shift, call the closing endpoint. OpenFiskal generates the fiscal closing report required by the jurisdiction.
+5. **Trigger the daily closing.** At the end of the business day or shift, call `POST /registers/:id/closings`. OpenFiskal generates the fiscal closing report required by the jurisdiction. All open operations must be completed or abandoned first.
 
 ## What OpenFiskal handles
 
@@ -240,7 +240,7 @@ The `fiscal` field on every operation is a `FiscalDocument` — a discriminated 
   <Card title="Authentication" icon="key" href="/auth">
     Set up your platform credentials and learn about the token flow.
   </Card>
-  <Card title="API Reference" icon="code" href="/api-reference/introduction">
-    Explore the full API surface — endpoints, schemas, and examples.
+  <Card title="Schemas" icon="database" href="/api-reference/schemas/sale-operation">
+    Explore operation schemas, line items, and payments.
   </Card>
 </CardGroup>

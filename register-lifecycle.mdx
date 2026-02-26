@@ -92,7 +92,7 @@ stateDiagram-v2
   </Step>
 
   <Step title="Start sending heartbeats">
-    Once active, the register should send periodic heartbeats so OpenFiskal can monitor its health.
+    Once active, the register should send periodic heartbeats (every 30–60 seconds) so OpenFiskal can monitor its health.
 
     ```bash
     curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/heartbeat \

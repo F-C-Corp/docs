@@ -413,7 +413,7 @@ sequenceDiagram
           "transaction_counter": 2,
           "signature": "base64encodedEndSignature==",
           "process_type": "Kassenbeleg-V1",
-          "process_data": "Beleg^43.00_0.00_0.00_0.00_0.00^43.00:Bar"
+          "process_data": "Beleg^43.00_0.00_0.00_0.00_0.00^43.00:Unbar"
         },
         "verification": {
           "qr_data": "V0;Kasse 1;ecdsa-plain-SHA384;2026-02-26T12:00:00;2026-02-26T12:14:55;43.00;2;base64encodedEndSignature=="
@@ -479,8 +479,8 @@ sequenceDiagram
         }
       },
       "links": {
-        "self": "https://api.openfiskal.com/v1/operations/op_01HXYZ/receipt",
-        "pdf": "https://api.openfiskal.com/v1/operations/op_01HXYZ/receipt.pdf"
+        "self": "https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ/receipt",
+        "pdf": "https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ/receipt.pdf"
       }
     }
     ```
@@ -497,11 +497,11 @@ sequenceDiagram
   <Card title="Authentication" icon="key" href="/auth">
     Credential types, token flows, and organization scoping.
   </Card>
+  <Card title="Register Lifecycle" icon="microchip" href="/register-lifecycle">
+    Fleet management — commissioning, monitoring, and decommissioning registers.
+  </Card>
   <Card title="POS Operations" icon="cash-register" href="/pos-operation-ingestion">
     The full operation lifecycle — start, mutate, complete, abandon.
-  </Card>
-  <Card title="API Reference" icon="code" href="/api-reference/introduction">
-    Explore every endpoint, schema, and response.
   </Card>
   <Card title="Schemas" icon="database" href="/api-reference/schemas/sale-operation">
     Detailed schema definitions for operations, line items, and payments.
