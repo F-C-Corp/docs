@@ -215,6 +215,8 @@ tags:
     description: Finalizes a prior deposit operation.
   - name: Gift Card Issuances
     description: Gift card activation. Redemption is handled via the `gift_card` payment method on a sale.
+  - name: Training
+    description: Non-fiscal training transactions for staff practice.
   - name: Receipts
     description: Fiscal receipt documents and rendering
   - name: Closings
@@ -621,6 +623,7 @@ paths:
       summary: Retrieve a location
       parameters:
         - $ref: '#/components/parameters/locationId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       responses:
         '200':
           description: Location retrieved
@@ -637,6 +640,7 @@ paths:
       summary: Update a location
       parameters:
         - $ref: '#/components/parameters/locationId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       requestBody:
         required: true
         content:
@@ -670,6 +674,7 @@ paths:
         If a register crashes and reconnects, it reconciles against this state.
       parameters:
         - $ref: '#/components/parameters/locationId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       requestBody:
         required: true
         content:
@@ -696,6 +701,7 @@ paths:
       summary: List registers at a location
       parameters:
         - $ref: '#/components/parameters/locationId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       responses:
         '200':
           description: List of registers
@@ -715,6 +721,7 @@ paths:
       summary: Retrieve a register
       parameters:
         - $ref: '#/components/parameters/registerId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       responses:
         '200':
           description: Register retrieved
@@ -752,6 +759,7 @@ paths:
         See the Security Model section in the API overview for full guidance.
       parameters:
         - $ref: '#/components/parameters/registerId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       requestBody:
         content:
           application/json:
@@ -790,6 +798,7 @@ paths:
         Any active register credential for this register is automatically revoked.
       parameters:
         - $ref: '#/components/parameters/registerId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       responses:
         '200':
           description: Register deactivated
@@ -820,6 +829,7 @@ paths:
         `POST /registers/:id/activate` with `issue_register_credential: true`.
       parameters:
         - $ref: '#/components/parameters/registerId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       responses:
         '200':
           description: Credential rotated. New key returned once.
@@ -844,6 +854,7 @@ paths:
         platform's authoritative list of currently open operations.
       parameters:
         - $ref: '#/components/parameters/registerId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       responses:
         '200':
           description: Register status
@@ -892,6 +903,7 @@ paths:
         create and manage individual operations.
       parameters:
         - $ref: '#/components/parameters/registerId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
         - name: type
           in: query
           schema:
@@ -942,6 +954,7 @@ paths:
         identifies which operation type this is, and `data` contains type-specific fields.
       parameters:
         - $ref: '#/components/parameters/operationId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       responses:
         '200':
           description: Operation retrieved
@@ -965,6 +978,7 @@ paths:
         Only available for operations in `completed` state.
       parameters:
         - $ref: '#/components/parameters/operationId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       responses:
         '200':
           description: Receipt retrieved
@@ -991,6 +1005,7 @@ paths:
         (e.g. TSE dual-signature block for Germany, RT footer for Italy).
       parameters:
         - $ref: '#/components/parameters/operationId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       responses:
         '200':
           description: PDF receipt
@@ -1011,6 +1026,7 @@ paths:
       summary: Send receipt to customer
       parameters:
         - $ref: '#/components/parameters/operationId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
@@ -1041,6 +1057,7 @@ paths:
       summary: List sales
       parameters:
         - $ref: '#/components/parameters/registerId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
         - $ref: '#/components/parameters/DateFrom'
         - $ref: '#/components/parameters/DateTo'
         - $ref: '#/components/parameters/Limit'
@@ -1112,6 +1129,7 @@ paths:
         ```
       parameters:
         - $ref: '#/components/parameters/registerId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
@@ -1138,6 +1156,7 @@ paths:
       summary: Retrieve a sale
       parameters:
         - $ref: '#/components/parameters/operationId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       responses:
         '200':
           description: Sale retrieved
@@ -1162,6 +1181,7 @@ paths:
         Only available for sales in `open` state.
       parameters:
         - $ref: '#/components/parameters/operationId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       requestBody:
         required: true
         content:
@@ -1234,6 +1254,7 @@ paths:
         on the receipt.
       parameters:
         - $ref: '#/components/parameters/operationId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
@@ -1267,6 +1288,7 @@ paths:
         is cancelled before payment.
       parameters:
         - $ref: '#/components/parameters/operationId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       requestBody:
         content:
           application/json:
@@ -1310,6 +1332,7 @@ paths:
         Like all operations, the start is a fiscal event in jurisdictions that require it.
       parameters:
         - $ref: '#/components/parameters/registerId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
@@ -1334,6 +1357,7 @@ paths:
       summary: Retrieve a refund
       parameters:
         - $ref: '#/components/parameters/operationId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       responses:
         '200':
           description: Refund retrieved
@@ -1355,6 +1379,7 @@ paths:
         all original items will be refunded if omitted.
       parameters:
         - $ref: '#/components/parameters/operationId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       requestBody:
         required: true
         content:
@@ -1382,6 +1407,7 @@ paths:
       summary: Complete a refund
       parameters:
         - $ref: '#/components/parameters/operationId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
@@ -1410,6 +1436,7 @@ paths:
       summary: Abandon a refund
       parameters:
         - $ref: '#/components/parameters/operationId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       responses:
         '200':
           description: Refund abandoned
@@ -1417,6 +1444,608 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RefundOperation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+
+  # ─────────────────────────────────────────────
+  # EXCHANGES
+  # ─────────────────────────────────────────────
+
+  /registers/{registerId}/exchanges:
+    post:
+      tags: [Exchanges]
+      operationId: startExchange
+      summary: Start an exchange
+      description: |
+        Opens a new exchange operation. An exchange is an atomic return + new sale
+        that references the original operation. Fiscally generates two documents
+        in most jurisdictions.
+      parameters:
+        - $ref: '#/components/parameters/registerId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExchangeStart'
+      responses:
+        '201':
+          description: Exchange started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExchangeOperation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /exchanges/{operationId}:
+    get:
+      tags: [Exchanges]
+      operationId: getExchange
+      summary: Retrieve an exchange
+      parameters:
+        - $ref: '#/components/parameters/operationId'
+      responses:
+        '200':
+          description: Exchange retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExchangeOperation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags: [Exchanges]
+      operationId: updateExchange
+      summary: Update an open exchange
+      description: |
+        Mutate an open exchange — set returned items, new items, notes, or metadata.
+        Not a fiscal event. Only available for exchanges in `open` state.
+      parameters:
+        - $ref: '#/components/parameters/operationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExchangeUpdate'
+      responses:
+        '200':
+          description: Exchange updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExchangeOperation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /exchanges/{operationId}/complete:
+    post:
+      tags: [Exchanges]
+      operationId: completeExchange
+      summary: Complete an exchange
+      parameters:
+        - $ref: '#/components/parameters/operationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExchangeComplete'
+      responses:
+        '200':
+          description: Exchange completed and fiscalized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExchangeOperation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /exchanges/{operationId}/abandon:
+    post:
+      tags: [Exchanges]
+      operationId: abandonExchange
+      summary: Abandon an exchange
+      parameters:
+        - $ref: '#/components/parameters/operationId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  example: Customer changed mind
+      responses:
+        '200':
+          description: Exchange abandoned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExchangeOperation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  # ─────────────────────────────────────────────
+  # DEPOSITS
+  # ─────────────────────────────────────────────
+
+  /registers/{registerId}/deposits:
+    post:
+      tags: [Deposits]
+      operationId: startDeposit
+      summary: Start a deposit
+      description: |
+        Opens a new deposit (prepayment or reservation) operation. The deposit
+        amount is collected upfront and can later be captured via a deposit capture.
+      parameters:
+        - $ref: '#/components/parameters/registerId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DepositStart'
+      responses:
+        '201':
+          description: Deposit started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepositOperation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /deposits/{operationId}:
+    get:
+      tags: [Deposits]
+      operationId: getDeposit
+      summary: Retrieve a deposit
+      parameters:
+        - $ref: '#/components/parameters/operationId'
+      responses:
+        '200':
+          description: Deposit retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepositOperation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /deposits/{operationId}/complete:
+    post:
+      tags: [Deposits]
+      operationId: completeDeposit
+      summary: Complete a deposit
+      parameters:
+        - $ref: '#/components/parameters/operationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DepositComplete'
+      responses:
+        '200':
+          description: Deposit completed and fiscalized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepositOperation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /deposits/{operationId}/abandon:
+    post:
+      tags: [Deposits]
+      operationId: abandonDeposit
+      summary: Abandon a deposit
+      parameters:
+        - $ref: '#/components/parameters/operationId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  example: Customer cancelled reservation
+      responses:
+        '200':
+          description: Deposit abandoned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepositOperation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  # ─────────────────────────────────────────────
+  # DEPOSIT CAPTURES
+  # ─────────────────────────────────────────────
+
+  /registers/{registerId}/deposit-captures:
+    post:
+      tags: [Deposit Captures]
+      operationId: startDepositCapture
+      summary: Start a deposit capture
+      description: |
+        Opens a deposit capture operation that finalizes a prior deposit. References
+        the original deposit operation and settles the remaining balance.
+      parameters:
+        - $ref: '#/components/parameters/registerId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DepositCaptureStart'
+      responses:
+        '201':
+          description: Deposit capture started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepositCaptureOperation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /deposit-captures/{operationId}:
+    get:
+      tags: [Deposit Captures]
+      operationId: getDepositCapture
+      summary: Retrieve a deposit capture
+      parameters:
+        - $ref: '#/components/parameters/operationId'
+      responses:
+        '200':
+          description: Deposit capture retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepositCaptureOperation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /deposit-captures/{operationId}/complete:
+    post:
+      tags: [Deposit Captures]
+      operationId: completeDepositCapture
+      summary: Complete a deposit capture
+      parameters:
+        - $ref: '#/components/parameters/operationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DepositCaptureComplete'
+      responses:
+        '200':
+          description: Deposit capture completed and fiscalized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepositCaptureOperation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /deposit-captures/{operationId}/abandon:
+    post:
+      tags: [Deposit Captures]
+      operationId: abandonDepositCapture
+      summary: Abandon a deposit capture
+      parameters:
+        - $ref: '#/components/parameters/operationId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  example: Deposit refunded instead
+      responses:
+        '200':
+          description: Deposit capture abandoned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepositCaptureOperation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  # ─────────────────────────────────────────────
+  # GIFT CARD ISSUANCES
+  # ─────────────────────────────────────────────
+
+  /registers/{registerId}/gift-card-issuances:
+    post:
+      tags: [Gift Card Issuances]
+      operationId: startGiftCardIssuance
+      summary: Issue a gift card
+      description: |
+        Opens a gift card issuance operation. The gift card is activated and loaded
+        with the specified amount upon completion. The tax event occurs when the
+        card is redeemed, not at issuance.
+      parameters:
+        - $ref: '#/components/parameters/registerId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GiftCardIssuanceStart'
+      responses:
+        '201':
+          description: Gift card issuance started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GiftCardIssuanceOperation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /gift-card-issuances/{operationId}:
+    get:
+      tags: [Gift Card Issuances]
+      operationId: getGiftCardIssuance
+      summary: Retrieve a gift card issuance
+      parameters:
+        - $ref: '#/components/parameters/operationId'
+      responses:
+        '200':
+          description: Gift card issuance retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GiftCardIssuanceOperation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /gift-card-issuances/{operationId}/complete:
+    post:
+      tags: [Gift Card Issuances]
+      operationId: completeGiftCardIssuance
+      summary: Complete a gift card issuance
+      parameters:
+        - $ref: '#/components/parameters/operationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GiftCardIssuanceComplete'
+      responses:
+        '200':
+          description: Gift card issuance completed and fiscalized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GiftCardIssuanceOperation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /gift-card-issuances/{operationId}/abandon:
+    post:
+      tags: [Gift Card Issuances]
+      operationId: abandonGiftCardIssuance
+      summary: Abandon a gift card issuance
+      parameters:
+        - $ref: '#/components/parameters/operationId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  example: Customer changed mind
+      responses:
+        '200':
+          description: Gift card issuance abandoned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GiftCardIssuanceOperation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  # ─────────────────────────────────────────────
+  # TRAINING
+  # ─────────────────────────────────────────────
+
+  /registers/{registerId}/training:
+    post:
+      tags: [Training]
+      operationId: startTraining
+      summary: Start a training operation
+      description: |
+        Opens a non-fiscal training operation for staff practice. Training
+        operations follow the same lifecycle as real operations but do not
+        generate fiscal documents or signatures.
+      parameters:
+        - $ref: '#/components/parameters/registerId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TrainingStart'
+      responses:
+        '201':
+          description: Training operation started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrainingOperation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /training/{operationId}:
+    get:
+      tags: [Training]
+      operationId: getTraining
+      summary: Retrieve a training operation
+      parameters:
+        - $ref: '#/components/parameters/operationId'
+      responses:
+        '200':
+          description: Training operation retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrainingOperation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /training/{operationId}/complete:
+    post:
+      tags: [Training]
+      operationId: completeTraining
+      summary: Complete a training operation
+      parameters:
+        - $ref: '#/components/parameters/operationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TrainingComplete'
+      responses:
+        '200':
+          description: Training operation completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrainingOperation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /training/{operationId}/abandon:
+    post:
+      tags: [Training]
+      operationId: abandonTraining
+      summary: Abandon a training operation
+      parameters:
+        - $ref: '#/components/parameters/operationId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  example: Training session ended
+      responses:
+        '200':
+          description: Training operation abandoned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrainingOperation'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -1444,6 +2073,7 @@ paths:
         Only permitted before the daily closing. After closing, use a refund instead.
       parameters:
         - $ref: '#/components/parameters/registerId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
@@ -1468,6 +2098,7 @@ paths:
       summary: Retrieve a void
       parameters:
         - $ref: '#/components/parameters/operationId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       responses:
         '200':
           description: Void retrieved
@@ -1498,6 +2129,7 @@ paths:
         Common use cases: opening float, banking cash, safe drops, petty cash payouts.
       parameters:
         - $ref: '#/components/parameters/registerId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
@@ -1526,6 +2158,7 @@ paths:
       summary: Retrieve a cash movement
       parameters:
         - $ref: '#/components/parameters/operationId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       responses:
         '200':
           description: Cash movement retrieved
@@ -1560,6 +2193,7 @@ paths:
         it automatically via a heartbeat directive.
       parameters:
         - $ref: '#/components/parameters/registerId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         content:
@@ -1591,6 +2225,7 @@ paths:
       summary: List closings
       parameters:
         - $ref: '#/components/parameters/registerId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
         - name: state
           in: query
           schema:
@@ -1625,6 +2260,7 @@ paths:
       summary: Retrieve a closing
       parameters:
         - $ref: '#/components/parameters/closingId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       responses:
         '200':
           description: Closing retrieved
@@ -1644,6 +2280,7 @@ paths:
       summary: Download closing report as PDF
       parameters:
         - $ref: '#/components/parameters/closingId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       responses:
         '200':
           description: PDF closing report
@@ -1751,6 +2388,7 @@ paths:
         newest-first. Used for audit reports and reconciliation.
       parameters:
         - $ref: '#/components/parameters/registerId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/DateFrom'
@@ -1778,6 +2416,7 @@ paths:
           required: true
           schema:
             type: string
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       security:
         - BearerAuth: []
       responses:
@@ -1864,6 +2503,7 @@ paths:
             schema:
               $ref: '#/components/schemas/InvoiceCreate'
       parameters:
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
         - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '201':
@@ -1888,6 +2528,7 @@ paths:
       operationId: listInvoices
       summary: List invoices
       parameters:
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
         - name: organization_id
           in: query
           required: true
@@ -1936,6 +2577,7 @@ paths:
         (when available) for push notifications on status changes.
       parameters:
         - $ref: '#/components/parameters/invoiceId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       responses:
         '200':
           description: Invoice retrieved
@@ -1958,6 +2600,7 @@ paths:
         Only valid for invoices in `draft` state.
       parameters:
         - $ref: '#/components/parameters/invoiceId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
         - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '200':
@@ -2003,6 +2646,7 @@ paths:
         This gives you full control over the corrected amounts.
       parameters:
         - $ref: '#/components/parameters/invoiceId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         content:
@@ -2045,6 +2689,7 @@ paths:
         exact bytes transmitted — not regenerated. Store it for your own records.
       parameters:
         - $ref: '#/components/parameters/invoiceId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
         - name: format
           in: query
           schema:
@@ -2287,6 +2932,7 @@ paths:
         provisioned portal credential record. Raw secrets are never returned.
       parameters:
         - $ref: '#/components/parameters/credentialId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       security:
         - BearerAuth: []
       responses:
@@ -2314,6 +2960,7 @@ paths:
         to confirm the new values work.
       parameters:
         - $ref: '#/components/parameters/credentialId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       security:
         - BearerAuth: []
       requestBody:
@@ -2347,6 +2994,7 @@ paths:
         merchant has terminated their account.
       parameters:
         - $ref: '#/components/parameters/credentialId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       security:
         - BearerAuth: []
       responses:
@@ -2388,6 +3036,7 @@ paths:
         `validation_error`.
       parameters:
         - $ref: '#/components/parameters/credentialId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       security:
         - BearerAuth: []
       responses:
@@ -2720,6 +3369,7 @@ components:
         - $ref: '#/components/schemas/DepositOperation'
         - $ref: '#/components/schemas/DepositCaptureOperation'
         - $ref: '#/components/schemas/GiftCardIssuanceOperation'
+        - $ref: '#/components/schemas/TrainingOperation'
       discriminator:
         propertyName: type
         mapping:
@@ -2731,6 +3381,7 @@ components:
           deposit: '#/components/schemas/DepositOperation'
           deposit_capture: '#/components/schemas/DepositCaptureOperation'
           gift_card_issue: '#/components/schemas/GiftCardIssuanceOperation'
+          training: '#/components/schemas/TrainingOperation'
 
     PosOperationList:
       type: object
@@ -4050,38 +4701,6 @@ components:
             to detect drift. Drift beyond ~5 seconds is a fiscal risk in
             jurisdictions that require accurate event timestamps.
 
-    RegisterDirective:
-      type: object
-      required: [id, type]
-      properties:
-        object:
-          type: string
-          const: directive
-        id:
-          type: string
-        type:
-          type: string
-          enum:
-            - sync_operations
-            - update_tax_rates
-            - perform_closing
-            - restart_fiscal_service
-            - log_diagnostic
-          description: |
-            - `sync_operations`: Upload locally-stored unsynced operations
-            - `update_tax_rates`: Refresh local tax rate configuration
-            - `perform_closing`: Trigger an end-of-day closing
-            - `restart_fiscal_service`: Restart the local fiscal signing service
-            - `log_diagnostic`: Collect and upload a diagnostic log bundle
-        priority:
-          type: string
-          enum: [low, normal, high, critical]
-          default: normal
-        payload:
-          type: object
-          additionalProperties: true
-          description: Type-specific directive parameters
-
     # ── Cash Drawer Opening ───────────────────────
 
     CashDrawerOpeningCreate:
@@ -4714,6 +5333,208 @@ components:
                     Gift card issuance is not itself a taxable event — the tax
                     event occurs when the card is redeemed on a future sale.
 
+    TrainingOperation:
+      allOf:
+        - $ref: '#/components/schemas/PosOperationEnvelope'
+        - type: object
+          properties:
+            type:
+              type: string
+              const: training
+            data:
+              type: object
+              properties:
+                scenario:
+                  type: [string, "null"]
+                  description: Training scenario description
+                line_items:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/LineItem'
+                payments:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Payment'
+
+    # ── Exchange input schemas ───────────────────
+
+    ExchangeStart:
+      type: object
+      required: [original_operation_id]
+      properties:
+        original_operation_id:
+          type: string
+          description: The original sale being exchanged
+        cashier:
+          $ref: '#/components/schemas/Cashier'
+        external_id:
+          type: string
+        currency:
+          type: string
+          format: iso-4217
+          example: EUR
+        metadata:
+          type: object
+          additionalProperties: true
+
+    ExchangeUpdate:
+      type: object
+      properties:
+        returned_line_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/LineItemInput'
+          description: Items being returned from the original sale
+        new_line_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/LineItemInput'
+          description: New items the customer is taking instead
+        notes:
+          type: array
+          items:
+            $ref: '#/components/schemas/PosOperationNote'
+        metadata:
+          type: object
+          additionalProperties: true
+
+    ExchangeComplete:
+      type: object
+      required: [payments]
+      properties:
+        payments:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/PaymentInput'
+          description: |
+            Mix of inbound and outbound payments settling the net difference
+            between returned and new items.
+
+    # ── Deposit input schemas ────────────────────
+
+    DepositStart:
+      type: object
+      required: [amount, currency]
+      properties:
+        amount:
+          type: integer
+          description: Deposit amount in minor currency units
+        currency:
+          type: string
+          format: iso-4217
+          example: EUR
+        description:
+          type: string
+          description: Description of the deposit or reservation
+        cashier:
+          $ref: '#/components/schemas/Cashier'
+        external_id:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+
+    DepositComplete:
+      type: object
+      required: [payments]
+      properties:
+        payments:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/PaymentInput'
+          description: Payments collecting the deposit amount.
+
+    # ── Deposit Capture input schemas ────────────
+
+    DepositCaptureStart:
+      type: object
+      required: [original_operation_id]
+      properties:
+        original_operation_id:
+          type: string
+          description: The original deposit operation being captured
+        line_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/LineItemInput'
+          description: Line items for the final sale settling the deposit
+        cashier:
+          $ref: '#/components/schemas/Cashier'
+        external_id:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+
+    DepositCaptureComplete:
+      type: object
+      required: [payments]
+      properties:
+        payments:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/PaymentInput'
+          description: |
+            Payments settling the remaining balance after the deposit is applied.
+
+    # ── Gift Card Issuance input schemas ─────────
+
+    GiftCardIssuanceStart:
+      type: object
+      required: [amount, currency]
+      properties:
+        amount:
+          type: integer
+          description: Value to load onto the gift card in minor currency units
+        currency:
+          type: string
+          format: iso-4217
+          example: EUR
+        external_id:
+          type: string
+        cashier:
+          $ref: '#/components/schemas/Cashier'
+        metadata:
+          type: object
+          additionalProperties: true
+
+    GiftCardIssuanceComplete:
+      type: object
+      required: [payment]
+      properties:
+        payment:
+          $ref: '#/components/schemas/PaymentInput'
+          description: |
+            The single inbound payment for the gift card purchase.
+
+    # ── Training input schemas ───────────────────
+
+    TrainingStart:
+      type: object
+      properties:
+        scenario:
+          type: string
+          description: Training scenario description
+        cashier:
+          $ref: '#/components/schemas/Cashier'
+        external_id:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+
+    TrainingComplete:
+      type: object
+      properties:
+        payments:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentInput'
+          description: Optional payments for training practice.
+
     # ── Shared ────────────────────────────────────
 
     Address:
@@ -5284,13 +6105,13 @@ components:
             returned after creation.
           oneOf:
             - $ref: '#/components/schemas/FisconlineCredentials'
-            - $ref: '#/components/schemas/EntatelCredentials'
+            - $ref: '#/components/schemas/EntratelCredentials'
             - $ref: '#/components/schemas/FinanzOnlineCredentials'
           discriminator:
             propertyName: type
             mapping:
               fisconline: '#/components/schemas/FisconlineCredentials'
-              entratel: '#/components/schemas/EntatelCredentials'
+              entratel: '#/components/schemas/EntratelCredentials'
               finanz_online: '#/components/schemas/FinanzOnlineCredentials'
 
     FisconlineCredentials:
@@ -5323,7 +6144,7 @@ components:
             renewed by the merchant at the AdE portal. Rotate via PATCH
             before expiry to avoid transmission interruption.
 
-    EntatelCredentials:
+    EntratelCredentials:
       type: object
       required: [type, tax_id_number, pin, password]
       properties:
@@ -5388,13 +6209,13 @@ components:
             existing record. After update, `state` resets to `unvalidated`.
           oneOf:
             - $ref: '#/components/schemas/FisconlineCredentials'
-            - $ref: '#/components/schemas/EntatelCredentials'
+            - $ref: '#/components/schemas/EntratelCredentials'
             - $ref: '#/components/schemas/FinanzOnlineCredentials'
           discriminator:
             propertyName: type
             mapping:
               fisconline: '#/components/schemas/FisconlineCredentials'
-              entratel: '#/components/schemas/EntatelCredentials'
+              entratel: '#/components/schemas/EntratelCredentials'
               finanz_online: '#/components/schemas/FinanzOnlineCredentials'
 
     FiscalPortalCredential:
