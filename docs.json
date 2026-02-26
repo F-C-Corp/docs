@@ -82,7 +82,15 @@
         ]
       },
       {
-        "tab": "Fiscalization API"
+        "tab": "Fiscalization API",
+        "pages": [
+          "auth",
+          "pos-operation-ingestion",
+          {
+            "group": "API",
+            "openapi": "api-reference/openapi.json"
+          }
+        ]
       },
       {
         "tab": "Analytics API"
