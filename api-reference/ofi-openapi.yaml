@@ -435,11 +435,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [token]
-              properties:
-                token:
-                  type: string
+              $ref: '#/components/schemas/TokenIntrospectionRequest'
       responses:
         '200':
           description: Token introspection result
@@ -803,14 +799,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                issue_register_credential:
-                  type: boolean
-                  default: false
-                  description: |
-                    If `true`, a register-scoped API key is issued and returned
-                    in the response. Only needed for device-direct integrations.
+              $ref: '#/components/schemas/RegisterActivationRequest'
       responses:
         '200':
           description: Register activated
@@ -1107,17 +1096,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  object:
-                    type: string
-                    const: list
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/SaleOperation'
-                  cursor:
-                    type: [string, "null"]
+                $ref: '#/components/schemas/SaleOperationList'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -1331,11 +1310,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                reason:
-                  type: string
-                  example: Customer cancelled
+              $ref: '#/components/schemas/AbandonRequest'
       responses:
         '200':
           description: Sale abandoned
@@ -1618,11 +1593,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                reason:
-                  type: string
-                  example: Customer changed mind
+              $ref: '#/components/schemas/AbandonRequest'
       responses:
         '200':
           description: Exchange abandoned
@@ -1732,11 +1703,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                reason:
-                  type: string
-                  example: Customer cancelled reservation
+              $ref: '#/components/schemas/AbandonRequest'
       responses:
         '200':
           description: Deposit abandoned
@@ -1846,11 +1813,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                reason:
-                  type: string
-                  example: Deposit refunded instead
+              $ref: '#/components/schemas/AbandonRequest'
       responses:
         '200':
           description: Deposit capture abandoned
@@ -1958,11 +1921,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                reason:
-                  type: string
-                  example: Training session ended
+              $ref: '#/components/schemas/AbandonRequest'
       responses:
         '200':
           description: Training operation abandoned
@@ -2123,12 +2082,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                type:
-                  type: string
-                  enum: [daily, shift, monthly, annual]
-                  default: daily
+              $ref: '#/components/schemas/ClosingRequest'
       responses:
         '201':
           description: Closing created
@@ -2576,12 +2530,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                reason:
-                  type: string
-                  description: Human-readable reason for cancellation
-                  example: Duplicate invoice issued in error
+              $ref: '#/components/schemas/InvoiceCancellationRequest'
       responses:
         '200':
           description: Cancellation initiated
@@ -3310,6 +3259,19 @@ components:
         cursor:
           type: [string, "null"]
 
+    SaleOperationList:
+      type: object
+      properties:
+        object:
+          type: string
+          const: list
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/SaleOperation'
+        cursor:
+          type: [string, "null"]
+
     # ── Fiscal document (polymorphic) ────────────────
 
     FiscalDocument:
@@ -3560,6 +3522,48 @@ components:
             Format varies by regime.
 
     # ── Sale ──────────────────────────────────────
+
+    RegisterActivationRequest:
+      type: object
+      properties:
+        issue_register_credential:
+          type: boolean
+          default: false
+          description: |
+            If `true`, a register-scoped API key is issued and returned
+            in the response. Only needed for device-direct integrations.
+
+    AbandonRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          description: Human-readable reason for abandoning the operation
+          example: Customer cancelled
+
+    ClosingRequest:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [daily, shift, monthly, annual]
+          default: daily
+
+    InvoiceCancellationRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          description: Human-readable reason for cancellation
+          example: Duplicate invoice issued in error
+
+    TokenIntrospectionRequest:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          description: The Bearer token or register API key to introspect
 
     SaleStart:
       type: object

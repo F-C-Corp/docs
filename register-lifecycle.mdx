@@ -1,0 +1,248 @@
+---
+title: 'Register Lifecycle'
+description: 'How registers are commissioned, monitored, and decommissioned'
+---
+
+## Overview
+
+A register is the core fiscal unit in OpenFiskal. In Germany it maps to a TSE-bound device, in Austria to an RKSV signature chain, and in Italy to an RT device. Every POS operation — sales, refunds, closings — is scoped to a register.
+
+Registers have their own lifecycle, separate from the operations they process. Understanding this lifecycle is essential for fleet management, device replacement, and compliance.
+
+## Fiscal state machine
+
+```
+                    activate         deactivate
+  ┌─────────┐  ────────────►┌────────┐  ──────────────►┌──────────┐
+  │ pending  │               │ active │                 │ inactive │
+  └─────────┘               └───┬────┘                 └──────────┘
+                                │
+                                │ fiscal device failure
+                                │
+                                ▼
+                           ┌─────────┐   activate
+                           │  error  ├──────────────►┌────────┐
+                           └─────────┘               │ active │
+                                                     └────────┘
+
+  Terminal state: inactive (decommissioned — cannot be undone)
+```
+
+- **pending**: The register has been created but not yet fiscally registered. It cannot accept operations.
+- **active**: The fiscal device is initialized and the register is ready to process operations. This is the only state that accepts sales, refunds, closings, and other fiscal events.
+- **error**: The fiscal device encountered a failure (e.g. TSE hardware fault, RT communication error). The register can be re-activated to recover.
+- **inactive**: The register has been permanently decommissioned. Fiscal deregistration has been triggered with the relevant authority. This cannot be undone — create a new register instead.
+
+## Commissioning a register
+
+<Steps>
+  <Step title="Create the register">
+    A register belongs to a location. Provide a label and the jurisdiction it operates in.
+
+    ```bash
+    curl -X POST https://api.openfiskal.com/v1/locations/loc_01HXYZ/registers \
+      -H "Authorization: Bearer $TOKEN" \
+      -H "OpenFiskal-Organization: org_01HXYZ" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "label": "Kasse 2",
+        "jurisdiction": "DE"
+      }'
+    ```
+
+    The register is created in `pending` fiscal state. It cannot process operations yet.
+  </Step>
+
+  <Step title="Activate the register">
+    Activation triggers jurisdiction-specific fiscal registration:
+
+    - **Germany**: Initializes the TSE, establishes the signature chain
+    - **Italy**: Activates the RT device with the Agenzia delle Entrate
+    - **Austria**: Establishes the RKSV signature chain, registers the AES key with FinanzOnline
+
+    ```bash
+    curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/activate \
+      -H "Authorization: Bearer $TOKEN" \
+      -H "OpenFiskal-Organization: org_01HXYZ"
+    ```
+
+    ```json
+    {
+      "object": "register_activation",
+      "register": {
+        "id": "reg_01HXYZ",
+        "label": "Kasse 2",
+        "jurisdiction": "DE",
+        "fiscal_state": "active",
+        "fiscal_registration": {
+          "regime": "tse",
+          "tse_serial": "abc123def456",
+          "client_id": "Kasse 2",
+          "signature_algorithm": "ecdsa-plain-SHA384",
+          "time_format": "utcTime",
+          "registered_at": "2026-02-26T10:00:00Z"
+        }
+      },
+      "register_api_key": null,
+      "credential_issued": false
+    }
+    ```
+
+    The register is now `active` and ready to accept operations. The activation call is idempotent — safe to retry.
+
+    <Info>
+      For device-direct integrations (EV chargers, unattended kiosks), pass `issue_register_credential: true` to receive a register-scoped API key. For server-side integrations, the platform Bearer token already covers all register operations.
+    </Info>
+  </Step>
+
+  <Step title="Start sending heartbeats">
+    Once active, the register should send periodic heartbeats so OpenFiskal can monitor its health.
+
+    ```bash
+    curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/heartbeat \
+      -H "Authorization: Bearer $TOKEN" \
+      -H "OpenFiskal-Organization: org_01HXYZ" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "timestamp": "2026-02-26T10:05:00Z",
+        "sequence": 1,
+        "status": "operational",
+        "software": {
+          "pos_vendor": "Acme POS",
+          "pos_version": "3.2.1"
+        }
+      }'
+    ```
+
+    The `status` field in the heartbeat is self-reported by the register. OpenFiskal derives its own operational status from heartbeat frequency:
+
+    | Status | Meaning |
+    |---|---|
+    | `operational` | Heartbeat received within expected interval |
+    | `degraded` | Register self-reported degraded status |
+    | `offline` | No heartbeat for 2x expected interval |
+    | `stale` | No heartbeat for an extended period |
+
+    Use `GET /registers/:id/status` to check a register's operational status and list its currently open operations.
+  </Step>
+</Steps>
+
+## Monitoring
+
+### Register status
+
+The status endpoint provides liveness information and the authoritative list of open operations:
+
+```bash
+curl https://api.openfiskal.com/v1/registers/reg_01HXYZ/status \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "OpenFiskal-Organization: org_01HXYZ"
+```
+
+```json
+{
+  "register_id": "reg_01HXYZ",
+  "status": "operational",
+  "last_heartbeat_at": "2026-02-26T14:30:00Z",
+  "open_operations": [
+    {
+      "id": "op_01ABC",
+      "type": "sale",
+      "started_at": "2026-02-26T14:25:00Z"
+    }
+  ],
+  "software": {
+    "pos_vendor": "Acme POS",
+    "pos_version": "3.2.1"
+  }
+}
+```
+
+### Fleet status
+
+To check all registers at a location in one call:
+
+```bash
+curl https://api.openfiskal.com/v1/locations/loc_01HXYZ/registers/status \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+This returns the status of every register at the location — useful for dashboards and alerting.
+
+## Error recovery
+
+If a fiscal device fails (TSE hardware fault, RT communication error), the register transitions to `error`. Operations on the register will be rejected until it is recovered.
+
+To recover, call activate again:
+
+```bash
+curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/activate \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "OpenFiskal-Organization: org_01HXYZ"
+```
+
+Activation is idempotent. If the underlying device issue has been resolved, the register returns to `active`. If the device is still unreachable, the call will fail and the register remains in `error`.
+
+<Warning>
+  Operations that were in-flight when the device failed may be in `failed` state. Check `GET /registers/:id/status` for open operations and start new ones as needed. Failed operations cannot be retried — start fresh.
+</Warning>
+
+## Decommissioning a register
+
+When a register is permanently retired — hardware replaced, location closed, or jurisdiction change — decommission it:
+
+```bash
+curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/deactivate \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "OpenFiskal-Organization: org_01HXYZ"
+```
+
+This triggers jurisdiction-specific fiscal deregistration:
+
+- **Germany**: Closes the TSE session and marks it as decommissioned
+- **Italy**: Deactivates the RT device with the Agenzia delle Entrate
+- **Austria**: Closes the RKSV signature chain with FinanzOnline
+
+<Warning>
+  Deactivation is permanent and cannot be undone. Any active register API key is automatically revoked. All open operations must be completed or abandoned before deactivation — the call returns `409 Conflict` otherwise.
+</Warning>
+
+### Replacing a register
+
+To replace a decommissioned register:
+
+1. Create a new register at the same location
+2. Activate it — it gets a fresh fiscal registration
+3. Update your POS to route operations to the new register ID
+
+The old register and all its historical operations remain in the system for audit purposes.
+
+## Credential management
+
+For device-direct integrations, register API keys may need rotation:
+
+```bash
+curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/credentials/rotate \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "OpenFiskal-Organization: org_01HXYZ"
+```
+
+The previous key is revoked immediately. The new key is returned in the response and must be provisioned to the device over a secure channel.
+
+<Tip>
+  Rotate credentials when a device is compromised, replaced, or as part of routine security hygiene. Always ensure the new key is provisioned before the old device goes offline.
+</Tip>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Getting Started" icon="rocket" href="/getting-started">
+    End-to-end walkthrough from setup token to first sale.
+  </Card>
+  <Card title="POS Operations" icon="cash-register" href="/pos-operation-ingestion">
+    The operation lifecycle — start, mutate, complete, abandon.
+  </Card>
+  <Card title="Authentication" icon="key" href="/auth">
+    Credential types, token flows, and device-direct vs server-side topologies.
+  </Card>
+</CardGroup>
