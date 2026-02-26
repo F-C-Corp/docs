@@ -1,0 +1,5613 @@
+openapi: 3.1.0
+info:
+  title: OpenFiskal API
+  version: 1.0.0
+  description: |
+    The OpenFiskal API enables POS vendors and custom POS builders to integrate
+    fiscalization compliance across multiple jurisdictions (Germany TSE, Austria RKSV,
+    Italy RT, and more) through a single, unified API surface.
+
+    ## Core Concept: Operations
+
+    Everything that happens at a register is an **operation**. Each operation has a
+    `start` and an `end` — and in many fiscal jurisdictions (notably Germany), both
+    events are individually signed by the fiscal security device.
+
+    This is not just a UX lifecycle. It is a legal requirement.
+
+    ### Germany (TSE) Example
+
+    In Germany, the TSE (Technische Sicherheitseinrichtung) mandates that the **start**
+    and **end** of every POS transaction are independently signed. Both signatures must
+    appear on the printed receipt.
+
+    The flow looks like this:
+
+    ```
+    1. Cashier opens a sale for Table 3
+       → POST /registers/reg_01/sales
+       → TSE signs the start event
+       → Platform returns: start_signature, transaction_counter=4821
+
+    2. Items are added, customer orders dessert, splits the bill
+       → PATCH /sales/op_01  (not a fiscal event — free mutations)
+
+    3. Customer pays
+       → POST /sales/op_01/complete
+       → TSE signs the end event
+       → Platform returns: end_signature, transaction_counter=4822, receipt
+
+    Receipt contains:
+      Start: counter=4821, sig=abc..., signed_at=19:02:11
+      End:   counter=4822, sig=xyz..., signed_at=20:14:55
+    ```
+
+    Meanwhile, Table 7 and Table 1 have their own open operations with their own
+    TSE-signed starts — all in-flight simultaneously on the same register.
+
+    ### Why Start is a Fiscal Event
+
+    Because the platform is involved from the very beginning, OpenFiskal becomes the
+    **authoritative record of every open operation at every register, at all times**.
+    If a register crashes mid-service, the platform holds the start signatures and
+    open state. When it reconnects, fiscal integrity is preserved.
+
+    ## Operation Lifecycle
+
+    Every operation moves through the following states. The state transitions
+    marked with 🔏 are **fiscal events** — they are signed by the fiscal security
+    device and cannot be undone.
+
+    ```
+    ┌─────────────────────────────────────────────────────────────────┐
+    │                     OPERATION LIFECYCLE                         │
+    └─────────────────────────────────────────────────────────────────┘
+
+         POST /registers/:id/sales
+         POST /registers/:id/refunds
+         POST /registers/:id/...
+                    │
+                    │ 🔏 fiscal start event signed
+                    ▼
+              ┌───────────┐
+              │   open    │ ◄─── PATCH mutations are free here
+              └─────┬─────┘      (items, discounts, customer)
+                    │
+            ┌───────┴────────┐
+            │                │
+            ▼                ▼
+    POST .../complete   POST .../abandon
+    🔏 fiscal end            │
+    event signed             │
+            │                ▼
+            ▼          ┌───────────┐
+    ┌─────────────┐    │ abandoned │  no fiscal document
+    │  completed  │    └───────────┘
+    └──────┬──────┘
+           │
+           │  same-day only,
+           │  before daily closing
+           ▼
+    POST /registers/:id/voids
+    🔏 fiscal reversal signed
+           │
+           ▼
+       ┌────────┐
+       │ voided │
+       └────────┘
+
+    ── error path ────────────────────────────────────────────────────
+
+    If payment or fiscalization fails during complete:
+
+              ┌───────────┐
+              │   open    │
+              └─────┬─────┘
+                    │ POST .../complete
+                    │ fiscalization fails
+                    ▼
+              ┌───────────┐
+              │  failed   │  operation recorded, no fiscal document
+              └───────────┘
+    ```
+
+    ### Fiscal Event Detail
+
+    For jurisdictions that sign both the start and end of an operation
+    (e.g. Germany TSE), the timeline looks like this:
+
+    ```
+    Time ──────────────────────────────────────────────────────────►
+
+      POST /sales          PATCH /sales         POST /sales/complete
+           │                    │                       │
+           │ 🔏 start signed    │  free mutations       │ 🔏 end signed
+           │                    │  (no fiscal event)    │
+           ▼                    ▼                       ▼
+      ┌─────────┐         ┌─────────┐             ┌─────────┐
+      │ fiscal  │         │ fiscal  │             │ fiscal  │
+      │  start  │         │  start  │             │  start  │
+      │ counter │         │ counter │             │ counter │
+      │  =4821  │         │  =4821  │             │  =4821  │
+      │  sig=…  │         │  sig=…  │             │  sig=…  │
+      └─────────┘         └─────────┘             ├─────────┤
+                                                  │ fiscal  │
+                                                  │   end   │
+                                                  │ counter │
+                                                  │  =4822  │
+                                                  │  sig=…  │
+                                                  └─────────┘
+                                                  receipt available
+    ```
+
+    ### Concurrent Operations
+
+    Multiple operations can be open simultaneously on the same register.
+    This is normal for hospitality (tables), mobility (fuel pumps, EV chargers),
+    and workshop environments (service bays). Each open operation holds its own
+    fiscally-signed start event independently.
+
+    ```
+    Register reg_01
+    │
+    ├── op_A  [open]  started 19:02  counter=4821  ← table in progress
+    ├── op_B  [open]  started 19:15  counter=4823  ← another table
+    ├── op_C  [open]  started 18:45  counter=4819  ← waiting for card
+    └── op_D  [open]  started 20:01  counter=4825  ← just started
+
+    All four hold TSE-signed start events.
+    Each completes independently when payment is confirmed.
+    The daily closing can only happen once all are completed or abandoned.
+    ```
+
+    ## Operation Types
+
+    Each operation type has its own endpoint with a strict, minimal schema.
+    The unified `/operations` feed allows listing and reading across all types.
+
+    | Type | Description |
+    |---|---|
+    | `sale` | Standard sale |
+    | `refund` | Full or partial return |
+    | `exchange` | Simultaneous refund + sale |
+    | `void` | Same-day cancellation (no new fiscal document) |
+    | `cash_movement` | Cash in / cash out |
+    | `deposit` | Prepayment or reservation |
+    | `deposit_capture` | Finalization of a prior deposit |
+    | `gift_card_issue` | Gift card activation |
+    | `training` | Non-fiscal staff training transaction |
+
+    ## Authentication
+
+    All API requests require a Bearer token obtained via OAuth2 client credentials.
+    Platform integrators (POS vendors acting on behalf of merchants) pass an additional
+    `OpenFiskal-Organization` header to scope requests to a specific merchant.
+
+    ```
+    Authorization: Bearer <platform_token>
+    OpenFiskal-Organization: org_01HXYZ
+    ```
+
+    Register devices use a lightweight long-lived API key for heartbeat-only auth.
+
+    ## Idempotency
+
+    All mutating endpoints accept an `Idempotency-Key` header. Strongly recommended
+    for `start` and `complete` actions — retrying a fiscalization event without one
+    risks duplicate fiscal records.
+
+    ## Monetary Values
+
+    All monetary amounts are integers in the **minor currency unit** (cents for EUR).
+    No floats, ever.
+
+  contact:
+    name: OpenFiskal Support
+    email: support@openfiskal.com
+    url: https://docs.openfiskal.com
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+
+servers:
+  - url: https://api.openfiskal.com/v1
+    description: Production
+  - url: https://sandbox.api.openfiskal.com/v1
+    description: Sandbox
+
+security:
+  - BearerAuth: []
+
+tags:
+  - name: Authentication
+    description: |
+      Platform credentials, access tokens, and register credential management.
+      See the Security Model section in the API overview for a full guide on
+      which credential type to use for your integration topology.
+  - name: Organizations
+    description: Merchant and operator account management
+  - name: Locations
+    description: Physical or logical points of sale
+  - name: Registers
+    description: Individual POS terminals or logical fiscal devices
+  - name: Operations
+    description: |
+      Unified read surface across all operation types. Use the typed endpoints
+      (Sales, Refunds, etc.) for creation and mutation.
+  - name: Sales
+    description: |
+      Standard sale operations. The most common operation type.
+
+      **Lifecycle:** `open` → `completed` (or `abandoned` / `failed`)
+
+      Both the start and end are fiscal events. In Germany, both are TSE-signed.
+  - name: Refunds
+    description: |
+      Full or partial return of a prior sale. Must reference the original operation.
+
+      **Lifecycle:** `open` → `completed` (or `abandoned`)
+  - name: Exchanges
+    description: |
+      Atomic return + new sale. Fiscally generates two documents in most jurisdictions.
+  - name: Voids
+    description: |
+      Same-day cancellation of a completed operation. Nullifies the original document.
+      Only available before the daily closing in most jurisdictions.
+  - name: Cash Movements
+    description: |
+      Cash in and cash out events. Not a sale — no line items, no receipt.
+      Required to be logged in Germany (TSE) and Austria (RKSV).
+  - name: Deposits
+    description: Prepayments and reservations.
+  - name: Deposit Captures
+    description: Finalizes a prior deposit operation.
+  - name: Gift Card Issuances
+    description: Gift card activation. Redemption is handled via the `gift_card` payment method on a sale.
+  - name: Receipts
+    description: Fiscal receipt documents and rendering
+  - name: Closings
+    description: End-of-day and shift closing reports
+  - name: Heartbeat
+    description: Register liveness, status monitoring, and directive delivery
+  - name: Cash Drawer Openings
+    description: |
+      Fiscal log of cash drawer open events. Required in jurisdictions that
+      mandate a complete audit trail of drawer activity (e.g. Norway, Sweden).
+      Each opening must be logged at the time it occurs, regardless of whether
+      a POS operation is in progress.
+  - name: Verification
+    description: Public receipt authenticity verification. No authentication required.
+
+  - name: E-Invoicing
+    description: |
+      Electronic invoice creation, submission, and lifecycle management.
+
+      E-invoicing is a **separate resource family from POS operations**. A POS
+      operation (sale, refund) produces a fiscal receipt at the point of sale.
+      An e-invoice is a structured document routed through a national authority
+      to a recipient — B2B, B2G, or consumer-on-request.
+
+      The two worlds connect via a **reference**, not a merge: a `SaleOperation`
+      may carry a `references.invoice_id` when a customer at a POS requests a
+      formal invoice. Each resource is independently complete.
+
+      ### Jurisdictions
+
+      | Code | Country/Region | System | Notes |
+      |------|---------------|--------|-------|
+      | `IT` | Italy | SDI / FatturaPA | Mandatory B2B since 2019 |
+      | `ES-PV-VI` | Álava | TicketBAI | All businesses since 2022 |
+      | `ES-PV-SS` | Gipuzkoa | TicketBAI | All businesses since 2022 |
+      | `ES-PV-BI` | Bizkaia | TicketBAI + Batuz | Includes LROE ledger requirement |
+      | `ES` | Spain (national) | Verifactu | Rolling out 2025 |
+
+      ### Invoice Lifecycle
+
+      ```
+      draft ──► submitted ──► transmitted ──► delivered ──► accepted
+                    │               │               │
+                    │               │               └──► undeliverable
+                    │               │
+                    │               └──► rejected_by_authority
+                    │                    (format / validation error)
+                    │
+                    └── Italy only: may remain draft up to 12 days
+                        for deferred invoicing (document_type: deferred_invoice)
+
+      Any transmitted invoice may be cancelled:
+      transmitted / delivered / accepted ──► cancellation_requested ──► cancelled
+      ```
+
+      `delivered` and `accepted` are SDI-specific states. Italy routes invoices
+      through SDI to the recipient, who has a 15-day acceptance window.
+      TicketBAI and Verifactu have no recipient delivery step — transmitted = done.
+
+      ### Document Types
+
+      | `document_type` | Description | IT (FatturaPA) | ES (Verifactu/TBAI) |
+      |----------------|-------------|---------------|---------------------|
+      | `invoice` | Standard B2B invoice | TD01 | F1 |
+      | `simplified_invoice` | B2C or low-value B2B | TD07 | F2 |
+      | `credit_note` | Full or partial cancellation | TD04 | R1 |
+      | `debit_note` | Additional charge on prior invoice | TD05 | — |
+      | `deferred_invoice` | Italy: issued after delivery (up to 12 days) | TD24 | — |
+      | `self_invoice` | Reverse charge scenarios | TD17 / TD18 / TD19 | — |
+
+  - name: Fiscal Certificates
+    description: |
+      Signing certificates required for e-invoicing jurisdictions.
+
+      TicketBAI, Verifactu, and SDI (via intermediary) all require a qualified
+      certificate to sign fiscal documents. OpenFiskal acts as the signing
+      intermediary — vendors provision certificates per organization and
+      jurisdiction, and OpenFiskal handles signing, chain maintenance, and
+      renewal reminders.
+
+  - name: Fiscal Portal Credentials
+    description: |
+      Government portal credentials that OpenFiskal holds on behalf of the
+      merchant and uses to authenticate to country-specific fiscal authority
+      portals.
+
+      Unlike signing certificates (which are cryptographic keys), portal
+      credentials are username/password pairs for government web portals.
+      OpenFiskal stores them encrypted and uses them only to submit fiscal
+      data on the merchant's behalf.
+
+      ### Jurisdiction coverage
+
+      | Portal | Jurisdiction | Used for |
+      |--------|-------------|----------|
+      | `fisconline` | Italy (IT) | B2C commercial document transmission to AdE |
+      | `entratel` | Italy (IT) | Corporate/accountant variant of Fisconline |
+      | `finanz_online` | Austria (AT) | RKSV registration and transmission to BMF |
+
+      Germany does not require portal credentials — the TSE device signs
+      transactions locally and no government portal login is needed.
+
+      ### Credential lifecycle
+
+      Portal credentials expire periodically (Fisconline: every 60 days;
+      FinanzOnline: annually). OpenFiskal tracks expiry and sends renewal
+      reminders at 14 and 3 days before expiry. After expiry, fiscal
+      transmission is blocked until credentials are rotated.
+
+      Credential values are **write-only** — raw secrets are never returned
+      after provisioning. Rotating credentials requires a `PATCH` with the
+      new values.
+
+      Certificates are scoped to an organization and a jurisdiction. An
+      organization may hold certificates for multiple jurisdictions simultaneously.
+
+paths:
+
+  # ─────────────────────────────────────────────
+  # AUTH
+  # ─────────────────────────────────────────────
+
+  /auth/token:
+    post:
+      tags: [Authentication]
+      operationId: createToken
+      summary: Obtain a platform access token
+      description: |
+        Exchange your platform `client_id` and `client_secret` for a short-lived
+        Bearer token (1 hour TTL). Use this token on all subsequent API requests.
+
+        **This endpoint must only be called from your server.** Never expose
+        your `client_secret` to devices or client-side code.
+
+        To scope requests to a specific merchant organization, include the
+        `OpenFiskal-Organization` header on downstream requests. You do not
+        need a separate token per organization.
+
+        ```http
+        Authorization: Bearer <token>
+        OpenFiskal-Organization: org_01HXYZ
+        ```
+
+        See the Security Model section in the API overview for full guidance
+        on credential types and integration topologies.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRequest'
+      responses:
+        '200':
+          description: Access token issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/token/introspect:
+    post:
+      tags: [Authentication]
+      operationId: introspectToken
+      summary: Introspect a token
+      description: |
+        Validate a token and retrieve its claims — expiry and associated
+        organization (if scoped). Useful for debugging credential issues.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+      responses:
+        '200':
+          description: Token introspection result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenIntrospection'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/platform-credentials:
+    get:
+      tags: [Authentication]
+      operationId: listPlatformCredentials
+      summary: List platform credentials
+      description: |
+        Returns all active `client_id` entries for your platform account.
+        Client secrets are never returned after initial issuance.
+      responses:
+        '200':
+          description: List of platform credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformCredentialList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Authentication]
+      operationId: createPlatformCredential
+      summary: Create a platform credential
+      description: |
+        Issue a new `client_id` / `client_secret` pair. Use this to rotate
+        credentials or issue separate credentials per environment.
+
+        The `client_secret` is returned only once at creation time.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformCredentialCreate'
+      responses:
+        '201':
+          description: Platform credential created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformCredential'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/platform-credentials/{clientId}:
+    delete:
+      tags: [Authentication]
+      operationId: revokePlatformCredential
+      summary: Revoke a platform credential
+      description: |
+        Permanently revokes a platform credential. All tokens issued from
+        this credential are immediately invalidated.
+
+        Ensure a replacement credential is active before revoking.
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Credential revoked
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ─────────────────────────────────────────────
+  # ORGANIZATIONS
+  # ─────────────────────────────────────────────
+
+  /organizations:
+    get:
+      tags: [Organizations]
+      operationId: listOrganizations
+      summary: List organizations
+      description: |
+        Returns all organizations under your platform account. Use this to
+        enumerate the merchants you have onboarded.
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Paginated list of organizations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Organizations]
+      operationId: createOrganization
+      summary: Create an organization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationCreate'
+      responses:
+        '201':
+          description: Organization created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /organizations/{organizationId}:
+    get:
+      tags: [Organizations]
+      operationId: getOrganization
+      summary: Retrieve an organization
+      parameters:
+        - $ref: '#/components/parameters/organizationId'
+      responses:
+        '200':
+          description: Organization retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags: [Organizations]
+      operationId: updateOrganization
+      summary: Update an organization
+      parameters:
+        - $ref: '#/components/parameters/organizationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationUpdate'
+      responses:
+        '200':
+          description: Organization updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+
+  # ─────────────────────────────────────────────
+  # LOCATIONS
+  # ─────────────────────────────────────────────
+
+  /organizations/{organizationId}/locations:
+    post:
+      tags: [Locations]
+      operationId: createLocation
+      summary: Create a location
+      parameters:
+        - $ref: '#/components/parameters/organizationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LocationCreate'
+      responses:
+        '201':
+          description: Location created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Location'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    get:
+      tags: [Locations]
+      operationId: listLocations
+      summary: List locations
+      parameters:
+        - $ref: '#/components/parameters/organizationId'
+      responses:
+        '200':
+          description: List of locations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /locations/{locationId}:
+    get:
+      tags: [Locations]
+      operationId: getLocation
+      summary: Retrieve a location
+      parameters:
+        - $ref: '#/components/parameters/locationId'
+      responses:
+        '200':
+          description: Location retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Location'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags: [Locations]
+      operationId: updateLocation
+      summary: Update a location
+      parameters:
+        - $ref: '#/components/parameters/locationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LocationUpdate'
+      responses:
+        '200':
+          description: Location updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Location'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ─────────────────────────────────────────────
+  # REGISTERS
+  # ─────────────────────────────────────────────
+
+  /locations/{locationId}/registers:
+    post:
+      tags: [Registers]
+      operationId: createRegister
+      summary: Create a register
+      description: |
+        A register is the core fiscal unit. It maps to a TSE-bound device in Germany,
+        an RKSV signature chain in Austria, or an RT device in Italy.
+
+        The platform maintains the authoritative list of all open operations per register.
+        If a register crashes and reconnects, it reconciles against this state.
+      parameters:
+        - $ref: '#/components/parameters/locationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterCreate'
+      responses:
+        '201':
+          description: Register created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Register'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    get:
+      tags: [Registers]
+      operationId: listRegisters
+      summary: List registers at a location
+      parameters:
+        - $ref: '#/components/parameters/locationId'
+      responses:
+        '200':
+          description: List of registers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /registers/{registerId}:
+    get:
+      tags: [Registers]
+      operationId: getRegister
+      summary: Retrieve a register
+      parameters:
+        - $ref: '#/components/parameters/registerId'
+      responses:
+        '200':
+          description: Register retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Register'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /registers/{registerId}/activate:
+    post:
+      tags: [Registers]
+      operationId: activateRegister
+      summary: Activate a register
+      description: |
+        Triggers jurisdiction-specific fiscal registration:
+        - **Germany**: Initializes the TSE, establishes the signature chain
+        - **Italy**: Activates the RT device with Agenzia delle Entrate
+        - **Austria**: Establishes the RKSV signature chain, registers AES key
+
+        Idempotent — calling on an already-active register returns the existing
+        fiscal registration data.
+
+        ### Register Credentials (Optional)
+
+        Pass `issue_register_credential: true` to receive a register-scoped API
+        key in the response. Use this for device-direct integrations (EV chargers,
+        unattended kiosks). The key is returned **once only** — store it immediately
+        and push to the device over a secure provisioning channel.
+
+        Server-side platform integrations (Shopify-style) should omit this — the
+        platform token already covers all register operations.
+
+        See the Security Model section in the API overview for full guidance.
+      parameters:
+        - $ref: '#/components/parameters/registerId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                issue_register_credential:
+                  type: boolean
+                  default: false
+                  description: |
+                    If `true`, a register-scoped API key is issued and returned
+                    in the response. Only needed for device-direct integrations.
+      responses:
+        '200':
+          description: Register activated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterActivationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /registers/{registerId}/deactivate:
+    post:
+      tags: [Registers]
+      operationId: deactivateRegister
+      summary: Deactivate a register
+      description: |
+        Fiscally decommissions a register and triggers jurisdiction-specific
+        deregistration where required. Cannot be undone.
+
+        Any active register credential for this register is automatically revoked.
+      parameters:
+        - $ref: '#/components/parameters/registerId'
+      responses:
+        '200':
+          description: Register deactivated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Register'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /registers/{registerId}/credentials/rotate:
+    post:
+      tags: [Registers, Authentication]
+      operationId: rotateRegisterCredential
+      summary: Rotate a register credential
+      description: |
+        Immediately revokes the existing register API key and issues a new one.
+
+        Use this when a device is compromised, replaced, or during routine rotation.
+        The old key is invalidated the moment this endpoint is called — provision
+        the new key to the device before the next operation attempt.
+
+        A register credential must have been previously issued via
+        `POST /registers/:id/activate` with `issue_register_credential: true`.
+      parameters:
+        - $ref: '#/components/parameters/registerId'
+      responses:
+        '200':
+          description: Credential rotated. New key returned once.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterCredentialRotation'
+        '409':
+          description: No register credential has been issued for this register
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /registers/{registerId}/status:
+    get:
+      tags: [Registers]
+      operationId: getRegisterStatus
+      summary: Get register operational status
+      description: |
+        Returns liveness status derived from heartbeat activity, plus the
+        platform's authoritative list of currently open operations.
+      parameters:
+        - $ref: '#/components/parameters/registerId'
+      responses:
+        '200':
+          description: Register status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /locations/{locationId}/registers/status:
+    get:
+      tags: [Registers]
+      operationId: listRegisterStatuses
+      summary: Get status for all registers at a location
+      parameters:
+        - $ref: '#/components/parameters/locationId'
+      responses:
+        '200':
+          description: Register status overview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterStatusList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ─────────────────────────────────────────────
+  # OPERATIONS (unified read surface)
+  # ─────────────────────────────────────────────
+
+  /registers/{registerId}/operations:
+    get:
+      tags: [Operations]
+      operationId: listOperations
+      summary: List all operations on a register
+      description: |
+        Unified chronological feed of all operation types on a register.
+        Use this for audit logs, daily closing summaries, and replaying register history.
+
+        Use the typed creation endpoints (POST /sales, POST /refunds, etc.) to
+        create and manage individual operations.
+      parameters:
+        - $ref: '#/components/parameters/registerId'
+        - name: type
+          in: query
+          schema:
+            $ref: '#/components/schemas/PosOperationType'
+        - name: state
+          in: query
+          schema:
+            $ref: '#/components/schemas/PosOperationState'
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 200
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paginated list of operations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PosOperationList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /operations/{operationId}:
+    get:
+      tags: [Operations]
+      operationId: getOperation
+      summary: Retrieve any operation by ID
+      description: |
+        Returns the full operation object regardless of type. The `type` field
+        identifies which operation type this is, and `data` contains type-specific fields.
+      parameters:
+        - $ref: '#/components/parameters/operationId'
+      responses:
+        '200':
+          description: Operation retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PosOperation'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /operations/{operationId}/receipt:
+    get:
+      tags: [Receipts]
+      operationId: getReceipt
+      summary: Retrieve a receipt
+      description: |
+        Returns the canonical OpenFiskal receipt for a completed operation.
+        Self-contained and verifiable — all data needed to render, archive,
+        or verify is present. No additional API calls required.
+
+        Only available for operations in `completed` state.
+      parameters:
+        - $ref: '#/components/parameters/operationId'
+      responses:
+        '200':
+          description: Receipt retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Receipt'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Operation is not yet completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /operations/{operationId}/receipt.pdf:
+    get:
+      tags: [Receipts]
+      operationId: getReceiptPdf
+      summary: Download receipt as PDF
+      description: |
+        Rendered PDF of the fiscal receipt. Layout adapts to jurisdiction
+        (e.g. TSE dual-signature block for Germany, RT footer for Italy).
+      parameters:
+        - $ref: '#/components/parameters/operationId'
+      responses:
+        '200':
+          description: PDF receipt
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /operations/{operationId}/receipt/send:
+    post:
+      tags: [Receipts]
+      operationId: sendReceipt
+      summary: Send receipt to customer
+      parameters:
+        - $ref: '#/components/parameters/operationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReceiptSendRequest'
+      responses:
+        '200':
+          description: Receipt delivery initiated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReceiptDelivery'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ─────────────────────────────────────────────
+  # SALES
+  # ─────────────────────────────────────────────
+
+  /registers/{registerId}/sales:
+    get:
+      tags: [Sales]
+      operationId: listSales
+      summary: List sales
+      parameters:
+        - $ref: '#/components/parameters/registerId'
+        - $ref: '#/components/parameters/DateFrom'
+        - $ref: '#/components/parameters/DateTo'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Paginated list of sales
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  object:
+                    type: string
+                    const: list
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SaleOperation'
+                  cursor:
+                    type: [string, "null"]
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    post:
+      tags: [Sales]
+      operationId: startSale
+      summary: Start a sale
+      description: |
+        Opens a new sale operation. This is a **fiscal event** — the platform
+        records the start and, in jurisdictions that require it, signs it immediately.
+
+        The response includes `fiscal.start` with the start-side signature and
+        transaction counter. Store this — it must appear on the final receipt.
+
+        Multiple sales can be open simultaneously on the same register (restaurant
+        tables, fuel pumps, workshop bays). Each gets its own fiscally-signed start.
+
+        ### Germany TSE Example
+
+        **Request:**
+        ```json
+        {
+          "external_id": "table-3-order-42",
+          "cashier": { "id": "cashier_01", "display_name": "Maria R." }
+        }
+        ```
+
+        **Response:**
+        ```json
+        {
+          "id": "op_01HXYZ",
+          "type": "sale",
+          "state": "open",
+          "started_at": "2026-02-25T19:02:11Z",
+          "fiscal": {
+            "jurisdiction": "DE",
+            "start": {
+              "signed_at": "2026-02-25T19:02:11Z",
+              "transaction_counter": 4821,
+              "signature": "base64encodedStartSignature==",
+              "certificate_id": "cert_tse_01"
+            },
+            "end": null
+          }
+        }
+        ```
+      parameters:
+        - $ref: '#/components/parameters/registerId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaleStart'
+      responses:
+        '201':
+          description: Sale started and fiscally opened
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SaleOperation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /sales/{operationId}:
+    get:
+      tags: [Sales]
+      operationId: getSale
+      summary: Retrieve a sale
+      parameters:
+        - $ref: '#/components/parameters/operationId'
+      responses:
+        '200':
+          description: Sale retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SaleOperation'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags: [Sales]
+      operationId: updateSale
+      summary: Update an open sale
+      description: |
+        Mutate an open sale — add or remove line items, update quantities,
+        apply discounts, attach customer data.
+
+        **Not a fiscal event.** No signature is generated. Mutations are free
+        and reversible until `complete` is called.
+
+        Only available for sales in `open` state.
+      parameters:
+        - $ref: '#/components/parameters/operationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaleUpdate'
+      responses:
+        '200':
+          description: Sale updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SaleOperation'
+        '409':
+          description: Sale is not in `open` state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /sales/{operationId}/complete:
+    post:
+      tags: [Sales]
+      operationId: completeSale
+      summary: Complete a sale
+      description: |
+        Finalizes the sale. This is a **fiscal event** — the platform signs the end,
+        generates the fiscal document, and (where required) transmits to the
+        tax authority.
+
+        The response includes the fully-formed operation with `fiscal.end` populated.
+        The receipt is now available at `GET /operations/:id/receipt`.
+
+        ### Germany TSE Example
+
+        After completion, `fiscal` contains both the start and end signatures,
+        as required by KassenSichV. Both must be printed on the receipt.
+
+        ```json
+        "fiscal": {
+          "jurisdiction": "DE",
+          "document_number": "2026-004822",
+          "transmission_status": "not_required",
+          "start": {
+            "signed_at": "2026-02-25T19:02:11Z",
+            "transaction_counter": 4821,
+            "signature": "base64encodedStartSignature=="
+          },
+          "end": {
+            "signed_at": "2026-02-25T20:14:55Z",
+            "transaction_counter": 4822,
+            "signature": "base64encodedEndSignature==",
+            "process_type": "Kassenbeleg-V1",
+            "process_data": "Beleg^42.50_0.00_0.00_0.00_0.00^42.50:Bar"
+          },
+          "jurisdiction_data": {
+            "tse_serial": "TSE0123456789ABCDEF",
+            "tse_signature_algorithm": "ecdsa-plain-SHA256",
+            "tse_time_format": "unixTime",
+            "tse_certificate_id": "cert_tse_01",
+            "client_id": "Kasse1"
+          },
+          "verification": {
+            "qr_data": "V0;Kasse1;ecdsa-plain-SHA256;2026-02-25T19:02:11.000Z;2026-02-25T20:14:55.000Z;42.50;4822;base64encodedEndSignature=="
+          }
+        }
+        ```
+
+        The `qr_data` value follows the DSFinV-K QR format and is printed verbatim
+        on the receipt.
+      parameters:
+        - $ref: '#/components/parameters/operationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaleComplete'
+      responses:
+        '200':
+          description: Sale completed and fiscalized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SaleOperation'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /sales/{operationId}/abandon:
+    post:
+      tags: [Sales]
+      operationId: abandonSale
+      summary: Abandon a sale
+      description: |
+        Explicitly closes an open sale without completing it. No fiscal document
+        is generated, but the abandonment is recorded. In Germany, the open TSE
+        transaction is properly closed to maintain chain integrity.
+
+        Use this when a customer walks away, a table is cleared, or a transaction
+        is cancelled before payment.
+      parameters:
+        - $ref: '#/components/parameters/operationId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  example: Customer cancelled
+      responses:
+        '200':
+          description: Sale abandoned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SaleOperation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  # ─────────────────────────────────────────────
+  # REFUNDS
+  # ─────────────────────────────────────────────
+
+  /registers/{registerId}/refunds:
+    post:
+      tags: [Refunds]
+      operationId: startRefund
+      summary: Start a refund
+      description: |
+        Opens a refund operation. Must reference the original operation via
+        `original_operation_id`. The original fiscal document number will be
+        included in the refund's fiscal output.
+
+        Supports both full and partial refunds. For partial refunds, specify
+        the returned items via `PATCH /refunds/:id` before completing.
+
+        Like all operations, the start is a fiscal event in jurisdictions that require it.
+      parameters:
+        - $ref: '#/components/parameters/registerId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefundStart'
+      responses:
+        '201':
+          description: Refund started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundOperation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /refunds/{operationId}:
+    get:
+      tags: [Refunds]
+      operationId: getRefund
+      summary: Retrieve a refund
+      parameters:
+        - $ref: '#/components/parameters/operationId'
+      responses:
+        '200':
+          description: Refund retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundOperation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags: [Refunds]
+      operationId: updateRefund
+      summary: Update an open refund
+      description: |
+        Set the line items being returned. For full refunds this is optional —
+        all original items will be refunded if omitted.
+      parameters:
+        - $ref: '#/components/parameters/operationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefundUpdate'
+      responses:
+        '200':
+          description: Refund updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundOperation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /refunds/{operationId}/complete:
+    post:
+      tags: [Refunds]
+      operationId: completeRefund
+      summary: Complete a refund
+      parameters:
+        - $ref: '#/components/parameters/operationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefundComplete'
+      responses:
+        '200':
+          description: Refund completed and fiscalized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundOperation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /refunds/{operationId}/abandon:
+    post:
+      tags: [Refunds]
+      operationId: abandonRefund
+      summary: Abandon a refund
+      parameters:
+        - $ref: '#/components/parameters/operationId'
+      responses:
+        '200':
+          description: Refund abandoned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundOperation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  # ─────────────────────────────────────────────
+  # VOIDS
+  # ─────────────────────────────────────────────
+
+  /registers/{registerId}/voids:
+    post:
+      tags: [Voids]
+      operationId: createVoid
+      summary: Void a completed operation
+      description: |
+        Same-day cancellation of a completed operation. Unlike a refund, a void
+        nullifies the original fiscal document rather than creating a new one.
+
+        - **Germany**: Storno-Buchung against the original TSE record
+        - **Italy**: Documento di annullamento — only valid same-day, before chiusura
+        - **Austria**: Reversal recorded in the RKSV signature chain
+
+        Only permitted before the daily closing. After closing, use a refund instead.
+      parameters:
+        - $ref: '#/components/parameters/registerId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VoidCreate'
+      responses:
+        '201':
+          description: Void created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VoidOperation'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /voids/{operationId}:
+    get:
+      tags: [Voids]
+      operationId: getVoid
+      summary: Retrieve a void
+      parameters:
+        - $ref: '#/components/parameters/operationId'
+      responses:
+        '200':
+          description: Void retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VoidOperation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ─────────────────────────────────────────────
+  # CASH MOVEMENTS
+  # ─────────────────────────────────────────────
+
+  /registers/{registerId}/cash-movements:
+    post:
+      tags: [Cash Movements]
+      operationId: createCashMovement
+      summary: Record a cash movement
+      description: |
+        Records a cash-in or cash-out event. Not a sale — no line items, no receipt.
+
+        Must be logged in Germany (KassenSichV — all cash drawer events must be
+        recorded in the TSE) and Austria (RKSV).
+
+        Common use cases: opening float, banking cash, safe drops, petty cash payouts.
+      parameters:
+        - $ref: '#/components/parameters/registerId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CashMovementCreate'
+      responses:
+        '201':
+          description: Cash movement recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashMovementOperation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /cash-movements/{operationId}:
+    get:
+      tags: [Cash Movements]
+      operationId: getCashMovement
+      summary: Retrieve a cash movement
+      parameters:
+        - $ref: '#/components/parameters/operationId'
+      responses:
+        '200':
+          description: Cash movement retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashMovementOperation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ─────────────────────────────────────────────
+  # CLOSINGS
+  # ─────────────────────────────────────────────
+
+  /registers/{registerId}/closings:
+    post:
+      tags: [Closings]
+      operationId: createClosing
+      summary: Trigger a closing
+      description: |
+        Triggers an end-of-day or shift closing. Closings are first-class fiscal
+        events — not just summary reports.
+
+        - **Italy**: `chiusura giornaliera` — required daily, transmitted to RT
+        - **Germany**: `Tagesabschluss` — required for DSFinV-K compliance
+        - **Austria**: Required for RKSV monthly and annual reports
+
+        All open operations must be completed or abandoned before a daily closing
+        can be triggered. If a required closing is missed, OpenFiskal will trigger
+        it automatically via a heartbeat directive.
+      parameters:
+        - $ref: '#/components/parameters/registerId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum: [daily, shift, monthly, annual]
+                  default: daily
+      responses:
+        '201':
+          description: Closing created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Closing'
+        '409':
+          description: Open operations exist or closing already performed today
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    get:
+      tags: [Closings]
+      operationId: listClosings
+      summary: List closings
+      parameters:
+        - $ref: '#/components/parameters/registerId'
+        - name: state
+          in: query
+          schema:
+            type: string
+            enum: [pending, completed, transmitted, failed]
+          description: Filter by closing state. Use `failed` to surface closings needing attention.
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [daily, shift, monthly, annual]
+        - $ref: '#/components/parameters/DateFrom'
+        - $ref: '#/components/parameters/DateTo'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: List of closings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClosingList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /closings/{closingId}:
+    get:
+      tags: [Closings]
+      operationId: getClosing
+      summary: Retrieve a closing
+      parameters:
+        - $ref: '#/components/parameters/closingId'
+      responses:
+        '200':
+          description: Closing retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Closing'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /closings/{closingId}/report.pdf:
+    get:
+      tags: [Closings]
+      operationId: getClosingReportPdf
+      summary: Download closing report as PDF
+      parameters:
+        - $ref: '#/components/parameters/closingId'
+      responses:
+        '200':
+          description: PDF closing report
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ─────────────────────────────────────────────
+  # HEARTBEAT
+  # ─────────────────────────────────────────────
+
+  /registers/{registerId}/heartbeat:
+    post:
+      tags: [Heartbeat]
+      operationId: sendHeartbeat
+      summary: Send a register heartbeat
+      description: |
+        Pure liveness ping. The register calls this on a regular schedule
+        (every 30–60 seconds). OpenFiskal derives the register's operational
+        status from heartbeat recency and the reported `status` field.
+
+        The response carries `server_time` so the register can detect local
+        clock drift — accurate timestamps are a fiscal requirement in many
+        jurisdictions.
+
+        Register devices authenticate using `X-Register-Api-Key` rather than
+        a full OAuth token, suitable for resource-constrained hardware.
+      parameters:
+        - $ref: '#/components/parameters/registerId'
+      security:
+        - BearerAuth: []
+        - RegisterApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HeartbeatRequest'
+      responses:
+        '200':
+          description: Heartbeat acknowledged
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HeartbeatResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ─────────────────────────────────────────────
+  # CASH DRAWER OPENINGS
+  # ─────────────────────────────────────────────
+
+  /registers/{registerId}/cash-drawer-openings:
+    post:
+      tags: [Cash Drawer Openings]
+      operationId: createCashDrawerOpening
+      summary: Log a cash drawer opening
+      description: |
+        Called by the register the moment the cash drawer opens. Must be
+        logged immediately — not batched or deferred — because the timestamp
+        is fiscally significant.
+
+        An opening can be linked to a POS operation (e.g. the drawer opened
+        at the end of a sale) or be standalone (e.g. a manager opened the
+        drawer to check the float). Both are valid and both must be logged.
+
+        Register devices authenticate using `X-Register-Api-Key`.
+      parameters:
+        - $ref: '#/components/parameters/registerId'
+      security:
+        - BearerAuth: []
+        - RegisterApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CashDrawerOpeningCreate'
+      responses:
+        '201':
+          description: Cash drawer opening logged
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashDrawerOpening'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+    get:
+      tags: [Cash Drawer Openings]
+      operationId: listCashDrawerOpenings
+      summary: List cash drawer openings
+      description: |
+        Returns all logged cash drawer openings for a register, ordered
+        newest-first. Used for audit reports and reconciliation.
+      parameters:
+        - $ref: '#/components/parameters/registerId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/DateFrom'
+        - $ref: '#/components/parameters/DateTo'
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Paginated list of cash drawer openings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashDrawerOpeningList'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /cash-drawer-openings/{cashDrawerOpeningId}:
+    get:
+      tags: [Cash Drawer Openings]
+      operationId: getCashDrawerOpening
+      summary: Retrieve a cash drawer opening
+      parameters:
+        - name: cashDrawerOpeningId
+          in: path
+          required: true
+          schema:
+            type: string
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Cash drawer opening
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashDrawerOpening'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ─────────────────────────────────────────────
+  # VERIFICATION (public)
+  # ─────────────────────────────────────────────
+
+  /verify/{fiscalDocumentCode}:
+    get:
+      tags: [Verification]
+      operationId: verifyReceipt
+      summary: Verify a receipt
+      description: |
+        Public endpoint — no authentication required. Verifies the authenticity
+        of a fiscal document by its code (printed on the receipt or encoded in
+        the QR code).
+
+        Safe to expose publicly and link from QR codes on receipts.
+      security: []
+      parameters:
+        - name: fiscalDocumentCode
+          in: path
+          required: true
+          schema:
+            type: string
+          example: DE-2026-004822
+      responses:
+        '200':
+          description: Receipt verified
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerificationResult'
+        '404':
+          description: Receipt not found or code invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ─────────────────────────────────────────────
+  # E-INVOICING
+  # ─────────────────────────────────────────────
+
+  /invoices:
+    post:
+      tags: [E-Invoicing]
+      operationId: createInvoice
+      summary: Create an invoice
+      description: |
+        Creates and submits an electronic invoice through the appropriate
+        national authority for the organization's jurisdiction.
+
+        The submission is synchronous where the authority allows it (TicketBAI,
+        Verifactu). For SDI (Italy), the invoice is submitted and `state` moves
+        to `transmitted` once SDI acknowledges receipt — delivery to the
+        recipient is tracked separately via `delivery_status`.
+
+        ### Draft mode
+
+        Pass `submit: false` to create the invoice in `draft` status without
+        submitting. Useful for Italy's deferred invoicing window (TD24 invoices
+        may be issued up to 12 days after delivery of goods/services). Call
+        `POST /invoices/:id/submit` when ready.
+
+        ### Linking to a POS operation
+
+        To link this invoice to a POS sale (e.g. customer requests a fattura
+        at a physical POS), pass `references.operation_id`. The sale record
+        will be updated to carry `references.invoice_id` in return.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoiceCreate'
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: "Invoice created (and submitted unless `submit: false`)"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          description: |
+            Invoice failed authority validation. Check `fiscal_errors` for
+            the authority's rejection reason and code.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    get:
+      tags: [E-Invoicing]
+      operationId: listInvoices
+      summary: List invoices
+      parameters:
+        - name: organization_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: state
+          in: query
+          schema:
+            $ref: '#/components/schemas/InvoiceState'
+        - name: document_type
+          in: query
+          schema:
+            $ref: '#/components/schemas/InvoiceDocumentType'
+        - name: jurisdiction
+          in: query
+          schema:
+            type: string
+            example: IT
+        - name: buyer_tax_id
+          in: query
+          schema:
+            type: string
+          description: Filter by buyer tax identifier
+        - $ref: '#/components/parameters/DateFrom'
+        - $ref: '#/components/parameters/DateTo'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Paginated list of invoices
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /invoices/{invoiceId}:
+    get:
+      tags: [E-Invoicing]
+      operationId: getInvoice
+      summary: Retrieve an invoice
+      description: |
+        Returns the full invoice with current transmission and delivery status.
+        Poll this endpoint to track SDI delivery progress, or use webhooks
+        (when available) for push notifications on status changes.
+      parameters:
+        - $ref: '#/components/parameters/invoiceId'
+      responses:
+        '200':
+          description: Invoice retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /invoices/{invoiceId}/submit:
+    post:
+      tags: [E-Invoicing]
+      operationId: submitInvoice
+      summary: Submit a draft invoice
+      description: |
+        Submits a `draft` invoice to the national authority. Once submitted,
+        the invoice is immutable — corrections require a credit note.
+
+        Only valid for invoices in `draft` state.
+      parameters:
+        - $ref: '#/components/parameters/invoiceId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Invoice submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+        '409':
+          description: Invoice is not in `draft` state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Authority rejected the submission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /invoices/{invoiceId}/cancel:
+    post:
+      tags: [E-Invoicing]
+      operationId: cancelInvoice
+      summary: Cancel an invoice
+      description: |
+        Cancels a transmitted invoice by issuing the appropriate corrective
+        document for the jurisdiction:
+
+        - **Italy (SDI)**: Issues a TD04 credit note covering the full original
+          invoice amount. The credit note is submitted through SDI and linked
+          to the original.
+        - **TicketBAI**: Issues an annulment record (`AnulaTicketBAI`) signed
+          and transmitted to the Hacienda.
+        - **Verifactu**: Issues a `R1` rectificative record.
+
+        The original invoice status moves to `cancellation_requested` until
+        the authority acknowledges, then to `cancelled`.
+
+        For **partial** corrections, use `POST /invoices` with
+        `document_type: credit_note` and `references.original_invoice_id`.
+        This gives you full control over the corrected amounts.
+      parameters:
+        - $ref: '#/components/parameters/invoiceId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  description: Human-readable reason for cancellation
+                  example: Duplicate invoice issued in error
+      responses:
+        '200':
+          description: Cancellation initiated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+        '409':
+          description: Invoice cannot be cancelled in its current state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /invoices/{invoiceId}/document:
+    get:
+      tags: [E-Invoicing]
+      operationId: getInvoiceDocument
+      summary: Download the signed invoice document
+      description: |
+        Returns the canonical signed document as submitted to the authority.
+        Format varies by jurisdiction:
+
+        - **Italy**: FatturaPA XML (UTF-8, validated against the official XSD)
+        - **TicketBAI**: TicketBAI XML signed with XAdES-EPES
+        - **Verifactu**: Verifactu XML
+
+        The response `Content-Type` reflects the format. The document is the
+        exact bytes transmitted — not regenerated. Store it for your own records.
+      parameters:
+        - $ref: '#/components/parameters/invoiceId'
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [xml, pdf]
+            default: xml
+          description: |
+            `xml` returns the signed fiscal document.
+            `pdf` returns a human-readable representation (not the fiscal document —
+            the XML is the legally binding record).
+      responses:
+        '200':
+          description: Invoice document
+          content:
+            application/xml:
+              schema:
+                type: string
+                format: binary
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Invoice has not been submitted yet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ─────────────────────────────────────────────
+  # FISCAL CERTIFICATES
+  # ─────────────────────────────────────────────
+
+  /organizations/{organizationId}/fiscal-certificates:
+    post:
+      tags: [Fiscal Certificates]
+      operationId: createFiscalCertificate
+      summary: Provision a fiscal signing certificate
+      description: |
+        Provisions a qualified signing certificate for an organization and
+        jurisdiction. OpenFiskal uses this certificate to sign all fiscal
+        documents on the organization's behalf.
+
+        The certificate must be obtained from the relevant authority before
+        provisioning:
+        - **Italy (SDI)**: Qualified certificate from an accredited CA, or
+          delegate signing to OpenFiskal directly via an intermediary agreement
+        - **TicketBAI**: Certificate issued by the relevant Hacienda Foral
+          (one per province — Álava, Gipuzkoa, Bizkaia each require separate
+          certificates)
+        - **Verifactu**: Qualified certificate from an accredited Spanish CA
+
+        Upload the certificate as a base64-encoded PKCS#12 bundle with its
+        private key. OpenFiskal stores it encrypted and uses it only for
+        document signing.
+
+        ### Certificate Lifecycle
+
+        OpenFiskal monitors certificate expiry and sends renewal reminders
+        at 60, 30, and 7 days before expiry. After expiry, document submission
+        is blocked until a replacement is provisioned.
+      parameters:
+        - $ref: '#/components/parameters/organizationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FiscalCertificateCreate'
+      responses:
+        '201':
+          description: Certificate provisioned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FiscalCertificate'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: An active certificate already exists for this jurisdiction
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    get:
+      tags: [Fiscal Certificates]
+      operationId: listFiscalCertificates
+      summary: List fiscal certificates
+      parameters:
+        - $ref: '#/components/parameters/organizationId'
+        - name: jurisdiction
+          in: query
+          schema:
+            type: string
+          description: Filter by jurisdiction code
+      responses:
+        '200':
+          description: List of fiscal certificates
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FiscalCertificateList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /organizations/{organizationId}/fiscal-certificates/{certificateId}:
+    get:
+      tags: [Fiscal Certificates]
+      operationId: getFiscalCertificate
+      summary: Retrieve a fiscal certificate
+      parameters:
+        - $ref: '#/components/parameters/organizationId'
+        - $ref: '#/components/parameters/certificateId'
+      responses:
+        '200':
+          description: Certificate retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FiscalCertificate'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Fiscal Certificates]
+      operationId: revokeFiscalCertificate
+      summary: Revoke a fiscal certificate
+      description: |
+        Permanently revokes a certificate and removes it from OpenFiskal's
+        signing infrastructure. Any subsequent document submission for this
+        jurisdiction will fail until a replacement is provisioned.
+
+        Only revoke when replacing — do not revoke before the replacement is
+        active.
+      parameters:
+        - $ref: '#/components/parameters/organizationId'
+        - $ref: '#/components/parameters/certificateId'
+      responses:
+        '204':
+          description: Certificate revoked
+        '409':
+          description: Certificate is currently in use and cannot be revoked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ─────────────────────────────────────────────
+  # FISCAL PORTAL CREDENTIALS
+  # ─────────────────────────────────────────────
+
+  /organizations/{organizationId}/fiscal-portal-credentials:
+    post:
+      tags: [Fiscal Portal Credentials]
+      operationId: createFiscalPortalCredential
+      summary: Provision portal credentials
+      description: |
+        Provisions government portal credentials for an organization and
+        jurisdiction. OpenFiskal stores the credentials encrypted at rest and
+        uses them only to submit fiscal data on the merchant's behalf.
+
+        The `portal_type` discriminates the credential shape:
+
+        - **`fisconline`** — Italian Fisconline (Codice Fiscale holder, B2C RT):
+          `pin` + `password` + `tax_id_number`. Password expires every 60 days.
+        - **`entratel`** — Italian Entratel (accountants, corporate filers):
+          `pin` + `password` + `tax_id_number`. Same rotation cadence as Fisconline.
+        - **`finanz_online`** — Austrian BMF portal (RKSV):
+          `participant_id` + `user_id` + `pin`. Expires annually.
+
+        After provisioning, call `/validate` to confirm the credentials work
+        against the live portal before commissioning any registers.
+
+        Credentials are write-only — raw values are never returned after this
+        call. Only masked representations (e.g. `pin: "****3"`) are returned
+        on subsequent reads.
+      parameters:
+        - $ref: '#/components/parameters/organizationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FiscalPortalCredentialCreate'
+      responses:
+        '201':
+          description: Credentials provisioned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FiscalPortalCredential'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: |
+            Credentials for this `portal_type` already exist for this
+            organization. Use `PATCH` to rotate them.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    get:
+      tags: [Fiscal Portal Credentials]
+      operationId: listFiscalPortalCredentials
+      summary: List portal credentials
+      description: |
+        Returns all provisioned portal credentials for an organization.
+        Credential values are masked in the response.
+      parameters:
+        - $ref: '#/components/parameters/organizationId'
+        - name: portal_type
+          in: query
+          schema:
+            type: string
+            enum: [fisconline, entratel, finanz_online]
+          description: Filter by portal type
+      responses:
+        '200':
+          description: List of provisioned portal credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FiscalPortalCredentialList'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /fiscal-portal-credentials/{credentialId}:
+    get:
+      tags: [Fiscal Portal Credentials]
+      operationId: getFiscalPortalCredential
+      summary: Retrieve portal credentials
+      description: |
+        Retrieves metadata and masked credential values for a single
+        provisioned portal credential record. Raw secrets are never returned.
+      parameters:
+        - $ref: '#/components/parameters/credentialId'
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Portal credential record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FiscalPortalCredential'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags: [Fiscal Portal Credentials]
+      operationId: updateFiscalPortalCredential
+      summary: Rotate portal credentials
+      description: |
+        Replaces the stored credential values with new ones. Use this when
+        the merchant has renewed their portal password (Fisconline: every 60
+        days; FinanzOnline: annually).
+
+        Only the credential fields themselves can be updated — `portal_type`,
+        `jurisdiction`, and `organization_id` are immutable. After updating,
+        the credential `state` is reset to `unvalidated`. Call `/validate`
+        to confirm the new values work.
+      parameters:
+        - $ref: '#/components/parameters/credentialId'
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FiscalPortalCredentialUpdate'
+      responses:
+        '200':
+          description: Credentials updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FiscalPortalCredential'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Fiscal Portal Credentials]
+      operationId: deleteFiscalPortalCredential
+      summary: Deprovision portal credentials
+      description: |
+        Permanently removes the stored credentials. Any subsequent fiscal
+        transmission for this jurisdiction will fail until new credentials
+        are provisioned.
+
+        Do not delete credentials unless you are replacing them or the
+        merchant has terminated their account.
+      parameters:
+        - $ref: '#/components/parameters/credentialId'
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: Credentials deprovisioned
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: |
+            Credentials are currently in use for active fiscal transmission
+            and cannot be deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /fiscal-portal-credentials/{credentialId}/validate:
+    post:
+      tags: [Fiscal Portal Credentials]
+      operationId: validateFiscalPortalCredential
+      summary: Validate credentials against the government portal
+      description: |
+        Performs a live authentication attempt against the government portal
+        using the stored credentials. Updates `state` and `last_validated_at`
+        based on the result.
+
+        This call is synchronous but may take a few seconds depending on
+        portal response times. The result reflects the portal's actual
+        response — not just format validation.
+
+        Use this:
+        - After provisioning new credentials, before commissioning registers
+        - After rotating credentials (PATCH), to confirm the new values work
+        - Manually when `state` transitions to `invalid` and credentials have
+          been renewed by the merchant
+
+        A successful validation sets `state` to `valid`. A failed attempt
+        sets it to `invalid` and includes the portal's error message in
+        `validation_error`.
+      parameters:
+        - $ref: '#/components/parameters/credentialId'
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Validation attempt completed (check `state` for outcome)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FiscalPortalCredential'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          description: |
+            Government portal is unreachable. The stored credentials were
+            not tested. Try again later.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+# ─────────────────────────────────────────────────────────
+# COMPONENTS
+# ─────────────────────────────────────────────────────────
+
+components:
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        OAuth2 access token from `/auth/token`. Platform integrators also pass
+        `OpenFiskal-Organization: org_xxx` to act on behalf of a merchant.
+    RegisterApiKey:
+      type: apiKey
+      in: header
+      name: X-Register-Api-Key
+      description: |
+        Long-lived API key issued per register. Used for heartbeat authentication
+        on resource-constrained hardware that cannot run a full OAuth flow.
+
+  parameters:
+    organizationId:
+      name: organizationId
+      in: path
+      required: true
+      schema:
+        type: string
+      example: org_01HXYZ
+
+    locationId:
+      name: locationId
+      in: path
+      required: true
+      schema:
+        type: string
+      example: loc_01HXYZ
+
+    registerId:
+      name: registerId
+      in: path
+      required: true
+      schema:
+        type: string
+      example: reg_01HXYZ
+
+    operationId:
+      name: operationId
+      in: path
+      required: true
+      schema:
+        type: string
+      example: op_01HXYZ
+
+    closingId:
+      name: closingId
+      in: path
+      required: true
+      schema:
+        type: string
+      example: cls_01HXYZ
+
+    invoiceId:
+      name: invoiceId
+      in: path
+      required: true
+      schema:
+        type: string
+      example: inv_01HXYZ
+
+    certificateId:
+      name: certificateId
+      in: path
+      required: true
+      schema:
+        type: string
+      example: cert_01HXYZ
+
+    credentialId:
+      name: credentialId
+      in: path
+      required: true
+      schema:
+        type: string
+      example: fpc_01HXYZ
+
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema:
+        type: string
+        format: uuid
+      description: |
+        Unique key to make the request idempotent. If a request with this key
+        was already processed, the original response is returned without
+        re-executing the operation. Strongly recommended on all `start` and
+        `complete` actions — these are fiscal events and must not be duplicated.
+
+    OpenFiskalOrganization:
+      name: OpenFiskal-Organization
+      in: header
+      required: false
+      schema:
+        type: string
+      description: |
+        Merchant organization ID. Required for platform integrators acting on
+        behalf of a specific merchant. Omit when using an organization-scoped
+        token directly.
+      example: org_01HXYZ
+
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        default: 50
+        minimum: 1
+        maximum: 200
+      description: Maximum number of results to return per page.
+
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema:
+        type: string
+      description: |
+        Pagination cursor from a previous response's `cursor` field.
+        Omit to start from the beginning.
+
+    DateFrom:
+      name: from
+      in: query
+      required: false
+      schema:
+        type: string
+        format: date-time
+      description: Filter results to those created at or after this timestamp (ISO 8601).
+
+    DateTo:
+      name: to
+      in: query
+      required: false
+      schema:
+        type: string
+        format: date-time
+      description: Filter results to those created at or before this timestamp (ISO 8601).
+
+  responses:
+    BadRequest:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Authentication credentials missing or invalid
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: Conflict with current resource state
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    UnprocessableEntity:
+      description: Fiscalization failed — see fiscal_errors for details
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+
+    # ── Enums ─────────────────────────────────────
+
+    PosOperationType:
+      type: string
+      enum:
+        - sale
+        - refund
+        - exchange
+        - void
+        - cash_movement
+        - deposit
+        - deposit_capture
+        - gift_card_issue
+        - training
+
+    PosOperationState:
+      type: string
+      enum:
+        - open
+        - pending_payment
+        - completed
+        - abandoned
+        - failed
+        - voided
+      description: |
+        The current lifecycle state of the operation. Transitions are
+        one-directional and enforced server-side — invalid transitions
+        return `409 Conflict`.
+
+        ```
+        ┌─────────────────────────────────────────────────────────────────────┐
+        │                    OPERATION STATE MACHINE                          │
+        └─────────────────────────────────────────────────────────────────────┘
+
+                       POST /registers/:id/sales
+                       POST /registers/:id/refunds  etc.
+                                   │
+                                   │ 🔏 fiscal start signed
+                                   ▼
+                            ┌────────────┐
+                            │    open    │ ◄── PATCH mutations free here
+                            └─────┬──┬──┘     (items, discounts, customer)
+                                  │  │
+                   POST .../complete  POST .../abandon
+                                  │  │
+                    🔏 fiscal end │  │  no fiscal document
+                        signed    │  │
+                                  ▼  ▼
+              ┌──────────────┐       ┌───────────┐
+              │   completed  │       │ abandoned │  ◄── terminal
+              └──────┬───────┘       └───────────┘
+                     │
+                     │  🔏 fiscal reversal
+                     │  same-day only,
+                     │  before daily closing
+                     ▼
+        POST /registers/:id/voids
+                     │
+                     ▼
+              ┌────────────┐
+              │   voided   │  ◄── terminal
+              └────────────┘
+
+        ── payment path ────────────────────────────────────────────────────
+
+        When payment requires async confirmation (bank transfer, online):
+
+            open ──► pending_payment ──► completed   (payment confirmed)
+                                    └──► failed       (payment declined/timeout)
+
+        ── error path ──────────────────────────────────────────────────────
+
+        If fiscalization fails during complete (authority unreachable,
+        hardware fault):
+
+            open ──► failed   ◄── terminal. No fiscal document issued.
+                               Retry by starting a new operation.
+        ```
+
+        ### Terminal states
+
+        | State | Fiscal document | Retryable |
+        |-------|----------------|-----------|
+        | `completed` | ✅ Yes | — |
+        | `abandoned` | ❌ No | N/A |
+        | `voided` | ✅ (reversal) | — |
+        | `failed` | ❌ No | Start new operation |
+
+        ### Valid transitions
+
+        | From | Event | To |
+        |------|-------|----|
+        | `open` | `POST .../complete` (sync payment) | `completed` |
+        | `open` | `POST .../complete` (async payment) | `pending_payment` |
+        | `open` | `POST .../abandon` | `abandoned` |
+        | `open` | fiscalization fault | `failed` |
+        | `pending_payment` | payment confirmed | `completed` |
+        | `pending_payment` | payment failed/timeout | `failed` |
+        | `completed` | `POST /voids` (same-day) | `voided` |
+
+    # ── Operation envelope ─────────────────────────
+
+    PosOperationEnvelope:
+      type: object
+      description: Shared fields present on every operation regardless of type.
+      properties:
+        id:
+          type: string
+          example: op_01HXYZ
+        object:
+          type: string
+          const: operation
+        type:
+          $ref: '#/components/schemas/PosOperationType'
+        state:
+          $ref: '#/components/schemas/PosOperationState'
+        register_id:
+          type: string
+        location_id:
+          type: string
+        organization_id:
+          type: string
+        external_id:
+          type: [string, "null"]
+        sequence_number:
+          type: integer
+          description: Monotonically increasing, register-scoped sequence number
+        cashier:
+          oneOf:
+            - $ref: '#/components/schemas/Cashier'
+            - type: "null"
+        fiscal:
+          $ref: '#/components/schemas/FiscalData'
+        references:
+          $ref: '#/components/schemas/PosOperationReferences'
+        metadata:
+          type: object
+          additionalProperties: true
+        started_at:
+          type: string
+          format: date-time
+          description: Timestamp of the fiscal start event
+        completed_at:
+          type: [string, "null"]
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    PosOperation:
+      description: |
+        Discriminated union of all operation types. Discriminate on `type`
+        to determine the concrete schema.
+      oneOf:
+        - $ref: '#/components/schemas/SaleOperation'
+        - $ref: '#/components/schemas/RefundOperation'
+        - $ref: '#/components/schemas/VoidOperation'
+        - $ref: '#/components/schemas/CashMovementOperation'
+        - $ref: '#/components/schemas/ExchangeOperation'
+        - $ref: '#/components/schemas/DepositOperation'
+        - $ref: '#/components/schemas/DepositCaptureOperation'
+        - $ref: '#/components/schemas/GiftCardIssuanceOperation'
+      discriminator:
+        propertyName: type
+        mapping:
+          sale: '#/components/schemas/SaleOperation'
+          refund: '#/components/schemas/RefundOperation'
+          void: '#/components/schemas/VoidOperation'
+          cash_movement: '#/components/schemas/CashMovementOperation'
+          exchange: '#/components/schemas/ExchangeOperation'
+          deposit: '#/components/schemas/DepositOperation'
+          deposit_capture: '#/components/schemas/DepositCaptureOperation'
+          gift_card_issue: '#/components/schemas/GiftCardIssuanceOperation'
+
+    PosOperationList:
+      type: object
+      properties:
+        object:
+          type: string
+          const: list
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PosOperation'
+        cursor:
+          type: [string, "null"]
+
+    # ── Fiscal data ────────────────────────────────
+
+    FiscalData:
+      type: object
+      description: |
+        Jurisdiction-specific fiscal output. Present on all operations.
+
+        `start` is populated immediately when the operation is opened — this is
+        the fiscally-signed start event. `end` is populated on completion.
+
+        In Germany, both `start` and `end` carry independent TSE signatures and
+        transaction counter values. Both must be printed on the receipt.
+      properties:
+        jurisdiction:
+          type: string
+          example: DE
+        document_type:
+          type: [string, "null"]
+          example: Kassenbeleg
+        document_number:
+          type: [string, "null"]
+          description: Assigned on completion
+          example: "2026-004822"
+        transmission_status:
+          type: [string, "null"]
+          enum: [transmitted, pending, failed, not_required]
+        transmitted_at:
+          type: [string, "null"]
+          format: date-time
+        start:
+          description: |
+            Fiscal start event. Populated when the operation is opened.
+            Must be stored by the POS and printed on the receipt.
+          oneOf:
+            - $ref: '#/components/schemas/FiscalEvent'
+            - type: "null"
+        end:
+          description: |
+            Fiscal end event. Populated when the operation is completed.
+          oneOf:
+            - $ref: '#/components/schemas/FiscalEndEvent'
+            - type: "null"
+        jurisdiction_data:
+          type: [object, "null"]
+          description: |
+            Opaque jurisdiction-specific data. Store and pass to rendering as-is.
+
+            **Germany (DE):** `tse_serial`, `tse_signature_algorithm`,
+            `tse_time_format`, `tse_certificate_id`, `client_id`
+
+            **Italy (IT):** `rt_serial`, `rt_firmware`, `lottery_code`,
+            `zrep_number`, `daily_sequence`
+
+            **Austria (AT):** `rksv_cashbox_id`, `rksv_signature`, `rksv_counter`
+          additionalProperties: true
+        verification:
+          type: [object, "null"]
+          properties:
+            url:
+              type: string
+              format: uri
+            qr_data:
+              type: string
+              description: |
+                Data to encode in the QR code printed on the receipt.
+
+                **Germany:** DSFinV-K format —
+                `V0;ClientID;Algorithm;StartTime;EndTime;Amount;Counter;Signature`
+
+                **Italy:** URL to Agenzia delle Entrate verification page
+
+                **Austria:** Base64-encoded RKSV DEP receipt
+
+    FiscalEvent:
+      type: object
+      description: A single fiscally-signed event (start or end)
+      properties:
+        signed_at:
+          type: string
+          format: date-time
+        transaction_counter:
+          type: integer
+          description: |
+            Monotonically increasing counter from the fiscal security device.
+            In Germany, the TSE increments this on every signed event — both
+            starts and ends each consume a counter value.
+          example: 4821
+        signature:
+          type: string
+          format: byte
+          description: Base64-encoded signature from the fiscal security device
+        certificate_id:
+          type: string
+
+    FiscalEndEvent:
+      allOf:
+        - $ref: '#/components/schemas/FiscalEvent'
+        - type: object
+          properties:
+            process_type:
+              type: [string, "null"]
+              description: |
+                Germany: process type recorded in the TSE end event.
+                Example: `Kassenbeleg-V1`
+            process_data:
+              type: [string, "null"]
+              description: |
+                Germany: process data recorded in the TSE end event.
+                Format: `Beleg^<tax_amounts_by_rate>^<payment_amounts_by_type>`
+                Example: `Beleg^42.50_0.00_0.00_0.00_0.00^42.50:Bar`
+
+    # ── Sale ──────────────────────────────────────
+
+    SaleStart:
+      type: object
+      description: |
+        Minimal data needed to open a sale. Line items and payments are added
+        via PATCH before completing. Only `external_id` and `cashier` are
+        required at start time — the fiscal event happens immediately.
+      properties:
+        external_id:
+          type: string
+          example: table-3-order-42
+        cashier:
+          $ref: '#/components/schemas/Cashier'
+        currency:
+          type: string
+          format: iso-4217
+          example: EUR
+        customer:
+          $ref: '#/components/schemas/CustomerInput'
+        metadata:
+          type: object
+          additionalProperties: true
+
+    SaleUpdate:
+      type: object
+      description: Mutable fields on an open sale. All fields are optional.
+      properties:
+        line_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/LineItemInput'
+          description: Replaces the current line item list
+        cart_discounts:
+          type: array
+          items:
+            $ref: '#/components/schemas/CartDiscountInput'
+          description: |
+            Order-level discounts (coupons, automatic promotions). Replaces the
+            current cart discount list. OpenFiskal allocates these across line
+            items proportionally and stores the per-line allocations.
+        customer:
+          $ref: '#/components/schemas/CustomerInput'
+        notes:
+          type: array
+          items:
+            $ref: '#/components/schemas/PosOperationNote'
+        metadata:
+          type: object
+          additionalProperties: true
+
+    SaleComplete:
+      type: object
+      required: [payments]
+      description: Data required to finalize and fiscalize the sale.
+      properties:
+        payments:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/PaymentInput'
+          description: |
+            One or more payments settling this sale. All payment lines on a
+            sale should have `direction: inbound`.
+
+            For cash sales, include a separate `outbound` cash line for change:
+            ```json
+            [
+              { "method": "cash", "direction": "inbound",  "amount": 5000, "cash": { "amount_tendered": 5000 } },
+              { "method": "cash", "direction": "outbound", "amount": 750 }
+            ]
+            ```
+        cart_discounts:
+          type: array
+          description: |
+            Order-level discounts to be allocated across line items.
+            OpenFiskal allocates each discount to line items according to
+            the `allocation_method` and records allocations on each LineItem.
+          items:
+            $ref: '#/components/schemas/CartDiscountInput'
+        fiscal_hints:
+          type: object
+          additionalProperties: true
+          description: Optional jurisdiction-specific overrides. See jurisdiction guides.
+
+    SaleOperation:
+      allOf:
+        - $ref: '#/components/schemas/PosOperationEnvelope'
+        - type: object
+          properties:
+            type:
+              type: string
+              enum: [sale]
+            data:
+              type: object
+              properties:
+                currency:
+                  type: string
+                  example: EUR
+                line_items:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/LineItem'
+                cart_discounts:
+                  type: array
+                  description: Cart-level discounts applied to this operation
+                  items:
+                    $ref: '#/components/schemas/CartDiscount'
+                payments:
+                  type: [array, "null"]
+                  items:
+                    $ref: '#/components/schemas/Payment'
+                  description: Populated after complete is called
+                totals:
+                  oneOf:
+                    - $ref: '#/components/schemas/Totals'
+                    - type: "null"
+                  description: Calculated once line items exist
+                customer:
+                  oneOf:
+                    - $ref: '#/components/schemas/CustomerInput'
+                    - type: "null"
+                notes:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/PosOperationNote'
+
+    # ── Refund ────────────────────────────────────
+
+    RefundStart:
+      type: object
+      required: [original_operation_id]
+      properties:
+        original_operation_id:
+          type: string
+          description: The sale being refunded
+        refund_type:
+          type: string
+          enum: [full, partial]
+          default: full
+        reason:
+          type: string
+          example: Customer returned item
+        cashier:
+          $ref: '#/components/schemas/Cashier'
+        external_id:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+
+    RefundUpdate:
+      type: object
+      properties:
+        line_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/LineItemInput'
+          description: |
+            Items being returned. For full refunds, omit and all original
+            items are refunded. For partial refunds, include only returned items.
+        notes:
+          type: array
+          items:
+            $ref: '#/components/schemas/PosOperationNote'
+
+    RefundComplete:
+      type: object
+      required: [payments]
+      properties:
+        payments:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentInput'
+          description: |
+            How the refund is returned to the customer. All payment lines on a
+            refund should have `direction: outbound`.
+
+            The method does not need to match the original sale — returning
+            cash for a card purchase is valid and common. Jurisdictions that
+            restrict this will return a validation error.
+
+    RefundOperation:
+      allOf:
+        - $ref: '#/components/schemas/PosOperationEnvelope'
+        - type: object
+          properties:
+            type:
+              type: string
+              enum: [refund]
+            data:
+              type: object
+              properties:
+                original_operation_id:
+                  type: string
+                refund_type:
+                  type: string
+                  enum: [full, partial]
+                reason:
+                  type: [string, "null"]
+                currency:
+                  type: string
+                line_items:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/LineItem'
+                cart_discounts:
+                  type: array
+                  description: Cart-level discounts applied to this refund
+                  items:
+                    $ref: '#/components/schemas/CartDiscount'
+                payments:
+                  type: [array, "null"]
+                  items:
+                    $ref: '#/components/schemas/Payment'
+                totals:
+                  description: |
+                    `net_payable` is negative on a refund — the merchant owes
+                    the customer. All other Totals fields are positive.
+                  oneOf:
+                    - $ref: '#/components/schemas/Totals'
+                    - type: "null"
+
+    # ── Void ──────────────────────────────────────
+
+    VoidCreate:
+      type: object
+      required: [original_operation_id]
+      properties:
+        original_operation_id:
+          type: string
+          description: The completed operation to void
+        reason:
+          type: string
+          example: Cashier error
+        cashier:
+          $ref: '#/components/schemas/Cashier'
+        metadata:
+          type: object
+          additionalProperties: true
+
+    VoidOperation:
+      allOf:
+        - $ref: '#/components/schemas/PosOperationEnvelope'
+        - type: object
+          properties:
+            type:
+              type: string
+              const: void
+            data:
+              type: object
+              properties:
+                original_operation_id:
+                  type: string
+                reason:
+                  type: [string, "null"]
+
+    # ── Cash Movement ─────────────────────────────
+
+    CashMovementCreate:
+      type: object
+      required: [direction, amount, currency]
+      properties:
+        direction:
+          type: string
+          enum: [in, out]
+          description: |
+            - `in`: Cash added to the drawer (opening float, cash received)
+            - `out`: Cash removed from the drawer (banking, safe drop, petty cash)
+        amount:
+          type: integer
+          description: Amount in minor currency units
+          example: 50000
+        currency:
+          type: string
+          format: iso-4217
+          example: EUR
+        reason:
+          type: string
+          example: Opening float
+        cashier:
+          $ref: '#/components/schemas/Cashier'
+        metadata:
+          type: object
+          additionalProperties: true
+
+    CashMovementOperation:
+      allOf:
+        - $ref: '#/components/schemas/PosOperationEnvelope'
+        - type: object
+          properties:
+            type:
+              type: string
+              enum: [cash_movement]
+            data:
+              type: object
+              properties:
+                direction:
+                  type: string
+                  enum: [in, out]
+                amount:
+                  type: integer
+                currency:
+                  type: string
+                reason:
+                  type: [string, "null"]
+
+    # ── Shared field schemas ───────────────────────
+
+    LineItemInput:
+      type: object
+      required: [description, quantity, unit_price_gross, tax]
+      description: |
+        A single line item as submitted by the POS. Provide the undiscounted
+        `unit_price_gross` and any line-level discounts. Cart-level discounts
+        are declared separately on the operation and allocated by OpenFiskal.
+      properties:
+        description:
+          type: string
+          example: Wiener Schnitzel
+        quantity:
+          type: number
+          format: double
+          example: 2
+        unit:
+          type: string
+          default: piece
+          example: piece
+        unit_price_gross:
+          type: integer
+          description: |
+            Undiscounted unit price including tax, in minor currency units.
+            This is the original shelf/menu price before any discounts.
+          example: 1800
+        tax:
+          $ref: '#/components/schemas/TaxInput'
+        line_discounts:
+          type: array
+          description: |
+            Discounts applied directly to this line item (e.g. happy hour,
+            manual price override, product-specific promotion). Distinct from
+            cart-level discounts which are declared at the operation level.
+          items:
+            $ref: '#/components/schemas/LineDiscountInput'
+        product_ref:
+          type: [string, "null"]
+          description: Your SKU, product ID, or barcode
+        flags:
+          type: array
+          items:
+            type: string
+            enum: [deposit, gift_card, service_charge, tip]
+
+    LineItem:
+      type: object
+      description: |
+        A resolved line item with full price stack. Every intermediate value
+        is computed and stored server-side — renderers and auditors can verify
+        any step without re-deriving it.
+
+        Price stack:
+          unit_price_gross × quantity = subtotal_gross
+          subtotal_gross − line_discount_amount = subtotal_after_line_discounts
+          subtotal_after_line_discounts − cart_discount_amount = total_gross
+          total_gross → split into total_net + tax_amount
+      properties:
+        id:
+          type: string
+          example: li_01HXYZ
+        position:
+          type: integer
+          description: 1-based display order on the receipt
+          example: 1
+        description:
+          type: string
+          example: Wiener Schnitzel
+        quantity:
+          type: number
+          format: double
+          example: 2
+        unit:
+          type: string
+          example: piece
+        unit_price_gross:
+          type: integer
+          description: Original undiscounted unit price including tax
+          example: 1800
+        product_ref:
+          type: [string, "null"]
+        flags:
+          type: array
+          items:
+            type: string
+            enum: [deposit, gift_card, service_charge, tip]
+
+        # ── Price stack ───────────────────────────────
+        subtotal_gross:
+          type: integer
+          description: unit_price_gross × quantity — before any discounts
+          example: 3600
+
+        line_discounts:
+          type: array
+          description: Applied line-level discounts
+          items:
+            $ref: '#/components/schemas/LineDiscount'
+        line_discount_amount:
+          type: integer
+          description: Sum of all line_discounts amounts
+          example: 360
+        subtotal_after_line_discounts:
+          type: integer
+          description: subtotal_gross − line_discount_amount
+          example: 3240
+
+        cart_discount_allocations:
+          type: array
+          description: |
+            Portions of cart-level discounts allocated to this line item.
+            Definitions live in the operation's `cart_discounts` array.
+            The sum of all allocations for a given discount_id must equal
+            that discount's total_amount.
+          items:
+            $ref: '#/components/schemas/CartDiscountAllocation'
+        cart_discount_amount:
+          type: integer
+          description: Sum of all cart_discount_allocations amounts
+          example: 324
+
+        total_gross:
+          type: integer
+          description: |
+            subtotal_after_line_discounts − cart_discount_amount.
+            The final amount the customer pays for this line.
+          example: 2916
+
+        # ── Tax (applied to total_gross) ──────────────
+        tax:
+          allOf:
+            - $ref: '#/components/schemas/TaxInput'
+            - type: object
+              properties:
+                taxable_amount:
+                  type: integer
+                  description: Net amount on which tax was computed
+                  example: 2651
+                tax_amount:
+                  type: integer
+                  description: Tax portion of total_gross
+                  example: 265
+
+        total_net:
+          type: integer
+          description: total_gross − tax_amount
+          example: 2651
+
+    # ── Discount schemas ──────────────────────────
+
+    LineDiscountInput:
+      type: object
+      required: [source]
+      description: |
+        A discount applied directly to a single line item. Provide either
+        `rate` (percentage) or `amount` (fixed). OpenFiskal computes the other.
+      properties:
+        type:
+          type: string
+          enum: [percentage, amount]
+          default: percentage
+          description: Determines how the discount is calculated
+        label:
+          type: string
+          description: |
+            Human-readable name. Appears on the receipt.
+          example: Happy Hour
+        source:
+          type: string
+          enum: [manual, promotion, loyalty, employee]
+          description: |
+            Origin of the discount.
+            - `manual`: Applied by cashier at time of sale
+            - `promotion`: System-applied product promotion
+            - `loyalty`: Loyalty programme reward
+            - `employee`: Staff discount
+        rate:
+          type: string
+          description: |
+            For `percentage` type: the discount rate as a decimal string.
+            e.g. `"0.10"` = 10% off. Mutually exclusive with `amount`.
+          example: "0.10"
+        amount:
+          type: integer
+          description: |
+            For `amount` type: fixed discount in minor currency units.
+            Mutually exclusive with `rate`.
+          example: 200
+
+    LineDiscount:
+      description: A resolved line-level discount with computed amount.
+      allOf:
+        - $ref: '#/components/schemas/LineDiscountInput'
+        - type: object
+          required: [id, amount]
+          properties:
+            id:
+              type: string
+              example: ldsc_01HXYZ
+            amount:
+              type: integer
+              description: |
+                Computed discount amount in minor currency units.
+                Always present regardless of discount type — renderers
+                and auditors use this, never re-derive from rate.
+              example: 360
+
+    CartDiscountInput:
+      type: object
+      required: [source]
+      description: |
+        An order-level discount declared on the operation and allocated
+        across line items. Provide either `rate` or `amount`.
+      properties:
+        type:
+          type: string
+          enum: [percentage, amount]
+          default: percentage
+        label:
+          type: string
+          description: Human-readable name. Appears on the receipt.
+          example: SAVE10 coupon
+        code:
+          type: [string, "null"]
+          description: Coupon or promotion code, if applicable
+          example: SAVE10
+        source:
+          type: string
+          enum: [coupon, automatic, staff, loyalty]
+          description: |
+            - `coupon`: Customer-entered discount code
+            - `automatic`: Triggered automatically (e.g. spend threshold)
+            - `staff`: Applied by staff at order level
+            - `loyalty`: Loyalty reward applied to the whole cart
+        allocation_method:
+          type: string
+          enum: [proportional, equal, first_item]
+          default: proportional
+          description: |
+            How the discount total is spread across line items.
+            - `proportional`: Each line bears its share by value (recommended)
+            - `equal`: Split equally regardless of line value
+            - `first_item`: Applied entirely to the first eligible item
+        rate:
+          type: string
+          description: |
+            For `percentage` type. e.g. `"0.10"` = 10% off total.
+          example: "0.10"
+        amount:
+          type: integer
+          description: For `amount` type. Fixed discount in minor currency units.
+          example: 500
+
+    CartDiscount:
+      description: A resolved cart-level discount with computed total and allocations.
+      allOf:
+        - $ref: '#/components/schemas/CartDiscountInput'
+        - type: object
+          required: [id, total_amount]
+          properties:
+            id:
+              type: string
+              example: cdsc_01HXYZ
+            total_amount:
+              type: integer
+              description: |
+                Total discount given across all line items in minor currency
+                units. Must equal the sum of all CartDiscountAllocations
+                referencing this discount's id.
+              example: 500
+
+    CartDiscountAllocation:
+      type: object
+      required: [discount_id, amount]
+      description: |
+        The portion of a cart-level discount allocated to one line item.
+        Lives on the LineItem, not on the CartDiscount itself.
+      properties:
+        discount_id:
+          type: string
+          description: References a CartDiscount.id on the parent operation
+          example: cdsc_01HXYZ
+        label:
+          type: string
+          description: Copied from the CartDiscount for renderer convenience
+          example: SAVE10 coupon
+        amount:
+          type: integer
+          description: Allocated amount in minor currency units
+          example: 162
+
+    PaymentInput:
+      type: object
+      required: [method, direction, amount]
+      description: |
+        A single payment line on an operation. `amount` is always a positive
+        integer — `direction` carries the sign semantic.
+
+        - `inbound`: money flows from customer to merchant (customer pays)
+        - `outbound`: money flows from merchant to customer (change, refunds)
+
+        Include a method-specific sub-object when you have details to attach.
+        Only the sub-object matching `method` is considered; others are ignored.
+      properties:
+        method:
+          type: string
+          enum: [cash, card, wallet, voucher, gift_card, online, other]
+        direction:
+          type: string
+          enum: [inbound, outbound]
+          description: |
+            Direction of money flow.
+            `inbound`: customer pays merchant.
+            `outbound`: merchant pays customer (change, refund payout).
+        amount:
+          type: integer
+          description: Always a positive integer in minor currency units
+          example: 4250
+        currency:
+          type: string
+          description: Defaults to the operation currency if omitted
+        reference:
+          type: [string, "null"]
+          description: |
+            External transaction reference from your payment processor.
+            Stored and returned as-is. Useful for reconciliation.
+        cash:
+          type: [object, "null"]
+          description: Present when `method` is `cash`
+          properties:
+            amount_tendered:
+              type: integer
+              description: |
+                Amount physically handed over by the customer, in minor currency
+                units. Change is modelled as a separate `outbound` cash payment
+                line — do not derive it from this field.
+              example: 5000
+        card:
+          type: [object, "null"]
+          description: Present when `method` is `card`
+          properties:
+            scheme:
+              type: string
+              enum: [visa, mastercard, amex, maestro, other]
+            last4:
+              type: string
+              example: "4242"
+            authorization_code:
+              type: string
+            terminal_id:
+              type: string
+            application_id:
+              type: string
+              description: EMV Application Identifier (AID)
+        wallet:
+          type: [object, "null"]
+          description: |
+            Present when `method` is `wallet` (Apple Pay, Google Pay, etc).
+            Wallet payments are card-present NFC transactions. Distinct from
+            `card` because some jurisdictions require the wallet provider on
+            the receipt.
+          properties:
+            provider:
+              type: string
+              enum: [apple_pay, google_pay, samsung_pay, other]
+            scheme:
+              type: string
+              enum: [visa, mastercard, amex, other]
+            last4:
+              type: string
+              example: "4242"
+            authorization_code:
+              type: string
+        voucher:
+          type: [object, "null"]
+          description: Present when `method` is `voucher`
+          properties:
+            code:
+              type: string
+              description: Voucher code as printed. Appears on the receipt.
+              example: SUMMER20
+            type:
+              type: string
+              description: Voucher classification for reporting purposes
+              example: promotional
+        gift_card:
+          type: [object, "null"]
+          description: Present when `method` is `gift_card`
+          properties:
+            gift_card_id:
+              type: string
+              description: |
+                Links this redemption back to a `GiftCardIssuance` operation.
+                Traces the full lifecycle of the card.
+            last4:
+              type: string
+              description: Last 4 digits of card number, for receipt display
+              example: "8821"
+        online:
+          type: [object, "null"]
+          description: |
+            Present when `method` is `online`. Covers remote payment providers
+            (PayPal, Klarna, bank transfer) — distinct from `wallet` which is
+            card-present NFC.
+          properties:
+            provider:
+              type: string
+              enum: [paypal, klarna, stripe, bank_transfer, other]
+            transaction_reference:
+              type: string
+              description: Provider-side transaction identifier
+
+    Payment:
+      description: A resolved payment line on a completed operation.
+      allOf:
+        - $ref: '#/components/schemas/PaymentInput'
+        - type: object
+          properties:
+            id:
+              type: string
+            status:
+              type: string
+              enum: [approved, pending]
+              description: |
+                `approved`: payment settled successfully.
+                `pending`: payment initiated but not yet fully settled
+                (e.g. bank transfer awaiting confirmation).
+                Declined payments never appear on completed operations.
+
+    TaxInput:
+      type: object
+      required: [rate, category]
+      properties:
+        rate:
+          type: string
+          description: |
+            Decimal tax rate as a string to avoid floating point precision issues.
+            Germany: `"0.19"` (Regelsteuersatz), `"0.07"` (ermäßigter Steuersatz)
+            Italy: `"0.22"`, `"0.10"`, `"0.04"`
+          example: "0.19"
+        category:
+          type: string
+          enum: [standard, reduced, super_reduced, zero, exempt]
+        included_in_price:
+          type: boolean
+          default: true
+          description: |
+            `true` = EU-style gross prices (tax included in `unit_price_gross`).
+            `false` = US-style net prices (tax added on top).
+
+    # Discount schemas moved above (LineDiscount, CartDiscount, etc.)
+
+    Totals:
+      type: object
+      description: |
+        Order-level totals, derived from line items. All fields are positive
+        integers in minor currency units. `net_payable` is the only field
+        that can be negative (on refunds).
+
+        Derivation:
+          subtotal_gross − total_line_discounts = subtotal_after_line_discounts
+          subtotal_after_line_discounts − total_cart_discounts = subtotal_after_all_discounts
+          subtotal_after_all_discounts + rounding_adjustment = total_gross
+          total_gross → total_net + total_tax
+      properties:
+        subtotal_gross:
+          type: integer
+          description: Sum of all line item subtotal_gross values before any discounts
+        total_line_discounts:
+          type: integer
+          description: Sum of all line-level discount amounts across all line items
+        subtotal_after_line_discounts:
+          type: integer
+          description: subtotal_gross − total_line_discounts
+        total_cart_discounts:
+          type: integer
+          description: Sum of all cart-level discount total_amounts
+        subtotal_after_all_discounts:
+          type: integer
+          description: subtotal_after_line_discounts − total_cart_discounts
+        rounding_adjustment:
+          type: integer
+          description: |
+            Cash rounding adjustment in minor currency units. Applied after
+            discounts. Required in Austria and some Italian scenarios.
+            Can be negative (round down) or positive (round up).
+        total_gross:
+          type: integer
+          description: |
+            subtotal_after_all_discounts + rounding_adjustment.
+            The total amount charged to the customer.
+        total_net:
+          type: integer
+          description: total_gross excluding tax
+        total_tax:
+          type: integer
+          description: Total tax amount across all line items
+        tax_breakdown:
+          type: array
+          items:
+            type: object
+            properties:
+              rate:
+                type: string
+              category:
+                type: string
+              taxable_amount:
+                type: integer
+              tax_amount:
+                type: integer
+              total_gross:
+                type: integer
+        net_payable:
+          type: integer
+          description: |
+            The net amount the customer owes (positive) or is owed (negative).
+            Positive on a sale, negative on a refund.
+
+            Change is not represented here — it is modelled as a separate
+            `outbound` cash payment line, making the full settlement picture
+            explicit. This field reflects the value exchanged, not how it
+            was settled.
+
+    CustomerInput:
+      type: object
+      properties:
+        id:
+          type: string
+        display_name:
+          type: string
+        tax_id:
+          type: string
+          description: e.g. Codice Fiscale, Partita IVA, VAT number
+        tax_id_type:
+          type: string
+          enum: [codice_fiscale, partita_iva, vat_id, nif, other]
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        loyalty_number:
+          type: string
+
+    Cashier:
+      type: object
+      properties:
+        id:
+          type: string
+        display_name:
+          type: string
+          example: Maria R.
+
+    PosOperationNote:
+      type: object
+      required: [type, text]
+      properties:
+        type:
+          type: string
+          enum: [custom, return_policy, promotion, legal]
+        text:
+          type: string
+
+    PosOperationReferences:
+      type: object
+      description: |
+        Links to related operations. The audit chain between operations lives here
+        at the envelope level — not inside the type-specific `data` block — because
+        any operation type can reference any other.
+      properties:
+        original_operation_id:
+          type: [string, "null"]
+        reason:
+          type: [string, "null"]
+
+    # ── Receipt ───────────────────────────────────
+
+    Receipt:
+      type: object
+      description: |
+        The OpenFiskal canonical receipt. Self-contained and verifiable —
+        everything needed to render, archive, or verify is present in this object.
+
+        The `fiscal` block contains both start and end events with their signatures.
+        In Germany, both must be printed. The `fiscal.verification.qr_data` field
+        contains the exact string to encode in the receipt QR code.
+      properties:
+        object:
+          type: string
+          const: receipt
+        id:
+          type: string
+          example: rcpt_01HXYZ
+        version:
+          type: string
+          example: "1.0"
+        created_at:
+          type: string
+          format: date-time
+        issuer:
+          type: object
+          properties:
+            organization_id:
+              type: string
+            legal_name:
+              type: string
+            trade_name:
+              type: [string, "null"]
+            tax_id:
+              type: string
+            address:
+              $ref: '#/components/schemas/Address'
+            location_id:
+              type: string
+            location_name:
+              type: string
+            register_id:
+              type: string
+            register_label:
+              type: string
+        operation:
+          type: object
+          properties:
+            id:
+              type: string
+            external_id:
+              type: [string, "null"]
+            type:
+              $ref: '#/components/schemas/PosOperationType'
+            sequence_number:
+              type: integer
+            started_at:
+              type: string
+              format: date-time
+            completed_at:
+              type: string
+              format: date-time
+            currency:
+              type: string
+            cashier:
+              oneOf:
+                - $ref: '#/components/schemas/Cashier'
+                - type: "null"
+        line_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/LineItem'
+        totals:
+          $ref: '#/components/schemas/Totals'
+        payments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Payment'
+        fiscal:
+          $ref: '#/components/schemas/FiscalData'
+        customer:
+          oneOf:
+            - $ref: '#/components/schemas/CustomerInput'
+            - type: "null"
+        notes:
+          type: array
+          items:
+            $ref: '#/components/schemas/PosOperationNote'
+        references:
+          $ref: '#/components/schemas/PosOperationReferences'
+        links:
+          type: object
+          properties:
+            self:
+              type: string
+              format: uri
+            pdf:
+              type: string
+              format: uri
+            operation:
+              type: string
+              format: uri
+        metadata:
+          type: object
+          additionalProperties: true
+
+    ReceiptSendRequest:
+      type: object
+      required: [channel, recipient]
+      properties:
+        channel:
+          type: string
+          enum: [email, sms]
+        recipient:
+          type: string
+          example: customer@example.com
+
+    ReceiptDelivery:
+      type: object
+      properties:
+        delivery_id:
+          type: string
+        channel:
+          type: string
+          enum: [email, sms]
+        recipient:
+          type: string
+        status:
+          type: string
+          enum: [queued, sent, failed]
+
+    # ── Closing ───────────────────────────────────
+
+    Closing:
+      type: object
+      properties:
+        id:
+          type: string
+          example: cls_01HXYZ
+        object:
+          type: string
+          const: closing
+        register_id:
+          type: string
+        type:
+          type: string
+          enum: [daily, shift, monthly, annual]
+        state:
+          type: string
+          enum: [pending, completed, transmitted, failed]
+        period:
+          type: object
+          properties:
+            from:
+              type: string
+              format: date-time
+            to:
+              type: string
+              format: date-time
+        summary:
+          type: object
+          properties:
+            operation_count:
+              type: integer
+            total_gross:
+              type: integer
+            total_tax:
+              type: integer
+            total_by_payment_method:
+              type: object
+              additionalProperties:
+                type: integer
+            by_operation_type:
+              type: object
+              description: Count and gross totals per operation type. Required by most jurisdictions for the Z-report.
+              properties:
+                sales:
+                  type: object
+                  properties:
+                    count:
+                      type: integer
+                    total_gross:
+                      type: integer
+                refunds:
+                  type: object
+                  properties:
+                    count:
+                      type: integer
+                    total_gross:
+                      type: integer
+                voids:
+                  type: object
+                  properties:
+                    count:
+                      type: integer
+                cash_movements:
+                  type: object
+                  properties:
+                    cash_in_total:
+                      type: integer
+                    cash_out_total:
+                      type: integer
+            tax_breakdown:
+              type: array
+              items:
+                type: object
+                properties:
+                  rate:
+                    type: string
+                  category:
+                    type: string
+                  taxable_amount:
+                    type: integer
+                  tax_amount:
+                    type: integer
+        fiscal:
+          type: object
+          additionalProperties: true
+          description: |
+            Jurisdiction-specific closing data.
+            Germany: `z_number`, DSFinV-K export status
+            Italy: `zrep_number`, RT transmission receipt
+            Austria: RKSV closing signature
+        created_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: [string, "null"]
+          format: date-time
+        links:
+          type: object
+          properties:
+            pdf:
+              type: string
+              format: uri
+
+    ClosingList:
+      type: object
+      properties:
+        object:
+          type: string
+          const: list
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Closing'
+
+    # ── Heartbeat ─────────────────────────────────
+
+    HeartbeatRequest:
+      type: object
+      required: [timestamp, sequence, status]
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        sequence:
+          type: integer
+          description: Monotonically increasing counter. Used to detect missed heartbeats.
+          example: 18291
+        status:
+          type: string
+          enum: [operational, degraded]
+        metrics:
+          type: object
+          properties:
+            pending_operations:
+              type: integer
+            unsynced_operations:
+              type: integer
+            battery_level:
+              type: [number, "null"]
+              format: float
+              minimum: 0
+              maximum: 1
+            disk_free_bytes:
+              type: [integer, "null"]
+        software:
+          type: object
+          properties:
+            pos_vendor:
+              type: string
+              example: acme-pos
+            pos_version:
+              type: string
+              example: 3.2.1
+            agent_version:
+              type: string
+              example: 1.4.0
+    HeartbeatResponse:
+      type: object
+      description: |
+        Minimal acknowledgment. The register uses `server_time` to detect
+        local clock drift — compare against the device's own clock and flag
+        significant deviations in the next heartbeat's `metrics`.
+      properties:
+        object:
+          type: string
+          const: heartbeat_response
+        received_at:
+          type: string
+          format: date-time
+          description: Server timestamp when this heartbeat was received
+        server_time:
+          type: string
+          format: date-time
+          description: |
+            Current server time. Compare against the register's local clock
+            to detect drift. Drift beyond ~5 seconds is a fiscal risk in
+            jurisdictions that require accurate event timestamps.
+
+    RegisterDirective:
+      type: object
+      required: [id, type]
+      properties:
+        object:
+          type: string
+          const: directive
+        id:
+          type: string
+        type:
+          type: string
+          enum:
+            - sync_operations
+            - update_tax_rates
+            - perform_closing
+            - restart_fiscal_service
+            - log_diagnostic
+          description: |
+            - `sync_operations`: Upload locally-stored unsynced operations
+            - `update_tax_rates`: Refresh local tax rate configuration
+            - `perform_closing`: Trigger an end-of-day closing
+            - `restart_fiscal_service`: Restart the local fiscal signing service
+            - `log_diagnostic`: Collect and upload a diagnostic log bundle
+        priority:
+          type: string
+          enum: [low, normal, high, critical]
+          default: normal
+        payload:
+          type: object
+          additionalProperties: true
+          description: Type-specific directive parameters
+
+    # ── Cash Drawer Opening ───────────────────────
+
+    CashDrawerOpeningCreate:
+      type: object
+      required: [occurred_at]
+      properties:
+        occurred_at:
+          type: string
+          format: date-time
+          description: |
+            Device-side timestamp of when the drawer opened. This is the
+            fiscally relevant timestamp — use the register's local clock,
+            not the time the API call is made. The server records its own
+            `received_at` separately.
+        operation_id:
+          type: [string, "null"]
+          description: |
+            The POS operation this drawer opening is associated with, if any.
+            Omit for unattended openings (float checks, manager access, etc.).
+          example: op_01HXYZ
+        cashier:
+          type: [object, "null"]
+          properties:
+            id:
+              type: string
+              description: Operator identifier as recorded in the POS
+              example: cashier_42
+            name:
+              type: [string, "null"]
+              example: Maria Rossi
+        reason:
+          type: [string, "null"]
+          description: |
+            Optional free-text reason for the opening. Some jurisdictions
+            require a reason for openings not linked to an operation.
+          example: Float check
+        note:
+          type: [string, "null"]
+          description: Internal note, not transmitted to fiscal authorities
+
+    CashDrawerOpening:
+      allOf:
+        - $ref: '#/components/schemas/CashDrawerOpeningCreate'
+        - type: object
+          required: [id, object, register_id, occurred_at, received_at, created_at]
+          properties:
+            id:
+              type: string
+              example: cdo_01HXYZ
+            object:
+              type: string
+              const: cash_drawer_opening
+            register_id:
+              type: string
+              description: The register this opening was logged against
+            received_at:
+              type: string
+              format: date-time
+              description: |
+                Server-side timestamp when this opening was received. May
+                differ from `occurred_at` if the register was offline and
+                syncing retroactively.
+            fiscal:
+              type: [object, "null"]
+              description: |
+                Jurisdiction-specific fiscal output. Present in jurisdictions
+                that require cash drawer openings to be signed or sequence-numbered
+                in the audit log (e.g. Norway, Sweden).
+              properties:
+                sequence_number:
+                  type: integer
+                  description: |
+                    Monotonically increasing sequence number assigned by the
+                    fiscal authority or signing service. Gaps in sequence are
+                    a compliance flag.
+                  example: 1042
+                signed_at:
+                  type: [string, "null"]
+                  format: date-time
+                  description: |
+                    Timestamp from the signing service, if applicable. May
+                    differ slightly from `occurred_at` due to transmission latency.
+                signature:
+                  type: [string, "null"]
+                  description: Cryptographic signature of the event record
+                  example: "a3f9b2..."
+                jurisdiction_data:
+                  type: [object, "null"]
+                  additionalProperties: true
+                  description: |
+                    Country-specific fields required by the local fiscal authority.
+            created_at:
+              type: string
+              format: date-time
+
+    CashDrawerOpeningList:
+      type: object
+      required: [object, data]
+      properties:
+        object:
+          type: string
+          const: list
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CashDrawerOpening'
+        has_more:
+          type: boolean
+        next_cursor:
+          type: [string, "null"]
+
+    # ── Register ──────────────────────────────────
+
+    RegisterCreate:
+      type: object
+      required: [label, jurisdiction]
+      properties:
+        label:
+          type: string
+          example: Kasse 1
+        jurisdiction:
+          type: string
+          enum: [IT, DE, AT]
+        serial_number:
+          type: [string, "null"]
+        metadata:
+          type: object
+          additionalProperties: true
+
+    Register:
+      allOf:
+        - $ref: '#/components/schemas/RegisterCreate'
+        - type: object
+          properties:
+            id:
+              type: string
+              example: reg_01HXYZ
+            object:
+              type: string
+              const: register
+            location_id:
+              type: string
+            fiscal_state:
+              type: string
+              enum: [pending, active, inactive, error]
+            fiscal_registration:
+              type: [object, "null"]
+              additionalProperties: true
+              description: Jurisdiction-specific registration details. Populated after activation.
+            created_at:
+              type: string
+              format: date-time
+
+    RegisterList:
+      type: object
+      properties:
+        object:
+          type: string
+          const: list
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Register'
+
+    RegisterStatus:
+      type: object
+      properties:
+        register_id:
+          type: string
+        status:
+          type: string
+          enum: [operational, degraded, offline, stale]
+          description: |
+            - `operational`: Heartbeat received within expected interval
+            - `degraded`: Register self-reported degraded status
+            - `offline`: No heartbeat for 2× expected interval
+            - `stale`: No heartbeat for an extended period
+        last_heartbeat_at:
+          type: [string, "null"]
+          format: date-time
+        open_operations:
+          type: array
+          description: Currently open operations on this register
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              type:
+                $ref: '#/components/schemas/PosOperationType'
+              started_at:
+                type: string
+                format: date-time
+        unsynced_operations:
+          type: [integer, "null"]
+        software:
+          type: [object, "null"]
+          properties:
+            pos_vendor:
+              type: string
+            pos_version:
+              type: string
+            agent_version:
+              type: string
+
+    RegisterStatusList:
+      type: object
+      properties:
+        location_id:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/RegisterStatus'
+
+    # ── Verification ──────────────────────────────
+
+    VerificationResult:
+      type: object
+      properties:
+        verified:
+          type: boolean
+          description: True if the document is authentic and unmodified
+        document_code:
+          type: string
+        jurisdiction:
+          type: string
+        document_number:
+          type: string
+        issued_at:
+          type: string
+          format: date-time
+        issuer:
+          type: object
+          properties:
+            legal_name:
+              type: string
+            tax_id:
+              type: string
+            location_name:
+              type: string
+        total_gross:
+          type: integer
+        currency:
+          type: string
+        signature_valid:
+          type: boolean
+        transmission_status:
+          type: string
+
+    # ── Auth ──────────────────────────────────────
+
+    TokenRequest:
+      type: object
+      required: [client_id, client_secret, grant_type]
+      properties:
+        grant_type:
+          type: string
+          const: client_credentials
+        client_id:
+          type: string
+        client_secret:
+          type: string
+
+    TokenResponse:
+      type: object
+      properties:
+        object:
+          type: string
+          const: token
+        access_token:
+          type: string
+        token_type:
+          type: string
+          const: bearer
+        expires_in:
+          type: integer
+          example: 3600
+
+    # ── Organizations ─────────────────────────────
+
+    OrganizationCreate:
+      type: object
+      required: [legal_name, country, tax_id]
+      properties:
+        legal_name:
+          type: string
+          example: Mustermann GmbH
+        trade_name:
+          type: [string, "null"]
+          example: Mustermann Café
+        country:
+          type: string
+          example: DE
+        tax_id:
+          type: string
+          example: DE123456789
+        address:
+          $ref: '#/components/schemas/Address'
+        metadata:
+          type: object
+          additionalProperties: true
+
+    OrganizationUpdate:
+      type: object
+      properties:
+        trade_name:
+          type: string
+        address:
+          $ref: '#/components/schemas/Address'
+        metadata:
+          type: object
+          additionalProperties: true
+
+    Organization:
+      allOf:
+        - $ref: '#/components/schemas/OrganizationCreate'
+        - type: object
+          properties:
+            id:
+              type: string
+              example: org_01HXYZ
+            object:
+              type: string
+              const: organization
+            created_at:
+              type: string
+              format: date-time
+            updated_at:
+              type: string
+              format: date-time
+
+
+    # ── Locations ─────────────────────────────────
+
+    LocationCreate:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          example: Berlin Mitte
+        address:
+          $ref: '#/components/schemas/Address'
+        timezone:
+          type: string
+          example: Europe/Berlin
+        metadata:
+          type: object
+          additionalProperties: true
+
+    Location:
+      allOf:
+        - $ref: '#/components/schemas/LocationCreate'
+        - type: object
+          properties:
+            id:
+              type: string
+              example: loc_01HXYZ
+            object:
+              type: string
+              const: location
+            organization_id:
+              type: string
+            created_at:
+              type: string
+              format: date-time
+
+    LocationList:
+      type: object
+      properties:
+        object:
+          type: string
+          const: list
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Location'
+
+
+    TokenIntrospection:
+      type: object
+      properties:
+        object:
+          type: string
+          const: token_introspection
+        active:
+          type: boolean
+          description: Whether the token is valid and unexpired
+        client_id:
+          type: string
+        organization_id:
+          type: [string, "null"]
+          description: Present if the token was scoped to a specific organization
+        expires_at:
+          type: string
+          format: date-time
+        issued_at:
+          type: string
+          format: date-time
+
+    PlatformCredentialCreate:
+      type: object
+      required: [label]
+      properties:
+        label:
+          type: string
+          description: Human-readable label to identify this credential
+          example: Production
+        description:
+          type: [string, "null"]
+
+    PlatformCredential:
+      type: object
+      properties:
+        object:
+          type: string
+          const: platform_credential
+        client_id:
+          type: string
+          example: pf_client_01HXYZ
+        client_secret:
+          type: [string, "null"]
+          description: |
+            Only returned at creation time. Store immediately — cannot be
+            retrieved again.
+          example: pf_secret_...
+        label:
+          type: string
+        description:
+          type: [string, "null"]
+        created_at:
+          type: string
+          format: date-time
+        last_used_at:
+          type: [string, "null"]
+          format: date-time
+
+    PlatformCredentialList:
+      type: object
+      properties:
+        object:
+          type: string
+          const: list
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlatformCredential'
+
+    RegisterActivationResponse:
+      type: object
+      description: |
+        Response to `POST /registers/:id/activate`. Always includes the
+        full register object. `register_api_key` is only present if
+        `issue_register_credential: true` was requested.
+      properties:
+        object:
+          type: string
+          const: register_activation
+        register:
+          $ref: '#/components/schemas/Register'
+        register_api_key:
+          type: [string, "null"]
+          description: |
+            Register-scoped API key. **Returned once only** — store immediately
+            and push to the device over a secure channel. `null` if
+            `issue_register_credential` was not requested.
+          example: ofk_reg_live_...
+        credential_issued:
+          type: boolean
+          description: Whether a register credential was issued in this response
+
+    RegisterCredentialRotation:
+      type: object
+      properties:
+        object:
+          type: string
+          const: register_credential_rotation
+        register_id:
+          type: string
+        register_api_key:
+          type: string
+          description: |
+            The new register API key. **Returned once only.** The previous key
+            is already revoked. Provision this to the device immediately.
+          example: ofk_reg_live_...
+        rotated_at:
+          type: string
+          format: date-time
+
+    OrganizationList:
+      type: object
+      properties:
+        object:
+          type: string
+          const: list
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Organization'
+        cursor:
+          type: [string, "null"]
+
+    LocationUpdate:
+      type: object
+      description: All fields optional — send only fields to change.
+      properties:
+        name:
+          type: string
+        address:
+          $ref: '#/components/schemas/Address'
+        timezone:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+
+    ExchangeOperation:
+      allOf:
+        - $ref: '#/components/schemas/PosOperationEnvelope'
+        - type: object
+          properties:
+            type:
+              type: string
+              const: exchange
+            data:
+              type: object
+              properties:
+                original_operation_id:
+                  type: string
+                currency:
+                  type: string
+                returned_line_items:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/LineItem'
+                new_line_items:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/LineItem'
+                payments:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Payment'
+                  description: |
+                    Mix of inbound and outbound payments. Net of all payments
+                    reflects the difference between new and returned items.
+                totals:
+                  oneOf:
+                    - $ref: '#/components/schemas/Totals'
+                    - type: "null"
+
+    DepositOperation:
+      allOf:
+        - $ref: '#/components/schemas/PosOperationEnvelope'
+        - type: object
+          properties:
+            type:
+              type: string
+              const: deposit
+            data:
+              type: object
+              properties:
+                amount:
+                  type: integer
+                currency:
+                  type: string
+                description:
+                  type: [string, "null"]
+                payments:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Payment'
+                capture_status:
+                  type: string
+                  enum: [open, captured, cancelled]
+
+    DepositCaptureOperation:
+      allOf:
+        - $ref: '#/components/schemas/PosOperationEnvelope'
+        - type: object
+          properties:
+            type:
+              type: string
+              const: deposit_capture
+            data:
+              type: object
+              properties:
+                original_operation_id:
+                  type: string
+                  description: References the original DepositOperation
+                deposit_amount_applied:
+                  type: integer
+                  description: Portion of the deposit netted off this capture
+                line_items:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/LineItem'
+                payments:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Payment'
+                totals:
+                  oneOf:
+                    - $ref: '#/components/schemas/Totals'
+                    - type: "null"
+
+    GiftCardIssuanceOperation:
+      allOf:
+        - $ref: '#/components/schemas/PosOperationEnvelope'
+        - type: object
+          properties:
+            type:
+              type: string
+              const: gift_card_issue
+            data:
+              type: object
+              properties:
+                gift_card_id:
+                  type: string
+                amount:
+                  type: integer
+                  description: Value loaded onto the card in minor currency units
+                currency:
+                  type: string
+                payment:
+                  $ref: '#/components/schemas/Payment'
+                  description: |
+                    The inbound payment for the gift card purchase.
+                    Gift card issuance is not itself a taxable event — the tax
+                    event occurs when the card is redeemed on a future sale.
+
+    # ── Shared ────────────────────────────────────
+
+    Address:
+      type: object
+      properties:
+        line1:
+          type: string
+          example: Friedrichstraße 42
+        line2:
+          type: [string, "null"]
+        city:
+          type: string
+          example: Berlin
+        state:
+          type: [string, "null"]
+        postal_code:
+          type: string
+          example: "10117"
+        country:
+          type: string
+          example: DE
+
+    # ── E-Invoicing ───────────────────────────────
+
+    InvoiceState:
+      type: string
+      enum:
+        - draft
+        - submitted
+        - transmitted
+        - delivered
+        - accepted
+        - undeliverable
+        - rejected_by_authority
+        - cancellation_requested
+        - cancelled
+      description: |
+        - `draft`: Created but not yet submitted to the authority.
+        - `submitted`: Submitted to the authority, awaiting acknowledgment.
+        - `transmitted`: Authority confirmed receipt. For TicketBAI/Verifactu,
+          this is the terminal success state. For SDI, delivery to recipient
+          still pending.
+        - `delivered`: SDI only. Invoice delivered to the recipient's inbox.
+          Recipient has 15 days to accept or reject.
+        - `accepted`: SDI only. Recipient explicitly accepted the invoice.
+          Implicit acceptance occurs after 15 days with no rejection.
+        - `undeliverable`: SDI only. SDI could not deliver to the recipient
+          (invalid `codice_destinatario` or PEC address). Invoice is fiscally
+          valid but the vendor must contact the recipient directly.
+        - `rejected_by_authority`: Authority rejected the document due to
+          format or validation errors. Check `fiscal_errors`. Must correct
+          and resubmit as a new invoice.
+        - `cancellation_requested`: Full cancellation initiated, awaiting
+          authority acknowledgment.
+        - `cancelled`: Invoice fully cancelled. A corrective document has been
+          issued and accepted.
+
+    InvoiceDocumentType:
+      type: string
+      enum:
+        - invoice
+        - simplified_invoice
+        - credit_note
+        - debit_note
+        - deferred_invoice
+        - self_invoice
+      description: |
+        OpenFiskal document type, mapped to jurisdiction-specific codes at
+        submission time. See the E-Invoicing tag description for the full
+        mapping table.
+
+    InvoiceCreate:
+      type: object
+      required: [organization_id, jurisdiction, document_type, seller, buyer, line_items]
+      properties:
+        object:
+          type: string
+          const: invoice
+        organization_id:
+          type: string
+          description: The merchant issuing the invoice
+        jurisdiction:
+          type: string
+          description: |
+            ISO 3166-1 alpha-2 or ISO 3166-2 subdivision code for the fiscal
+            jurisdiction. Use subdivision codes for sub-national systems.
+          examples:
+            - IT
+            - ES-PV-VI
+            - ES-PV-SS
+            - ES-PV-BI
+            - ES
+        document_type:
+          $ref: '#/components/schemas/InvoiceDocumentType'
+        submit:
+          type: boolean
+          default: true
+          description: |
+            If `false`, the invoice is created in `draft` status and not
+            submitted to the authority. Call `POST /invoices/:id/submit`
+            when ready. Useful for Italy's deferred invoicing window.
+        series:
+          type: [string, "null"]
+          description: |
+            Invoice series identifier. Used to maintain separate sequential
+            numbering for different document types or business units.
+            If omitted, OpenFiskal assigns the default series for the
+            jurisdiction and document type.
+          example: A
+        issue_date:
+          type: string
+          format: date
+          description: |
+            Invoice issue date. Defaults to today. For deferred invoices
+            (Italy TD24), this is the invoice date — the delivery date is
+            in `references.delivery_date`.
+        seller:
+          $ref: '#/components/schemas/InvoiceParty'
+          description: |
+            Usually derived from the organization's registered details.
+            Pass explicitly to override (e.g. for multi-brand setups).
+        buyer:
+          $ref: '#/components/schemas/InvoiceParty'
+          description: |
+            Buyer details. All fields mandatory for B2B invoicing.
+            For B2C simplified invoices, `tax_id` may be omitted.
+        line_items:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/InvoiceLineItem'
+        payment_terms:
+          $ref: '#/components/schemas/InvoicePaymentTerms'
+          description: |
+            Payment terms block. Required by FatturaPA even for already-paid
+            invoices — use `method: already_paid` in that case.
+        routing:
+          $ref: '#/components/schemas/InvoiceRouting'
+          description: |
+            Italy only. How SDI should route the invoice to the recipient.
+            If omitted, SDI will attempt delivery via the recipient's
+            registered codice destinatario.
+        notes:
+          type: array
+          items:
+            type: string
+          description: |
+            Free-text notes (`Causale` in FatturaPA). Appear on the
+            human-readable document. Max 200 characters per entry.
+        references:
+          $ref: '#/components/schemas/InvoiceReferences'
+        metadata:
+          type: object
+          additionalProperties: true
+
+    Invoice:
+      allOf:
+        - $ref: '#/components/schemas/InvoiceCreate'
+        - type: object
+          properties:
+            id:
+              type: string
+              example: inv_01HXYZ
+            state:
+              $ref: '#/components/schemas/InvoiceState'
+            invoice_number:
+              type: [string, "null"]
+              description: |
+                Sequential invoice number assigned by OpenFiskal on submission.
+                Format: `<series>/<year>/<sequence>` or jurisdiction-specific.
+              example: A/2026/00042
+            totals:
+              $ref: '#/components/schemas/Totals'
+            fiscal:
+              $ref: '#/components/schemas/InvoiceFiscalData'
+            created_at:
+              type: string
+              format: date-time
+            submitted_at:
+              type: [string, "null"]
+              format: date-time
+            cancelled_at:
+              type: [string, "null"]
+              format: date-time
+
+    InvoiceList:
+      type: object
+      properties:
+        object:
+          type: string
+          const: list
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Invoice'
+        cursor:
+          type: [string, "null"]
+
+    InvoiceParty:
+      type: object
+      required: [legal_name, tax_id, tax_id_type, address]
+      description: |
+        Full legal identity of an invoice party (seller or buyer).
+        All fields are required for standard B2B invoices.
+      properties:
+        legal_name:
+          type: string
+          description: Registered legal name
+          example: Acme S.r.l.
+        tax_id:
+          type: string
+          description: Tax identification number
+          example: IT12345678901
+        tax_id_type:
+          type: string
+          enum: [partita_iva, codice_fiscale, vat_id, nif, cif, other]
+        address:
+          $ref: '#/components/schemas/Address'
+        sdi_code:
+          type: [string, "null"]
+          description: |
+            Italy only. The recipient's SDI routing code (`Codice Destinatario`).
+            7 characters for intermediary codes, `0000000` if unknown — in which
+            case `pec_address` must be provided as fallback.
+          example: ABC1234
+        pec_address:
+          type: [string, "null"]
+          format: email
+          description: |
+            Italy only. Recipient's PEC (certified email) address.
+            Used as fallback when `sdi_code` is `0000000`.
+          example: recipient@pec.example.it
+
+    InvoiceLineItem:
+      type: object
+      required: [description, quantity, unit_price_net, tax]
+      description: |
+        Invoice line items use **net prices** (tax-exclusive), unlike POS
+        line items which use gross prices. This reflects the difference between
+        a retail receipt (consumer sees final price) and a B2B invoice
+        (buyer wants to see net amounts and VAT separately).
+      properties:
+        description:
+          type: string
+          example: Software development services — March 2026
+        quantity:
+          type: number
+          format: double
+          example: 8
+        unit:
+          type: string
+          example: hours
+        unit_price_net:
+          type: integer
+          description: Unit price excluding tax, in minor currency units
+          example: 15000
+        discount:
+          $ref: '#/components/schemas/LineDiscountInput'
+        tax:
+          $ref: '#/components/schemas/TaxInput'
+        product_ref:
+          type: [string, "null"]
+          description: Your internal product or service code
+        nature_code:
+          type: [string, "null"]
+          description: |
+            Italy only. Exemption or non-taxability nature code, required when
+            `tax.category` is `zero` or `exempt`.
+            Examples: `N1` (excluded), `N2.1` (non-taxable exports),
+            `N3.1` (non-taxable intra-EU), `N4` (exempt Art. 10)
+          example: N4
+        line_total_net:
+          type: integer
+          readOnly: true
+          description: Server-computed. `unit_price_net × quantity − discount`
+        line_total_tax:
+          type: integer
+          readOnly: true
+        line_total_gross:
+          type: integer
+          readOnly: true
+
+    InvoicePaymentTerms:
+      type: object
+      required: [method]
+      properties:
+        method:
+          type: string
+          enum:
+            - already_paid
+            - bank_transfer
+            - direct_debit
+            - card
+            - cash
+            - other
+          description: |
+            `already_paid`: Payment was collected at point of sale. Still
+            required in FatturaPA — use this when linking to a POS operation.
+        due_date:
+          type: [string, "null"]
+          format: date
+          description: Required for `bank_transfer` and `direct_debit`
+        iban:
+          type: [string, "null"]
+          description: Required for `bank_transfer` and `direct_debit`
+          example: IT60X0542811101000000123456
+        installments:
+          type: [array, "null"]
+          description: |
+            For split-payment terms. Each installment carries its own due date
+            and amount. Amounts must sum to the invoice total.
+          items:
+            type: object
+            required: [due_date, amount]
+            properties:
+              due_date:
+                type: string
+                format: date
+              amount:
+                type: integer
+
+    InvoiceRouting:
+      type: object
+      description: Italy (SDI) routing configuration
+      properties:
+        codice_destinatario:
+          type: string
+          description: |
+            SDI routing code of the recipient. `0000000` if unknown, in which
+            case `pec_address` is used. Overrides the value in `buyer.sdi_code`
+            if both are present.
+          example: ABC1234
+        pec_address:
+          type: [string, "null"]
+          format: email
+
+    InvoiceReferences:
+      type: object
+      description: Links to related resources
+      properties:
+        operation_id:
+          type: [string, "null"]
+          description: |
+            ID of a POS operation this invoice was generated from. When provided,
+            the operation's `references.invoice_id` is updated automatically.
+        original_invoice_id:
+          type: [string, "null"]
+          description: |
+            For credit notes and debit notes — the invoice being corrected.
+            OpenFiskal validates that the referenced invoice exists and is in
+            a cancellable/correctable state.
+        delivery_date:
+          type: [string, "null"]
+          format: date
+          description: |
+            Italy TD24 (deferred invoice) only. The date goods/services were
+            delivered. The invoice may be issued up to 12 days later.
+        purchase_order_ref:
+          type: [string, "null"]
+          description: Buyer's purchase order number, if provided
+        contract_ref:
+          type: [string, "null"]
+
+    InvoiceFiscalData:
+      type: object
+      description: |
+        Authority-specific output populated after submission.
+        Treat `jurisdiction_data` as opaque — store it, do not parse it.
+      properties:
+        jurisdiction:
+          type: string
+          example: IT
+        transmission_status:
+          type: [string, "null"]
+          enum: [pending, transmitted, rejected_by_authority]
+        delivery_status:
+          type: [string, "null"]
+          enum: [pending, delivered, accepted, undeliverable, rejected_by_recipient]
+          description: |
+            Italy (SDI) only. Tracks delivery to the recipient after SDI
+            transmission. `null` for TicketBAI and Verifactu which have no
+            recipient delivery step.
+        authority_identifier:
+          type: [string, "null"]
+          description: |
+            The identifier returned by the authority on successful transmission.
+            - **Italy**: `IdentificativoSdI` from SDI
+            - **TicketBAI**: `IdentificadorTBAI` (e.g. `TBAI-12345678A-...`)
+            - **Verifactu**: `CSV` (Código Seguro de Verificación)
+          example: TBAI-12345678A-261226-jBsGMnPmXM-3
+        chain_hash:
+          type: [string, "null"]
+          description: |
+            Hash of this document's key fields, chained from the previous
+            document. Used by TicketBAI (`EncadenamientoFacturaAnterior`) and
+            Verifactu. `null` for Italy (SDI does not use hash chaining).
+          format: byte
+        transmitted_at:
+          type: [string, "null"]
+          format: date-time
+        delivered_at:
+          type: [string, "null"]
+          format: date-time
+        verification:
+          type: [object, "null"]
+          properties:
+            url:
+              type: string
+              format: uri
+              description: Public verification URL for the invoice
+              example: https://ticketbai.gipuzkoa.eus/tbai/qr?id=TBAI-...
+            qr_data:
+              type: string
+              description: Data to encode in the QR code on the document
+        jurisdiction_data:
+          type: [object, "null"]
+          additionalProperties: true
+          description: |
+            Opaque jurisdiction-specific payload. Store as-is.
+            - **IT**: `identificativo_sdi`, `nome_file`, `ricevuta_consegna`
+            - **TicketBAI**: `numero_factura`, `serie`, `fecha_expedicion_factura`
+            - **Verifactu**: `num_serie_factura`, `fecha_expedicion`, `huella_previa`
+        fiscal_errors:
+          type: [array, "null"]
+          description: Authority rejection details when status is `rejected_by_authority`
+          items:
+            type: object
+            properties:
+              code:
+                type: string
+                description: Authority error code
+                example: "00159"
+              message:
+                type: string
+                description: Authority error description
+                example: Codice fiscale acquirente non valido
+
+    # ── Fiscal Certificates ───────────────────────
+
+    FiscalCertificateCreate:
+      type: object
+      required: [jurisdiction, certificate_p12, passphrase]
+      properties:
+        jurisdiction:
+          type: string
+          description: |
+            Jurisdiction this certificate covers. Use ISO 3166-2 subdivision
+            codes for sub-national systems (TicketBAI requires one certificate
+            per province).
+          example: ES-PV-SS
+        label:
+          type: string
+          description: Human-readable label for internal reference
+          example: Gipuzkoa TicketBAI 2026
+        certificate_p12:
+          type: string
+          format: byte
+          description: |
+            Base64-encoded PKCS#12 bundle containing the certificate and
+            private key. OpenFiskal stores this encrypted at rest and uses
+            it only for document signing.
+        passphrase:
+          type: string
+          format: password
+          description: Passphrase protecting the PKCS#12 bundle
+        replace_existing:
+          type: boolean
+          default: false
+          description: |
+            If `true`, replaces an existing active certificate for this
+            jurisdiction. The previous certificate is immediately revoked.
+            Use with caution — ensure the new certificate is valid before
+            setting this.
+
+    FiscalCertificate:
+      type: object
+      properties:
+        object:
+          type: string
+          const: fiscal_certificate
+        id:
+          type: string
+          example: cert_01HXYZ
+        organization_id:
+          type: string
+        jurisdiction:
+          type: string
+          example: ES-PV-SS
+        label:
+          type: [string, "null"]
+        status:
+          type: string
+          enum: [active, expired, revoked]
+        subject:
+          type: string
+          description: Certificate subject DN
+          example: CN=Acme S.L., OU=TicketBAI, O=FNMT, C=ES
+        issuer:
+          type: string
+          description: Certificate issuer DN
+        serial_number:
+          type: string
+        valid_from:
+          type: string
+          format: date-time
+        valid_until:
+          type: string
+          format: date-time
+          description: |
+            Renewal reminders are sent at 60, 30, and 7 days before this date.
+            Document submission is blocked after expiry.
+        fingerprint:
+          type: string
+          description: SHA-256 fingerprint of the certificate (hex)
+          example: "3a:7b:f2:..."
+        created_at:
+          type: string
+          format: date-time
+        revoked_at:
+          type: [string, "null"]
+          format: date-time
+
+    FiscalCertificateList:
+      type: object
+      properties:
+        object:
+          type: string
+          const: list
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/FiscalCertificate'
+
+    # ── Fiscal Portal Credentials ─────────────────
+
+    FiscalPortalCredentialCreate:
+      type: object
+      required: [portal_type, jurisdiction, credentials]
+      properties:
+        portal_type:
+          type: string
+          enum: [fisconline, entratel, finanz_online]
+          description: |
+            Identifies the government portal and determines the expected
+            credential shape.
+
+            - `fisconline` — Italian AdE portal for natural persons and
+              businesses. Used for RT commercial document transmission.
+            - `entratel` — Italian AdE portal for accountants and large
+              corporate filers. Functionally similar to Fisconline but
+              separate authentication system.
+            - `finanz_online` — Austrian BMF portal. Required for RKSV
+              registration, TSE certificate management, and annual
+              transmission reports.
+        jurisdiction:
+          type: string
+          description: ISO 3166-1 alpha-2 country code
+          enum: [IT, AT]
+          example: IT
+        label:
+          type: [string, "null"]
+          description: Optional human-readable label for internal reference
+          example: Acme S.r.l. – Fisconline
+        credentials:
+          description: |
+            Portal-specific credential fields. Shape is determined by
+            `portal_type`. All values are stored encrypted and never
+            returned after creation.
+          oneOf:
+            - $ref: '#/components/schemas/FisconlineCredentials'
+            - $ref: '#/components/schemas/EntatelCredentials'
+            - $ref: '#/components/schemas/FinanzOnlineCredentials'
+          discriminator:
+            propertyName: type
+            mapping:
+              fisconline: '#/components/schemas/FisconlineCredentials'
+              entratel: '#/components/schemas/EntatelCredentials'
+              finanz_online: '#/components/schemas/FinanzOnlineCredentials'
+
+    FisconlineCredentials:
+      type: object
+      required: [type, tax_id_number, pin, password]
+      properties:
+        type:
+          type: string
+          const: fisconline
+        tax_id_number:
+          type: string
+          description: |
+            Italian Codice Fiscale of the credential holder. For companies,
+            this is the legal representative's Codice Fiscale, not the
+            company's Partita IVA.
+          example: RSSMRA80A01H501U
+        pin:
+          type: string
+          format: password
+          description: |
+            Fisconline PIN (10 digits). Issued by the Revenue Agency and
+            does not expire independently — but the account password expires
+            every 60 days.
+          example: "1234567890"
+        password:
+          type: string
+          format: password
+          description: |
+            Fisconline account password. Expires every 60 days and must be
+            renewed by the merchant at the AdE portal. Rotate via PATCH
+            before expiry to avoid transmission interruption.
+
+    EntatelCredentials:
+      type: object
+      required: [type, tax_id_number, pin, password]
+      properties:
+        type:
+          type: string
+          const: entratel
+        tax_id_number:
+          type: string
+          description: |
+            Italian Codice Fiscale of the Entratel-authorized intermediary
+            or corporate filer.
+          example: RSSMRA80A01H501U
+        pin:
+          type: string
+          format: password
+          description: Entratel PIN
+        password:
+          type: string
+          format: password
+          description: |
+            Entratel account password. Same 60-day rotation policy as
+            Fisconline.
+
+    FinanzOnlineCredentials:
+      type: object
+      required: [type, participant_id, user_id, pin]
+      properties:
+        type:
+          type: string
+          const: finanz_online
+        participant_id:
+          type: string
+          description: |
+            FinanzOnline Teilnehmer-ID (participant identifier). Assigned
+            by the Austrian BMF when the account is created.
+          example: "1234567"
+        user_id:
+          type: string
+          description: |
+            FinanzOnline Benutzer-ID (user identifier within the participant
+            account). A single participant can have multiple users.
+          example: user001
+        pin:
+          type: string
+          format: password
+          description: |
+            FinanzOnline PIN. Expires annually and must be renewed at
+            the BMF portal.
+
+    FiscalPortalCredentialUpdate:
+      type: object
+      required: [credentials]
+      description: |
+        Rotation payload. Only credential values can be updated.
+        `portal_type` and `jurisdiction` are immutable.
+      properties:
+        label:
+          type: [string, "null"]
+        credentials:
+          description: |
+            New credential values. Must match the `portal_type` of the
+            existing record. After update, `state` resets to `unvalidated`.
+          oneOf:
+            - $ref: '#/components/schemas/FisconlineCredentials'
+            - $ref: '#/components/schemas/EntatelCredentials'
+            - $ref: '#/components/schemas/FinanzOnlineCredentials'
+          discriminator:
+            propertyName: type
+            mapping:
+              fisconline: '#/components/schemas/FisconlineCredentials'
+              entratel: '#/components/schemas/EntatelCredentials'
+              finanz_online: '#/components/schemas/FinanzOnlineCredentials'
+
+    FiscalPortalCredential:
+      type: object
+      required: [id, object, organization_id, portal_type, jurisdiction, state, created_at]
+      properties:
+        id:
+          type: string
+          example: fpc_01HXYZ
+        object:
+          type: string
+          const: fiscal_portal_credential
+        organization_id:
+          type: string
+        portal_type:
+          type: string
+          enum: [fisconline, entratel, finanz_online]
+        jurisdiction:
+          type: string
+          enum: [IT, AT]
+        label:
+          type: [string, "null"]
+        state:
+          type: string
+          enum: [unvalidated, valid, expiring_soon, expired, invalid]
+          description: |
+            Lifecycle state of the credentials.
+
+            - `unvalidated` — provisioned but not yet tested against the portal.
+              Fiscal transmission will be attempted but may fail.
+            - `valid` — last validation succeeded. Credentials are working.
+            - `expiring_soon` — credentials are valid but the password expiry
+              is within the warning window (14 days for Fisconline/Entratel,
+              30 days for FinanzOnline). Renew at the government portal and
+              rotate via PATCH.
+            - `expired` — password has passed its expiry date. Fiscal
+              transmission is blocked. Merchant must renew at the portal
+              and rotate via PATCH.
+            - `invalid` — last validation failed (wrong credentials, account
+              locked, or portal-side issue). Transmission blocked. Investigate
+              via `validation_error`.
+        masked_credentials:
+          type: [object, "null"]
+          description: |
+            Masked representations of the stored credential fields. Never
+            contains raw secret values. Useful for confirming which values
+            are on file without requiring re-entry.
+          properties:
+            tax_id_number:
+              type: [string, "null"]
+              description: Full value — not sensitive
+              example: RSSMRA80A01H501U
+            participant_id:
+              type: [string, "null"]
+              description: Full value — not sensitive
+              example: "1234567"
+            user_id:
+              type: [string, "null"]
+              description: Full value — not sensitive
+              example: user001
+            pin:
+              type: [string, "null"]
+              description: Last character only
+              example: "****0"
+            password:
+              type: [string, "null"]
+              description: Masked — length preserved
+              example: "***********"
+        expires_at:
+          type: [string, "null"]
+          format: date-time
+          description: |
+            Projected credential expiry date, calculated from the last
+            validation timestamp and the known rotation period for this
+            portal type (Fisconline/Entratel: 60 days; FinanzOnline: 365 days).
+            `null` if the credential has never been validated.
+        last_validated_at:
+          type: [string, "null"]
+          format: date-time
+          description: |
+            Timestamp of the most recent successful validation attempt
+            against the government portal.
+        validation_error:
+          type: [string, "null"]
+          description: |
+            Human-readable error message from the last failed validation
+            attempt. `null` if the last validation succeeded.
+          example: "PIN or password incorrect (AdE error code: 401)"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    FiscalPortalCredentialList:
+      type: object
+      required: [object, data]
+      properties:
+        object:
+          type: string
+          const: list
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/FiscalPortalCredential'
+
+    Error:
+      type: object
+      properties:
+        object:
+          type: string
+          const: error
+        code:
+          type: string
+          example: operation_not_open
+        message:
+          type: string
+          example: This operation is not in open status and cannot be modified.
+        param:
+          type: [string, "null"]
+          description: The request field that caused the error, if applicable
+        fiscal_errors:
+          type: [array, "null"]
+          description: Jurisdiction-specific fiscalization errors, if applicable
+          items:
+            type: object
+            properties:
+              code:
+                type: string
+              message:
+                type: string
+              jurisdiction:
+                type: string
+        request_id:
+          type: string
+          description: Unique request ID for support references
