@@ -58,57 +58,16 @@ info:
     marked with 🔏 are **fiscal events** — they are signed by the fiscal security
     device and cannot be undone.
 
-    ```
-    ┌─────────────────────────────────────────────────────────────────┐
-    │                     OPERATION LIFECYCLE                         │
-    └─────────────────────────────────────────────────────────────────┘
+    ```mermaid
+    stateDiagram-v2
+        direction TB
+        [*] --> open : POST /registers/:id/sales\nPOST /registers/:id/refunds\n🔏 fiscal start signed
+        open --> completed : POST .../complete\n🔏 fiscal end signed
+        open --> abandoned : POST .../abandon\n(no fiscal document)
+        open --> failed : fiscalization fails\n(no fiscal document)
+        completed --> voided : POST /registers/:id/voids\n🔏 fiscal reversal signed\n(same-day, before closing)
 
-         POST /registers/:id/sales
-         POST /registers/:id/refunds
-         POST /registers/:id/...
-                    │
-                    │ 🔏 fiscal start event signed
-                    ▼
-              ┌───────────┐
-              │   open    │ ◄─── PATCH mutations are free here
-              └─────┬─────┘      (items, discounts, customer)
-                    │
-            ┌───────┴────────┐
-            │                │
-            ▼                ▼
-    POST .../complete   POST .../abandon
-    🔏 fiscal end            │
-    event signed             │
-            │                ▼
-            ▼          ┌───────────┐
-    ┌─────────────┐    │ abandoned │  no fiscal document
-    │  completed  │    └───────────┘
-    └──────┬──────┘
-           │
-           │  same-day only,
-           │  before daily closing
-           ▼
-    POST /registers/:id/voids
-    🔏 fiscal reversal signed
-           │
-           ▼
-       ┌────────┐
-       │ voided │
-       └────────┘
-
-    ── error path ────────────────────────────────────────────────────
-
-    If payment or fiscalization fails during complete:
-
-              ┌───────────┐
-              │   open    │
-              └─────┬─────┘
-                    │ POST .../complete
-                    │ fiscalization fails
-                    ▼
-              ┌───────────┐
-              │  failed   │  operation recorded, no fiscal document
-              └───────────┘
+        note right of open : PATCH mutations are free here\n(items, discounts, customer)
     ```
 
     ### Fiscal Event Detail
@@ -116,28 +75,23 @@ info:
     For jurisdictions that sign both the start and end of an operation
     (e.g. Germany TSE), the timeline looks like this:
 
-    ```
-    Time ──────────────────────────────────────────────────────────►
+    ```mermaid
+    sequenceDiagram
+        participant POS
+        participant OpenFiskal
+        participant TSE
 
-      POST /sales          PATCH /sales         POST /sales/complete
-           │                    │                       │
-           │ 🔏 start signed    │  free mutations       │ 🔏 end signed
-           │                    │  (no fiscal event)    │
-           ▼                    ▼                       ▼
-      ┌─────────┐         ┌─────────┐             ┌─────────┐
-      │ fiscal  │         │ fiscal  │             │ fiscal  │
-      │  start  │         │  start  │             │  start  │
-      │ counter │         │ counter │             │ counter │
-      │  =4821  │         │  =4821  │             │  =4821  │
-      │  sig=…  │         │  sig=…  │             │  sig=…  │
-      └─────────┘         └─────────┘             ├─────────┤
-                                                  │ fiscal  │
-                                                  │   end   │
-                                                  │ counter │
-                                                  │  =4822  │
-                                                  │  sig=…  │
-                                                  └─────────┘
-                                                  receipt available
+        POS->>OpenFiskal: POST /sales
+        OpenFiskal->>TSE: Sign start event
+        TSE-->>OpenFiskal: counter=4821, sig=abc...
+        OpenFiskal-->>POS: fiscal.start (counter=4821)
+
+        Note over POS,OpenFiskal: PATCH /sales — free mutations (no fiscal event)
+
+        POS->>OpenFiskal: POST /sales/complete
+        OpenFiskal->>TSE: Sign end event
+        TSE-->>OpenFiskal: counter=4822, sig=xyz...
+        OpenFiskal-->>POS: fiscal.end (counter=4822) + receipt
     ```
 
     ### Concurrent Operations
@@ -147,18 +101,16 @@ info:
     and workshop environments (service bays). Each open operation holds its own
     fiscally-signed start event independently.
 
-    ```
-    Register reg_01
-    │
-    ├── op_A  [open]  started 19:02  counter=4821  ← table in progress
-    ├── op_B  [open]  started 19:15  counter=4823  ← another table
-    ├── op_C  [open]  started 18:45  counter=4819  ← waiting for card
-    └── op_D  [open]  started 20:01  counter=4825  ← just started
+    | Operation | State | Started | Counter | Note |
+    |-----------|-------|---------|---------|------|
+    | op_A | open | 19:02 | 4821 | table in progress |
+    | op_B | open | 19:15 | 4823 | another table |
+    | op_C | open | 18:45 | 4819 | waiting for card |
+    | op_D | open | 20:01 | 4825 | just started |
 
-    All four hold TSE-signed start events.
+    All four hold TSE-signed start events on register `reg_01`.
     Each completes independently when payment is confirmed.
     The daily closing can only happen once all are completed or abandoned.
-    ```
 
     ## Operation Types
 
@@ -303,19 +255,23 @@ tags:
 
       ### Invoice Lifecycle
 
-      ```
-      draft ──► submitted ──► transmitted ──► delivered ──► accepted
-                    │               │               │
-                    │               │               └──► undeliverable
-                    │               │
-                    │               └──► rejected_by_authority
-                    │                    (format / validation error)
-                    │
-                    └── Italy only: may remain draft up to 12 days
-                        for deferred invoicing (document_type: deferred_invoice)
+      ```mermaid
+      stateDiagram-v2
+          direction LR
+          [*] --> draft
+          draft --> submitted : POST /invoices/:id/submit
+          submitted --> transmitted : authority acknowledged
+          transmitted --> delivered : SDI delivered (Italy)
+          delivered --> accepted : recipient accepted (Italy)
+          delivered --> undeliverable : invalid recipient
+          transmitted --> rejected_by_authority : format/validation error
+          transmitted --> cancellation_requested : POST /invoices/:id/cancel
+          delivered --> cancellation_requested : POST /invoices/:id/cancel
+          accepted --> cancellation_requested : POST /invoices/:id/cancel
+          cancellation_requested --> cancelled : authority confirmed
 
-      Any transmitted invoice may be cancelled:
-      transmitted / delivered / accepted ──► cancellation_requested ──► cancelled
+          note left of draft : Italy TD24: may remain\ndraft up to 12 days
+          note right of transmitted : TicketBAI/Verifactu:\ntransmitted = terminal success
       ```
 
       `delivered` and `accepted` are SDI-specific states. Italy routes invoices
@@ -2666,54 +2622,19 @@ components:
         one-directional and enforced server-side — invalid transitions
         return `409 Conflict`.
 
-        ```
-        ┌─────────────────────────────────────────────────────────────────────┐
-        │                    OPERATION STATE MACHINE                          │
-        └─────────────────────────────────────────────────────────────────────┘
+        ```mermaid
+        stateDiagram-v2
+            direction TB
+            [*] --> open : POST /registers/:id/sales\n🔏 fiscal start signed
+            open --> completed : POST .../complete\n🔏 fiscal end signed
+            open --> pending_payment : POST .../complete\n(async payment)
+            open --> abandoned : POST .../abandon
+            open --> failed : fiscalization fault
+            pending_payment --> completed : payment confirmed
+            pending_payment --> failed : payment declined/timeout
+            completed --> voided : POST /voids\n🔏 fiscal reversal\n(same-day, before closing)
 
-                       POST /registers/:id/sales
-                       POST /registers/:id/refunds  etc.
-                                   │
-                                   │ 🔏 fiscal start signed
-                                   ▼
-                            ┌────────────┐
-                            │    open    │ ◄── PATCH mutations free here
-                            └─────┬──┬──┘     (items, discounts, customer)
-                                  │  │
-                   POST .../complete  POST .../abandon
-                                  │  │
-                    🔏 fiscal end │  │  no fiscal document
-                        signed    │  │
-                                  ▼  ▼
-              ┌──────────────┐       ┌───────────┐
-              │   completed  │       │ abandoned │  ◄── terminal
-              └──────┬───────┘       └───────────┘
-                     │
-                     │  🔏 fiscal reversal
-                     │  same-day only,
-                     │  before daily closing
-                     ▼
-        POST /registers/:id/voids
-                     │
-                     ▼
-              ┌────────────┐
-              │   voided   │  ◄── terminal
-              └────────────┘
-
-        ── payment path ────────────────────────────────────────────────────
-
-        When payment requires async confirmation (bank transfer, online):
-
-            open ──► pending_payment ──► completed   (payment confirmed)
-                                    └──► failed       (payment declined/timeout)
-
-        ── error path ──────────────────────────────────────────────────────
-
-        If fiscalization fails during complete (authority unreachable,
-        hardware fault):
-
-            open ──► failed   ◄── terminal. No fiscal document issued.
-                               Retry by starting a new operation.
+            note right of open : PATCH mutations free here
         ```
 
         ### Terminal states
