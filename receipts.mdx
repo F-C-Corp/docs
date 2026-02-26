@@ -180,44 +180,40 @@ The receipt is a denormalized snapshot — issuer details, line items, totals, p
 
 A compliant German fiscal receipt must include the fields shown below. OpenFiskal returns all of them in the receipt object — your POS just prints what it receives.
 
-```
-┌──────────────────────────────────────┐
-│         Mustermann GmbH              │
-│       Friedrichstraße 42             │
-│        10117 Berlin                  │
-│       USt-IdNr: DE123456789          │
-│                                      │
-│  Kasse 1              Berlin Mitte   │
-│  Beleg-Nr: 4822                      │
-│  26.02.2026  12:14                   │
-│  Kassiererin: Maria R.               │
-│──────────────────────────────────────│
-│  1x Wiener Schnitzel        18,50 €  │
-│  2x Berliner Weisse         13,00 €  │
-│  2x Espresso                 7,00 €  │
-│  1x Mineralwasser            4,50 €  │
-│──────────────────────────────────────│
-│  Netto                      36,13 €  │
-│  MwSt 19%                    6,87 €  │
-│  GESAMT                     43,00 €  │
-│──────────────────────────────────────│
-│  Visa ****6411 (Chip)       43,00 €  │
-│──────────────────────────────────────│
-│                                      │
-│  TSE: TSE0123456789ABCDEF            │
-│  Start: 4821  26.02.2026 12:00:00    │
-│  Ende:  4822  26.02.2026 12:14:55    │
-│  Sig:   base64encodedEndSignature==  │
-│                                      │
-│  ┌──────────┐                        │
-│  │ QR CODE  │  V0;Kasse 1;ecdsa-     │
-│  │          │  plain-SHA384;2026-02-  │
-│  │          │  26T12:00:00;2026-02-   │
-│  └──────────┘  26T12:14:55;43.00;    │
-│                4822;base64encoded...  │
-│                                      │
-└──────────────────────────────────────┘
-```
+<div style={{ maxWidth: 340, margin: '24px auto', fontFamily: 'monospace', fontSize: 13, lineHeight: 1.6, background: '#fafafa', border: '1px solid #e5e5e5', borderRadius: 8, padding: '24px 20px', whiteSpace: 'pre', overflowX: 'auto' }}>
+{`         Mustermann GmbH
+       Friedrichstraße 42
+          10117 Berlin
+      USt-IdNr: DE123456789
+
+  Kasse 1           Berlin Mitte
+  Beleg-Nr: 4822
+  26.02.2026  12:14
+  Kassiererin: Maria R.
+ ─────────────────────────────────
+  1x Wiener Schnitzel     18,50 €
+  2x Berliner Weisse      13,00 €
+  2x Espresso              7,00 €
+  1x Mineralwasser         4,50 €
+ ─────────────────────────────────
+  Netto                   36,13 €
+  MwSt 19%                 6,87 €
+  GESAMT                  43,00 €
+ ─────────────────────────────────
+  Visa ****6411 (Chip)    43,00 €
+ ─────────────────────────────────
+
+  TSE: TSE0123456789ABCDEF
+  Start: 4821 26.02.2026 12:00:00
+  Ende:  4822 26.02.2026 12:14:55
+  Sig: base64encodedEndSig...
+
+  ┌────────────┐
+  │            │  DSFinV-K QR code
+  │  QR CODE   │  encoded from
+  │            │  fiscal.verification
+  └────────────┘  .qr_data`}
+</div>
 
 ### Mapping receipt fields to the API response
 
