@@ -1,0 +1,307 @@
+---
+title: 'Receipts'
+description: 'Retrieve, render, and deliver fiscal receipts'
+---
+
+After a POS operation is completed, OpenFiskal generates a **receipt** — a self-contained, verifiable document that includes everything needed to print, archive, or verify the transaction. No additional API calls required.
+
+## Endpoints
+
+| Endpoint | Description |
+| --- | --- |
+| `GET /operations/:id/receipt` | JSON receipt |
+| `GET /operations/:id/receipt.pdf` | Rendered PDF |
+| `POST /operations/:id/receipt/send` | Email or SMS delivery |
+
+## Retrieving a receipt
+
+Receipts are available immediately after an operation reaches `completed` state.
+
+```bash
+curl https://api.openfiskal.com/v1/operations/op_01HXYZ/receipt \
+  -H "Authorization: Bearer ofk_live_eyJhbGciOiJS..." \
+  -H "OpenFiskal-Organization: org_01HXYZ"
+```
+
+<Warning>
+  Calling this endpoint on an operation that is not yet completed returns `409 Conflict`.
+</Warning>
+
+## The Receipt object
+
+The receipt is a denormalized snapshot — issuer details, line items, totals, payments, and the fiscal document are all embedded. This makes receipts portable: you can store or forward them without needing access to the API.
+
+```json
+{
+  "object": "receipt",
+  "id": "rcpt_01HXYZ",
+  "version": "1.0",
+  "created_at": "2026-02-26T12:14:55Z",
+  "issuer": {
+    "organization_id": "org_01HXYZ",
+    "legal_name": "Mustermann GmbH",
+    "trade_name": null,
+    "tax_id": "DE123456789",
+    "address": {
+      "line1": "Friedrichstraße 42",
+      "city": "Berlin",
+      "postal_code": "10117",
+      "country": "DE"
+    },
+    "location_id": "loc_01HXYZ",
+    "location_name": "Berlin Mitte",
+    "register_id": "reg_01HXYZ",
+    "register_label": "Kasse 1"
+  },
+  "operation": {
+    "id": "op_01HXYZ",
+    "external_id": "table-3-order-42",
+    "type": "sale",
+    "sequence_number": 4822,
+    "started_at": "2026-02-26T12:00:00Z",
+    "completed_at": "2026-02-26T12:14:55Z",
+    "currency": "EUR",
+    "cashier": {
+      "id": "cashier_01",
+      "display_name": "Maria R."
+    }
+  },
+  "line_items": [
+    {
+      "id": "li_01HXYZ",
+      "position": 1,
+      "description": "Wiener Schnitzel",
+      "quantity": 1,
+      "unit_price": 1850,
+      "total_gross": 1850,
+      "tax_rate": "19.00",
+      "tax_amount": 296
+    },
+    {
+      "id": "li_02HXYZ",
+      "position": 2,
+      "description": "Berliner Weisse",
+      "quantity": 2,
+      "unit_price": 650,
+      "total_gross": 1300,
+      "tax_rate": "19.00",
+      "tax_amount": 208
+    },
+    {
+      "id": "li_03HXYZ",
+      "position": 3,
+      "description": "Espresso",
+      "quantity": 2,
+      "unit_price": 350,
+      "total_gross": 700,
+      "tax_rate": "19.00",
+      "tax_amount": 112
+    },
+    {
+      "id": "li_04HXYZ",
+      "position": 4,
+      "description": "Mineralwasser",
+      "quantity": 1,
+      "unit_price": 450,
+      "total_gross": 450,
+      "tax_rate": "19.00",
+      "tax_amount": 71
+    }
+  ],
+  "totals": {
+    "total_gross": 4300,
+    "total_net": 3613,
+    "total_tax": 687,
+    "tax_breakdown": [
+      { "rate": "19.00", "net": 3613, "tax": 687, "gross": 4300 }
+    ]
+  },
+  "payments": [
+    {
+      "method": "card",
+      "amount": 4300,
+      "card": {
+        "brand": "visa",
+        "last4": "6411",
+        "entry_mode": "chip"
+      }
+    }
+  ],
+  "fiscal": {
+    "regime": "tse",
+    "document_type": "receipt",
+    "transmission_status": "not_required",
+    "tse_serial": "TSE0123456789ABCDEF",
+    "client_id": "Kasse1",
+    "signature_algorithm": "ecdsa-plain-SHA384",
+    "time_format": "utcTime",
+    "start_event": {
+      "signed_at": "2026-02-26T12:00:00Z",
+      "transaction_counter": 4821,
+      "signature": "base64encodedStartSignature==",
+      "process_type": "Kassenbeleg-V1",
+      "process_data": "Beleg^0.00_0.00_0.00_0.00_0.00^0.00:Bar"
+    },
+    "end_event": {
+      "signed_at": "2026-02-26T12:14:55Z",
+      "transaction_counter": 4822,
+      "signature": "base64encodedEndSignature==",
+      "process_type": "Kassenbeleg-V1",
+      "process_data": "Beleg^43.00_0.00_0.00_0.00_0.00^43.00:Unbar"
+    },
+    "verification": {
+      "qr_data": "V0;Kasse 1;ecdsa-plain-SHA384;2026-02-26T12:00:00;2026-02-26T12:14:55;43.00;4822;base64encodedEndSignature=="
+    }
+  },
+  "customer": null,
+  "notes": [],
+  "links": {
+    "self": "https://api.openfiskal.com/v1/operations/op_01HXYZ/receipt",
+    "pdf": "https://api.openfiskal.com/v1/operations/op_01HXYZ/receipt.pdf",
+    "operation": "https://api.openfiskal.com/v1/operations/op_01HXYZ"
+  },
+  "metadata": {}
+}
+```
+
+### Key sections
+
+| Section | Contents |
+| --- | --- |
+| `issuer` | Legal name, tax ID, address, location, and register that produced the receipt |
+| `operation` | Operation ID, type, sequence number, timestamps, currency, and cashier |
+| `line_items` | Every item with position, description, quantity, unit price, gross total, tax rate, and tax amount |
+| `totals` | Gross, net, and tax totals with a per-rate breakdown |
+| `payments` | Payment methods with method-specific details (card brand, last4, wallet provider, etc.) |
+| `fiscal` | The full fiscal document — regime-specific signatures, counters, and verification data |
+| `links` | Self-referencing URLs for JSON, PDF, and the parent operation |
+
+## What a printed receipt looks like
+
+A compliant German fiscal receipt must include the fields shown below. OpenFiskal returns all of them in the receipt object — your POS just prints what it receives.
+
+```
+┌──────────────────────────────────────┐
+│         Mustermann GmbH              │
+│       Friedrichstraße 42             │
+│        10117 Berlin                  │
+│       USt-IdNr: DE123456789          │
+│                                      │
+│  Kasse 1              Berlin Mitte   │
+│  Beleg-Nr: 4822                      │
+│  26.02.2026  12:14                   │
+│  Kassiererin: Maria R.               │
+│──────────────────────────────────────│
+│  1x Wiener Schnitzel        18,50 €  │
+│  2x Berliner Weisse         13,00 €  │
+│  2x Espresso                 7,00 €  │
+│  1x Mineralwasser            4,50 €  │
+│──────────────────────────────────────│
+│  Netto                      36,13 €  │
+│  MwSt 19%                    6,87 €  │
+│  GESAMT                     43,00 €  │
+│──────────────────────────────────────│
+│  Visa ****6411 (Chip)       43,00 €  │
+│──────────────────────────────────────│
+│                                      │
+│  TSE: TSE0123456789ABCDEF            │
+│  Start: 4821  26.02.2026 12:00:00    │
+│  Ende:  4822  26.02.2026 12:14:55    │
+│  Sig:   base64encodedEndSignature==  │
+│                                      │
+│  ┌──────────┐                        │
+│  │ QR CODE  │  V0;Kasse 1;ecdsa-     │
+│  │          │  plain-SHA384;2026-02-  │
+│  │          │  26T12:00:00;2026-02-   │
+│  └──────────┘  26T12:14:55;43.00;    │
+│                4822;base64encoded...  │
+│                                      │
+└──────────────────────────────────────┘
+```
+
+### Mapping receipt fields to the API response
+
+| Receipt line | Source field |
+| --- | --- |
+| Business name | `issuer.legal_name` |
+| Address | `issuer.address` |
+| Tax ID | `issuer.tax_id` |
+| Register | `issuer.register_label` |
+| Beleg-Nr (receipt number) | `operation.sequence_number` |
+| Date/time | `operation.completed_at` |
+| Cashier | `operation.cashier.display_name` |
+| Line items | `line_items[].description`, `quantity`, `unit_price` |
+| Tax breakdown | `totals.tax_breakdown[]` |
+| Total | `totals.total_gross` |
+| Payment method | `payments[].method`, `payments[].card.last4` |
+| TSE serial | `fiscal.tse_serial` |
+| Start counter / time | `fiscal.start_event.transaction_counter`, `signed_at` |
+| End counter / time | `fiscal.end_event.transaction_counter`, `signed_at` |
+| Signature | `fiscal.end_event.signature` |
+| QR code data | `fiscal.verification.qr_data` |
+
+<Info>
+  All amounts are in the currency's smallest unit (cents for EUR). Divide by 100 for display: `4300` → `43,00 €`.
+</Info>
+
+## PDF receipts
+
+OpenFiskal renders jurisdiction-appropriate PDFs. The layout adapts automatically — dual-signature TSE block for Germany, RT footer for Italy, RKSV chain data for Austria.
+
+```bash
+curl https://api.openfiskal.com/v1/operations/op_01HXYZ/receipt.pdf \
+  -H "Authorization: Bearer ofk_live_eyJhbGciOiJS..." \
+  -H "OpenFiskal-Organization: org_01HXYZ" \
+  -o receipt.pdf
+```
+
+Use the PDF endpoint if your POS doesn't have a custom receipt renderer. For thermal printers or custom layouts, use the JSON receipt and render it yourself.
+
+## Sending receipts
+
+Deliver a digital receipt to the customer via email or SMS:
+
+```bash
+curl -X POST https://api.openfiskal.com/v1/operations/op_01HXYZ/receipt/send \
+  -H "Authorization: Bearer ofk_live_eyJhbGciOiJS..." \
+  -H "OpenFiskal-Organization: org_01HXYZ" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "channel": "email",
+    "recipient": "customer@example.com"
+  }'
+```
+
+```json
+{
+  "delivery_id": "dlv_01HXYZ",
+  "channel": "email",
+  "recipient": "customer@example.com",
+  "status": "queued"
+}
+```
+
+Delivery is asynchronous. The `status` field will be `queued` initially, then transition to `sent` or `failed`.
+
+## Jurisdiction differences
+
+The receipt object structure is consistent across jurisdictions. What changes is the content of the `fiscal` block:
+
+| Jurisdiction | Signatures | Required on receipt |
+| --- | --- | --- |
+| Germany (TSE) | Start + end (dual) | Both counters, both timestamps, end signature, QR code |
+| Austria (RKSV) | End only (chained) | Turnover counter, signature, QR code |
+| Italy (RT) | End only | Document number, daily closing number, verification URL or QR |
+
+Your POS does not need to branch on regime. Render whatever fields are present in the `fiscal` block — OpenFiskal populates the correct fields for the jurisdiction.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="POS Operations" icon="cash-register" href="/pos-operation-ingestion">
+    The full operation lifecycle — start, mutate, complete, abandon.
+  </Card>
+  <Card title="Getting Started" icon="rocket" href="/getting-started">
+    End-to-end walkthrough including receipt retrieval.
+  </Card>
+</CardGroup>

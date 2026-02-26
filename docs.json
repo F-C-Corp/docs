@@ -21,6 +21,7 @@
           "auth",
           "register-lifecycle",
           "pos-operation-ingestion",
+          "receipts",
           {
             "group": "API",
             "openapi": "api-reference/ofi-openapi.yaml"
