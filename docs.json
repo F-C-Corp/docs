@@ -89,6 +89,20 @@
           {
             "group": "API",
             "openapi": "api-reference/ofi-openapi.yaml"
+          },
+          {
+            "group": "Schemas",
+            "pages": [
+              "api-reference/schemas/pos-operation-envelope",
+              "api-reference/schemas/sale-operation",
+              "api-reference/schemas/line-item",
+              "api-reference/schemas/line-item-input",
+              "api-reference/schemas/payment",
+              "api-reference/schemas/payment-input",
+              "api-reference/schemas/totals",
+              "api-reference/schemas/fiscal-document",
+              "api-reference/schemas/error"
+            ]
           }
         ]
       },

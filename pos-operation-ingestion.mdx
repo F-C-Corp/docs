@@ -36,28 +36,32 @@ A POS operation is anything that happens at a register that has fiscal relevance
 Every operation moves through these states:
 
 ```
-                           mutate
-                        ┌──────────┐
-                        │          │
-                        ▼          │
-         start ■  ┌──────────┐  complete ■  ┌───────────┐  void ■  ┌────────┐
-       ─────────►│   open   ├────────────►│ completed  ├────────►│ voided │
-                  └─┬──┬──┬─┘              └───────────┘         └────────┘
-                    │  │  │                      ▲
-           abandon  │  │  │ complete             │ confirmed
-                    │  │  │ (async)              │
-                    │  │  │   ┌─────────────────┬┘
-                    │  │  └──►│pending_payment  ├─ declined/timeout ─►┌────────┐
-                    │  │      └─────────────────┘                     │ failed │
-                    │  │                                              └────────┘
-                    │  └──────────── fault ─────────────────────────────►▲
-                    ▼
-              ┌───────────┐
-              │ abandoned  │
-              └───────────┘
+                          mutate
+                       ┌──────────┐
+                       │          │
+                       ▼          │
+        start    ┌──────────┐  complete    ┌───────────┐  void     ┌────────┐
+    ───────────►│   open   ├────────────►│ completed  ├────────►│ voided │
+       ■        └──┬──┬──┬─┘     ■       └───────────┘    ■     └────────┘
+                   │  │  │                     ▲
+                   │  │  │ complete             │
+                   │  │  │ (async)              │ confirmed
+                   │  │  │                     │
+                   │  │  │  ┌─────────────────┬┘
+                   │  │  └─►│ pending_payment ├──── declined ───►┌────────┐
+                   │  │     └─────────────────┘    / timeout     │ failed │
+                   │  │                                          └────────┘
+                   │  └──────────── fault ─────────────────────────►▲
+                   │
+                   │ abandon
+                   │
+                   ▼
+             ┌───────────┐
+             │ abandoned  │
+             └───────────┘
 
-■ = fiscal event (signed by the fiscal security device)
-Terminal states: completed, abandoned, failed, voided
+  ■ = fiscal event (signed by the fiscal security device)
+  Terminal states: completed, abandoned, failed, voided
 ```
 
 - **start → open**: The fiscal device signs the start event. The POS receives a signature and transaction counter. This is irreversible — once started, the operation must be completed or explicitly abandoned.
