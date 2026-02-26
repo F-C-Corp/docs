@@ -126,7 +126,6 @@ info:
     | `cash_movement` | Cash in / cash out |
     | `deposit` | Prepayment or reservation |
     | `deposit_capture` | Finalization of a prior deposit |
-    | `gift_card_issue` | Gift card activation |
     | `training` | Non-fiscal staff training transaction |
 
     ## Authentication
@@ -213,8 +212,6 @@ tags:
     description: Prepayments and reservations.
   - name: Deposit Captures
     description: Finalizes a prior deposit operation.
-  - name: Gift Card Issuances
-    description: Gift card activation. Redemption is handled via the `gift_card` payment method on a sale.
   - name: Training
     description: Non-fiscal training transactions for staff practice.
   - name: Receipts
@@ -1827,121 +1824,6 @@ paths:
           $ref: '#/components/responses/Conflict'
 
   # ─────────────────────────────────────────────
-  # GIFT CARD ISSUANCES
-  # ─────────────────────────────────────────────
-
-  /registers/{registerId}/gift-card-issuances:
-    post:
-      tags: [Gift Card Issuances]
-      operationId: startGiftCardIssuance
-      summary: Issue a gift card
-      description: |
-        Opens a gift card issuance operation. The gift card is activated and loaded
-        with the specified amount upon completion. The tax event occurs when the
-        card is redeemed, not at issuance.
-      parameters:
-        - $ref: '#/components/parameters/registerId'
-        - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/GiftCardIssuanceStart'
-      responses:
-        '201':
-          description: Gift card issuance started
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GiftCardIssuanceOperation'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /gift-card-issuances/{operationId}:
-    get:
-      tags: [Gift Card Issuances]
-      operationId: getGiftCardIssuance
-      summary: Retrieve a gift card issuance
-      parameters:
-        - $ref: '#/components/parameters/operationId'
-      responses:
-        '200':
-          description: Gift card issuance retrieved
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GiftCardIssuanceOperation'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /gift-card-issuances/{operationId}/complete:
-    post:
-      tags: [Gift Card Issuances]
-      operationId: completeGiftCardIssuance
-      summary: Complete a gift card issuance
-      parameters:
-        - $ref: '#/components/parameters/operationId'
-        - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/GiftCardIssuanceComplete'
-      responses:
-        '200':
-          description: Gift card issuance completed and fiscalized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GiftCardIssuanceOperation'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
-
-  /gift-card-issuances/{operationId}/abandon:
-    post:
-      tags: [Gift Card Issuances]
-      operationId: abandonGiftCardIssuance
-      summary: Abandon a gift card issuance
-      parameters:
-        - $ref: '#/components/parameters/operationId'
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                reason:
-                  type: string
-                  example: Customer changed mind
-      responses:
-        '200':
-          description: Gift card issuance abandoned
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GiftCardIssuanceOperation'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-
-  # ─────────────────────────────────────────────
   # TRAINING
   # ─────────────────────────────────────────────
 
@@ -3254,7 +3136,6 @@ components:
         - cash_movement
         - deposit
         - deposit_capture
-        - gift_card_issue
         - training
 
     PosOperationState:
@@ -3368,7 +3249,6 @@ components:
         - $ref: '#/components/schemas/ExchangeOperation'
         - $ref: '#/components/schemas/DepositOperation'
         - $ref: '#/components/schemas/DepositCaptureOperation'
-        - $ref: '#/components/schemas/GiftCardIssuanceOperation'
         - $ref: '#/components/schemas/TrainingOperation'
       discriminator:
         propertyName: type
@@ -3380,7 +3260,6 @@ components:
           exchange: '#/components/schemas/ExchangeOperation'
           deposit: '#/components/schemas/DepositOperation'
           deposit_capture: '#/components/schemas/DepositCaptureOperation'
-          gift_card_issue: '#/components/schemas/GiftCardIssuanceOperation'
           training: '#/components/schemas/TrainingOperation'
 
     PosOperationList:
@@ -4206,9 +4085,7 @@ components:
           properties:
             gift_card_id:
               type: string
-              description: |
-                Links this redemption back to a `GiftCardIssuance` operation.
-                Traces the full lifecycle of the card.
+              description: Vendor-side gift card identifier, for reconciliation
             last4:
               type: string
               description: Last 4 digits of card number, for receipt display
@@ -5308,31 +5185,6 @@ components:
                     - $ref: '#/components/schemas/Totals'
                     - type: "null"
 
-    GiftCardIssuanceOperation:
-      allOf:
-        - $ref: '#/components/schemas/PosOperationEnvelope'
-        - type: object
-          properties:
-            type:
-              type: string
-              const: gift_card_issue
-            data:
-              type: object
-              properties:
-                gift_card_id:
-                  type: string
-                amount:
-                  type: integer
-                  description: Value loaded onto the card in minor currency units
-                currency:
-                  type: string
-                payment:
-                  $ref: '#/components/schemas/Payment'
-                  description: |
-                    The inbound payment for the gift card purchase.
-                    Gift card issuance is not itself a taxable event — the tax
-                    event occurs when the card is redeemed on a future sale.
-
     TrainingOperation:
       allOf:
         - $ref: '#/components/schemas/PosOperationEnvelope'
@@ -5479,36 +5331,6 @@ components:
             $ref: '#/components/schemas/PaymentInput'
           description: |
             Payments settling the remaining balance after the deposit is applied.
-
-    # ── Gift Card Issuance input schemas ─────────
-
-    GiftCardIssuanceStart:
-      type: object
-      required: [amount, currency]
-      properties:
-        amount:
-          type: integer
-          description: Value to load onto the gift card in minor currency units
-        currency:
-          type: string
-          format: iso-4217
-          example: EUR
-        external_id:
-          type: string
-        cashier:
-          $ref: '#/components/schemas/Cashier'
-        metadata:
-          type: object
-          additionalProperties: true
-
-    GiftCardIssuanceComplete:
-      type: object
-      required: [payment]
-      properties:
-        payment:
-          $ref: '#/components/schemas/PaymentInput'
-          description: |
-            The single inbound payment for the gift card purchase.
 
     # ── Training input schemas ───────────────────
 
