@@ -19,12 +19,12 @@ When the API is unreachable, persist the full operation payload locally on the d
 
 Each queued entry must include:
 
-- **The full request payload** — headers, body, and method, exactly as you would send it online.
+- **A client-generated operation ID** — generate a UUID before starting the operation. Use it as the `id` in the start request body and in the URL path for all subsequent calls (`PATCH /sales/{id}`, `POST /sales/{id}/complete`). Because the ID is generated client-side, you can construct every payload in the queue upfront — no need to wait for a server response.
 - **An `Idempotency-Key`** — generated at the time of the action, not at sync time. This is what makes retries safe.
-- **A device-side timestamp** — record when the event actually occurred on the register's local clock.
+- **An `occurred_at` timestamp** — the register's local clock at the moment the event happened. This is the fiscally relevant timestamp — not the time the API call eventually succeeds.
 
 <Warning>
-  Use the register's local clock for timestamps, not the time the API call eventually succeeds. The fiscally relevant moment is when the cashier pressed the button, not when the network came back.
+  Use the register's local clock for `occurred_at`, not the time the sync happens. The fiscally relevant moment is when the cashier pressed the button, not when the network came back.
 </Warning>
 
 Store the queue in durable local storage — a local database, file, or embedded store that survives app restarts and crashes. An in-memory queue is not sufficient.
@@ -43,20 +43,23 @@ sequenceDiagram
 
     Note over POS: Connectivity lost
 
-    POS->>Queue: Store: POST /sales (key=sale-101-start)
-    POS->>Queue: Store: PATCH /sales/:id (items)
-    POS->>Queue: Store: POST /sales/:id/complete (key=sale-101-complete)
-    POS->>Queue: Store: POST /sales (key=sale-102-start)
+    Note over POS: Generate UUID: op_a1b2c3
+    POS->>Queue: POST /sales {id: op_a1b2c3} (key=sale-101-start)
+    POS->>Queue: PATCH /sales/op_a1b2c3 (items)
+    POS->>Queue: POST /sales/op_a1b2c3/complete (key=sale-101-complete)
+
+    Note over POS: Generate UUID: op_d4e5f6
+    POS->>Queue: POST /sales {id: op_d4e5f6} (key=sale-102-start)
 
     Note over POS: Connectivity restored
 
-    Queue->>API: POST /sales (key=sale-101-start)
+    Queue->>API: POST /sales {id: op_a1b2c3}
     API-->>Queue: 201 Created
-    Queue->>API: PATCH /sales/:id (items)
+    Queue->>API: PATCH /sales/op_a1b2c3
     API-->>Queue: 200 OK
-    Queue->>API: POST /sales/:id/complete (key=sale-101-complete)
+    Queue->>API: POST /sales/op_a1b2c3/complete
     API-->>Queue: 200 Completed + fiscal document
-    Queue->>API: POST /sales (key=sale-102-start)
+    Queue->>API: POST /sales {id: op_d4e5f6}
     API-->>Queue: 201 Created
 
     Note over POS: Queue drained
@@ -66,11 +69,27 @@ Key rules:
 
 1. **Replay in order.** Operations must be synced in the same sequence they occurred. A `complete` cannot arrive before its `start`.
 2. **Use the original idempotency key.** If a request fails mid-sync (e.g., a second network drop), retry with the same key. The server deduplicates automatically.
-3. **Do not modify payloads.** Send exactly what was queued. Do not recalculate timestamps, amounts, or keys at sync time.
+3. **Do not modify payloads.** Send exactly what was queued. Do not recalculate timestamps, amounts, or IDs at sync time.
 
 <Tip>
   On a successful response, remove the entry from the queue. On a network error, stop and retry later — do not skip entries.
 </Tip>
+
+## Receipts while offline
+
+When a sale completes offline, the POS has not yet received a fiscal document from OpenFiskal — there is no signature, no QR code, no document number. The customer is still waiting.
+
+Print a **provisional receipt** with the data you have locally: line items, totals, payments, and the `occurred_at` timestamp. Mark it clearly as non-fiscal — it does not carry the legally required fiscal data yet.
+
+Once the queue is synced and the operation is completed on the server, the full fiscal receipt becomes available via `GET /operations/:id/receipt`. You can then:
+
+- Email the fiscal receipt to the customer (if you captured contact details).
+- Make it available for reprint at the register.
+- Store it for audit purposes.
+
+<Warning>
+  A provisional receipt is not a substitute for the fiscal receipt. The fiscal receipt must be made available to the customer once the operation is synced. Check your jurisdiction's rules on how and when it must be delivered.
+</Warning>
 
 ## Timestamps
 
@@ -109,29 +128,6 @@ When operations arrive late, OpenFiskal handles the fiscal outcome per regime. Y
   The fiscal document in the API response reflects the actual outcome. If a TSE signature was not produced, the `start_event` and `end_event` fields will indicate this. The POS prints whatever is returned — no special handling needed.
 </Info>
 
-## Heartbeat and monitoring
-
-While offline, the register cannot send heartbeats. OpenFiskal detects this: after 2x the expected heartbeat interval with no signal, the register status transitions to `offline`.
-
-When connectivity returns:
-
-1. Resume heartbeats immediately.
-2. Include `metrics.unsynced_operations` in the heartbeat payload — this tells the server how many queued operations are waiting to be synced.
-
-```json
-{
-  "timestamp": "2026-02-26T15:00:00Z",
-  "sequence": 4829,
-  "status": "operational",
-  "metrics": {
-    "unsynced_operations": 12,
-    "pending_operations": 0
-  }
-}
-```
-
-The register status transitions back to `operational` once heartbeats resume. The server can monitor the `unsynced_operations` count to track sync progress.
-
 ## Daily closing
 
 All queued operations must be synced and either completed or abandoned before calling `POST /registers/:id/closings`.
@@ -151,13 +147,14 @@ If the register was offline for part of the day, the closing sequence is:
 
 Your POS must implement the following to support offline operation:
 
+- **Client-generated operation IDs** — generate a UUID for each operation before starting it. Use this ID in all subsequent calls (mutate, complete) so every payload can be constructed at queue time.
 - **Local persistence** — durable storage for queued operations that survives restarts and crashes.
 - **Ordered replay** — sync queued operations in the exact order they occurred.
 - **Idempotency keys** — generate a unique key for every `start` and `complete` action at queue time, and reuse it on retry.
 - **Device-side timestamps** — record `occurred_at` from the register's local clock at the time of the event.
+- **Provisional receipts** — print a non-fiscal receipt for the customer at the time of sale, and make the fiscal receipt available after sync.
 - **Clock accuracy** — compare `server_time` from heartbeat responses against the local clock and alert on significant drift.
 - **Queue drain before closing** — block the daily closing until all queued operations are synced and completed or abandoned.
-- **Heartbeat `unsynced_operations`** — report the queue depth in heartbeat metrics so the server knows the register has a backlog.
 
 ## Next steps
 
