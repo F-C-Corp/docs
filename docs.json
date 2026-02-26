@@ -17,6 +17,7 @@
           "auth",
           "register-lifecycle",
           "pos-operation-ingestion",
+          "offline-guidance",
           "receipts",
           {
             "group": "API",
