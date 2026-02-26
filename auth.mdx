@@ -1,4 +1,224 @@
 ---
-title: 'Auth'
+title: 'Authentication'
+description: 'Credential types, token flows, and how to scope requests to merchant organizations'
 ---
 
+## Credential model
+
+OpenFiskal uses two credential types, each designed for a different integration topology:
+
+| Credential | Format | Lifetime | Use case |
+|---|---|---|---|
+| **Platform credential** | OAuth2 client credentials (`client_id` + `client_secret`) | Short-lived Bearer token (1 hour) | Server-side integration — your backend calls the API on behalf of merchants |
+| **Register API key** | Static key in `X-Register-Api-Key` header | Long-lived | Device-direct integration — hardware (EV chargers, unattended kiosks) that cannot run an OAuth flow |
+
+Most POS integrations use platform credentials exclusively. Register API keys are only needed when individual devices call the API directly without a backend intermediary.
+
+## Platform credentials (OAuth2)
+
+Platform credentials are the primary authentication method. Your backend exchanges a `client_id` and `client_secret` for a short-lived Bearer token, then uses that token for all subsequent requests.
+
+### Obtaining a token
+
+```bash
+curl -X POST https://api.openfiskal.com/v1/auth/token \
+  -H "Content-Type: application/json" \
+  -d '{
+    "grant_type": "client_credentials",
+    "client_id": "your_client_id",
+    "client_secret": "your_client_secret"
+  }'
+```
+
+```json
+{
+  "object": "token",
+  "access_token": "ofk_live_eyJhbGciOiJS...",
+  "token_type": "bearer",
+  "expires_in": 3600
+}
+```
+
+The token is valid for **1 hour**. Cache it and refresh before expiry. There is no refresh token — request a new token when the current one expires.
+
+<Warning>
+  The `client_secret` must never be exposed to client-side code or device firmware. Token exchange must happen exclusively on your server.
+</Warning>
+
+### Scoping requests to a merchant
+
+A single platform token can act on behalf of any merchant organization. Include the `OpenFiskal-Organization` header to scope a request:
+
+```bash
+curl https://api.openfiskal.com/v1/registers \
+  -H "Authorization: Bearer ofk_live_eyJhbGciOiJS..." \
+  -H "OpenFiskal-Organization: org_01HXYZ"
+```
+
+There is no need to obtain a separate token per organization. The same token works across all merchants under your platform account.
+
+### Managing platform credentials
+
+Platform credentials can be created, listed, and revoked via the API:
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /auth/platform-credentials` | Issue a new `client_id` / `client_secret` pair |
+| `GET /auth/platform-credentials` | List all active credentials |
+| `DELETE /auth/platform-credentials/{clientId}` | Permanently revoke a credential |
+
+The `client_secret` is returned **once** at creation time. Store it securely — it cannot be retrieved afterward.
+
+<Tip>
+  Issue separate credentials per environment (production, staging) and rotate them periodically. Always ensure a replacement credential is active before revoking the old one.
+</Tip>
+
+### Token introspection
+
+Use the introspection endpoint to validate a token and inspect its claims during development or debugging:
+
+```bash
+curl -X POST https://api.openfiskal.com/v1/auth/token/introspect \
+  -H "Authorization: Bearer ofk_live_eyJhbGciOiJS..." \
+  -H "Content-Type: application/json" \
+  -d '{ "token": "ofk_live_eyJhbGciOiJS..." }'
+```
+
+```json
+{
+  "object": "token_introspection",
+  "active": true,
+  "client_id": "your_client_id",
+  "organization_id": null,
+  "expires_at": "2026-02-26T15:30:00Z"
+}
+```
+
+## Register API keys
+
+Register API keys are long-lived, device-scoped credentials for hardware that calls the API directly — without routing through a backend server. They authenticate via the `X-Register-Api-Key` header.
+
+### When to use register API keys
+
+Use register API keys only for **device-direct integrations** where the hardware cannot perform an OAuth flow:
+
+- EV chargers
+- Unattended kiosks and vending machines
+- Embedded POS terminals without server connectivity
+
+Standard server-side integrations (where your backend proxies API calls) should use platform credentials exclusively. The platform token already authorizes all register operations.
+
+### Issuing a register API key
+
+A register API key is issued during register activation by setting `issue_register_credential: true`:
+
+```bash
+curl -X POST https://api.openfiskal.com/v1/registers/reg_01ABC/activate \
+  -H "Authorization: Bearer ofk_live_eyJhbGciOiJS..." \
+  -H "OpenFiskal-Organization: org_01HXYZ" \
+  -H "Content-Type: application/json" \
+  -d '{ "issue_register_credential": true }'
+```
+
+```json
+{
+  "object": "register_activation",
+  "register": { "...": "..." },
+  "register_api_key": "ofk_reg_live_..."
+}
+```
+
+<Warning>
+  The API key is returned **once only**. Store it immediately and provision it to the device over a secure channel. It cannot be retrieved again.
+</Warning>
+
+### Using a register API key
+
+The device includes the key in the `X-Register-Api-Key` header:
+
+```bash
+curl -X POST https://api.openfiskal.com/v1/registers/reg_01ABC/heartbeat \
+  -H "X-Register-Api-Key: ofk_reg_live_..."
+```
+
+Register API keys are scoped to a single register and support a limited set of operations — primarily heartbeats and register-level fiscal events.
+
+### Rotating a register API key
+
+If a device is compromised or replaced, rotate the key immediately:
+
+```bash
+curl -X POST https://api.openfiskal.com/v1/registers/reg_01ABC/rotate-credential \
+  -H "Authorization: Bearer ofk_live_eyJhbGciOiJS..." \
+  -H "OpenFiskal-Organization: org_01HXYZ"
+```
+
+The previous key is invalidated immediately. The new key is returned in the response and must be provisioned to the device.
+
+## Integration topologies
+
+<Tabs>
+  <Tab title="Server-side (recommended)">
+    Your backend server holds the platform credentials and proxies all API calls. Individual registers do not authenticate directly with OpenFiskal.
+
+    ```mermaid
+    sequenceDiagram
+        participant Register
+        participant POS Backend
+        participant OpenFiskal
+
+        POS Backend->>OpenFiskal: POST /auth/token (client credentials)
+        OpenFiskal-->>POS Backend: Bearer token
+
+        Register->>POS Backend: Sale completed
+        POS Backend->>OpenFiskal: POST /registers/:id/sales (Bearer + Org header)
+        OpenFiskal-->>POS Backend: Fiscal document
+        POS Backend-->>Register: Receipt data
+    ```
+
+    This is the recommended topology for most POS integrations. Credentials remain on the server, and the POS backend controls all fiscal interactions.
+  </Tab>
+  <Tab title="Device-direct">
+    Each register device holds its own API key and calls OpenFiskal directly. No backend intermediary is required.
+
+    ```mermaid
+    sequenceDiagram
+        participant Register
+        participant OpenFiskal
+
+        Register->>OpenFiskal: POST /registers/:id/heartbeat (X-Register-Api-Key)
+        OpenFiskal-->>Register: OK
+
+        Register->>OpenFiskal: POST /registers/:id/sales (X-Register-Api-Key)
+        OpenFiskal-->>Register: Fiscal document
+    ```
+
+    Use this topology only when the device operates independently and cannot route through a backend — such as EV chargers or unattended kiosks.
+  </Tab>
+</Tabs>
+
+## Idempotency
+
+All mutating endpoints accept an `Idempotency-Key` header. Including one is strongly recommended for `start` and `complete` actions — retrying a fiscalization event without an idempotency key risks creating duplicate fiscal records.
+
+```bash
+curl -X POST https://api.openfiskal.com/v1/registers/reg_01ABC/sales \
+  -H "Authorization: Bearer ofk_live_eyJhbGciOiJS..." \
+  -H "OpenFiskal-Organization: org_01HXYZ" \
+  -H "Idempotency-Key: sale_abc123_start" \
+  -H "Content-Type: application/json" \
+  -d '{ "...": "..." }'
+```
+
+If a request with the same idempotency key has already been processed, the original response is returned without creating a new fiscal event.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="POS Operations" icon="cash-register" href="/pos-operation-ingestion">
+    Learn how to report register activity and handle the operation lifecycle.
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference/introduction">
+    Explore the full API surface — endpoints, schemas, and examples.
+  </Card>
+</CardGroup>

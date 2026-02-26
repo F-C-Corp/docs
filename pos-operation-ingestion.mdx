@@ -3,13 +3,13 @@ title: 'POS Operations'
 description: 'How POS vendors report register activity to OpenFiskal'
 ---
 
-## The deal
+## Overview
 
-You build the POS. We handle fiscalization.
+OpenFiskal handles fiscalization so your POS doesn't have to.
 
-Every event that happens on a register — a sale, a refund, a cash drawer movement — must be reported to OpenFiskal as a **POS operation**. We sign it, store it, and return the fiscal data your receipt needs. You print it.
+Every event that occurs at a register — a sale, a refund, a cash drawer movement — is reported to OpenFiskal as a **POS operation**. We sign it, store it, and return the fiscal data required for the receipt. Your POS prints it.
 
-That's the contract: **you send us what happened, we make it legally compliant.**
+The integration model is straightforward: **your POS reports what happened, and OpenFiskal makes it legally compliant.**
 
 ## What is a POS operation?
 
@@ -17,17 +17,17 @@ A POS operation is anything that happens at a register that has fiscal relevance
 
 <Steps>
   <Step title="Start">
-    Your POS tells OpenFiskal that something is happening — a sale was opened, a refund initiated, cash was moved.
+    The POS notifies OpenFiskal that an event has begun — a sale opened, a refund initiated, or cash moved.
 
-    This is already a fiscal event. In Germany, the TSE signs the start immediately. We return the start signature and a transaction counter. **Store these — they go on the receipt.**
+    This is already a fiscal event. The fiscal security device signs the start immediately. OpenFiskal returns the start signature and transaction counter. **Store these values — they are required on the receipt.**
   </Step>
   <Step title="Mutate (optional)">
-    While the operation is open, your POS can freely update it — add line items, apply discounts, attach customer data. These mutations are not fiscal events. No signatures, no counters. Just data updates.
+    While the operation is open, the POS may update it freely — adding line items, applying discounts, or attaching customer data. These mutations are not fiscal events and do not produce signatures or counter values.
   </Step>
   <Step title="Complete">
-    Your POS sends the final payment data and tells us to close the operation.
+    The POS submits the final payment data and requests completion.
 
-    We sign the end event, generate the fiscal document, and return everything: end signature, document number, receipt data, QR code payload. **This is what goes on the printed receipt.**
+    OpenFiskal signs the end event, generates the fiscal document, and returns the full set of receipt data: end signature, document number, and QR code payload. **These fields must appear on the printed receipt.**
   </Step>
 </Steps>
 
@@ -47,12 +47,12 @@ sequenceDiagram
     POS->>OpenFiskal: POST /sales/:id/complete (with payments)
     OpenFiskal->>Fiscal Device: Sign end event
     Fiscal Device-->>OpenFiskal: end signature + counter
-    OpenFiskal-->>POS: operation completed + fiscal data + receipt
+    OpenFiskal-->>POS: operation completed + fiscal document
 ```
 
 ## Operation types
 
-You only implement the operation types that exist in your system. If your POS doesn't handle deposits, don't send deposits. If you never do exchanges, skip them.
+Implement only the operation types that apply to your system. If your POS does not handle deposits, there is no need to send them.
 
 | Type | When to use it |
 |---|---|
@@ -66,78 +66,151 @@ You only implement the operation types that exist in your system. If your POS do
 | `training` | Staff practice transaction. Not fiscalized — no real fiscal document is generated. |
 
 <Info>
-  Every operation type follows the same lifecycle: **start → mutate → complete** (or **abandon**). The API surface is consistent across all types. Learn one, you know them all.
+  Every operation type follows the same lifecycle: **start → mutate → complete** (or **abandon**). The API surface is identical across all types.
 </Info>
 
-## Your responsibilities
+## POS vendor responsibilities
 
-As the POS vendor, you are responsible for:
+As the POS vendor, your integration must:
 
-1. **Reporting every fiscal event as it happens.** When a cashier opens a sale, you call us. When the customer pays, you call us. Don't batch, don't delay, don't skip.
+1. **Report every fiscal event in real time.** When a cashier opens a sale, call the API. When the customer pays, call the API. Events must not be batched, delayed, or omitted.
 
-2. **Printing what we return.** The fiscal data in our response — signatures, counters, QR codes, document numbers — must appear on the receipt exactly as returned. This is a legal requirement in every jurisdiction we support.
+2. **Print the returned fiscal data verbatim.** Signatures, counters, QR codes, and document numbers in the response must appear on the receipt exactly as returned. This is a legal requirement in every supported jurisdiction.
 
-3. **Handling the open state.** Multiple operations can be open at the same time on the same register. A restaurant with four tables has four open sales. Your POS manages the UI; we manage the fiscal state.
+3. **Manage concurrent open operations.** Multiple operations may be open simultaneously on the same register (e.g., a restaurant serving several tables). The POS manages the user interface; OpenFiskal manages the fiscal state.
 
-4. **Completing or abandoning every operation.** An operation that was started must eventually be completed or explicitly abandoned. Open operations block the daily closing.
+4. **Complete or abandon every operation.** Any operation that has been started must eventually be completed or explicitly abandoned. Open operations block the daily closing.
 
-5. **Triggering the daily closing.** At the end of the business day (or shift), call the closing endpoint. We generate the fiscal closing report (Z-report in Germany, chiusura giornaliera in Italy).
+5. **Trigger the daily closing.** At the end of the business day or shift, call the closing endpoint. OpenFiskal generates the fiscal closing report required by the jurisdiction.
 
-## What you don't need to worry about
+## What OpenFiskal handles
 
-OpenFiskal handles:
-
-- **Signing.** TSE in Germany, RKSV in Austria, RT in Italy — we manage the fiscal security devices and their signature chains.
-- **Transmission.** Where the jurisdiction requires it (Italy RT, Austrian BMF), we transmit to the tax authority on your behalf.
-- **Jurisdiction differences.** You send the same API calls regardless of country. We handle the mapping, the signing, and the document format.
-- **Receipt rendering.** We provide a receipt API with structured data and PDF rendering. You can use ours or build your own from the data we return.
-- **Audit trail.** Every operation, every signature, every counter value is stored and can be replayed.
+- **Signing.** Fiscal security devices and their signature chains are fully managed, regardless of jurisdiction.
+- **Transmission.** Where required, fiscal data is transmitted to the tax authority automatically.
+- **Jurisdiction abstraction.** The POS sends the same API calls regardless of country. OpenFiskal handles regime-specific mapping, signing, and document formatting.
+- **Receipt rendering.** A receipt API provides structured data and PDF rendering. Use it directly, or build a custom renderer from the returned data.
+- **Audit trail.** Every operation, signature, and counter value is stored and available for replay.
 
 ## Data model
 
-Our data model is designed to be a superset of what POS systems typically carry. Line items, discounts (both line-level and cart-level), tax breakdowns, payment methods, customer data — it should map cleanly to your existing structures.
+The data model is designed as a superset of what POS systems typically carry — line items, discounts (both line-level and cart-level), tax breakdowns, payment methods, and customer data — and should map cleanly to existing POS structures.
 
-A few things to know:
+Key conventions:
 
-- **All monetary amounts are integers in the minor currency unit.** Cents for EUR, pennies for GBP. No floats, ever. `1800` means 18.00 EUR.
-- **Tax rates are decimal strings.** `"0.19"` for 19% German standard rate. Strings avoid floating-point precision issues.
-- **Discounts are explicit.** Line-level discounts live on the line item. Cart-level discounts (coupons, promotions) are declared at the operation level and we allocate them across line items. Every intermediate value is computed and stored — nothing is derived at render time.
-- **Payments model the full flow.** Cash tendered + change is two payment lines (`inbound` + `outbound`), not a single net amount. Split payments across methods are first-class.
+- **All monetary amounts are integers in the minor currency unit.** Cents for EUR, pennies for GBP. Floats are never used. `1800` means 18.00 EUR.
+- **Tax rates are decimal strings.** `"0.19"` for 19%, `"0.10"` for 10%. Strings avoid floating-point precision issues.
+- **Discounts are explicit.** Line-level discounts are attached to the line item. Cart-level discounts (coupons, promotions) are declared at the operation level, and OpenFiskal allocates them across line items. Every intermediate value is computed and stored — nothing is derived at render time.
+- **Payments model the full flow.** Cash tendered and change are represented as two payment lines (`inbound` + `outbound`), not a single net amount. Split payments across methods are fully supported.
 
 <Tip>
-  If something exists in your POS data model that doesn't have a field in ours, use the `metadata` object on any resource. It accepts arbitrary key-value pairs and is stored as-is.
+  For POS data that does not map to a dedicated field, use the `metadata` object available on any resource. It accepts arbitrary key-value pairs and is stored as-is.
 </Tip>
 
-## What happens at completion
+## The fiscal document
 
-When you complete an operation, the response contains everything needed for the receipt:
+When an operation is completed, OpenFiskal attaches a **fiscal document** — the jurisdiction's proof that the transaction was recorded, signed, numbered, and tamper-evident.
 
-```json
-{
-  "id": "op_01HXYZ",
-  "type": "sale",
-  "state": "completed",
-  "fiscal": {
-    "jurisdiction": "DE",
-    "document_number": "2026-004822",
-    "start": {
-      "signed_at": "2026-02-25T19:02:11Z",
-      "transaction_counter": 4821,
-      "signature": "base64encodedStartSignature=="
-    },
-    "end": {
-      "signed_at": "2026-02-25T20:14:55Z",
-      "transaction_counter": 4822,
-      "signature": "base64encodedEndSignature=="
-    },
-    "verification": {
-      "qr_data": "V0;Kasse1;ecdsa-plain-SHA256;..."
+The POS does not construct the fiscal document. OpenFiskal generates it and returns it in the completion response. The POS prints the returned data on the receipt.
+
+The `fiscal` field on every operation is a `FiscalDocument` — a discriminated union keyed on `regime`. Each regime variant carries fully typed fields specific to its fiscal security device and signing protocol. There is no opaque metadata bag; every field is documented and predictable.
+
+<Tabs>
+  <Tab title="TSE (Germany)">
+    The TSE signs **twice** per operation — once at open (`start_event`) and once at completion (`end_event`). Each event consumes an independent transaction counter value. Both signatures must appear on the printed receipt.
+
+    ```json
+    {
+      "regime": "tse",
+      "document_number": "2026-004822",
+      "document_type": "Kassenbeleg",
+      "transmission_status": "transmitted",
+      "transmitted_at": "2026-02-25T20:15:01Z",
+      "tse_serial": "abc123def456",
+      "client_id": "Register1",
+      "signature_algorithm": "ecdsa-plain-SHA384",
+      "time_format": "utcTime",
+      "start_event": {
+        "signed_at": "2026-02-25T19:02:11Z",
+        "transaction_counter": 4821,
+        "signature": "base64encodedStartSignature==",
+        "process_type": null,
+        "process_data": null
+      },
+      "end_event": {
+        "signed_at": "2026-02-25T20:14:55Z",
+        "transaction_counter": 4822,
+        "signature": "base64encodedEndSignature==",
+        "process_type": "Kassenbeleg-V1",
+        "process_data": "Beleg^42.50_0.00_0.00_0.00_0.00^42.50:Bar"
+      },
+      "verification": {
+        "qr_data": "V0;Register1;ecdsa-plain-SHA384;2026-02-25T19:02:11;2026-02-25T20:14:55;42.50;4822;base64encodedEndSignature=="
+      }
     }
-  }
-}
-```
+    ```
 
-The `fiscal.verification.qr_data` field is the exact string you encode into the QR code on the receipt. In Germany, this follows the DSFinV-K format. In Italy, it's a verification URL. We handle the format — you just print it.
+    The `verification.qr_data` field follows the DSFinV-K format. Encode it into the QR code on the receipt as-is.
+  </Tab>
+  <Tab title="RKSV (Austria)">
+    RKSV signs **once** at completion. The signature chains to the previous receipt via an encrypted turnover counter, forming a tamper-evident sequence.
+
+    ```json
+    {
+      "regime": "rksv",
+      "document_number": "2026-004822",
+      "document_type": "Beleg",
+      "transmission_status": "transmitted",
+      "transmitted_at": "2026-02-25T20:15:01Z",
+      "cashbox_id": "KASSE-001",
+      "certificate_serial": "abc123",
+      "signature": {
+        "signed_at": "2026-02-25T20:14:55Z",
+        "transaction_counter": 4822,
+        "turnover_counter": "encrypted-turnover-value",
+        "signature": "base64encodedSignature==",
+        "certificate_serial": "abc123"
+      },
+      "verification": {
+        "qr_data": "_R1-AT0_KASSE-001_4822_2026-02-25T20:14:55_..."
+      }
+    }
+    ```
+
+    The `verification.qr_data` encodes the full receipt compact representation (machine-readable code) per the RKSV specification.
+  </Tab>
+  <Tab title="RT (Italy)">
+    The RT device signs **once** at completion, producing a **documento commerciale** with progressive numbering within daily closing periods. Italy requires real-time transmission to the Agenzia delle Entrate — OpenFiskal handles this automatically.
+
+    ```json
+    {
+      "regime": "rt",
+      "document_number": "0001-0042",
+      "document_type": "documento commerciale",
+      "transmission_status": "transmitted",
+      "transmitted_at": "2026-02-25T20:15:01Z",
+      "rt_serial": "RTDEV001",
+      "rt_firmware": "2.1.0",
+      "progressive_number": 42,
+      "daily_closing_number": 1,
+      "lottery_code": "AKLF3920FL29",
+      "signature": {
+        "signed_at": "2026-02-25T20:14:55Z",
+        "signature": "base64encodedSignature=="
+      },
+      "verification": {
+        "url": "https://ivaservizi.agenziaentrate.gov.it/v1/...",
+        "qr_data": "https://ivaservizi.agenziaentrate.gov.it/v1/..."
+      }
+    }
+    ```
+
+    The `verification.url` allows the customer to verify the receipt with the tax authority. Print it directly or encode it as a QR code.
+  </Tab>
+</Tabs>
+
+<Info>
+  The fiscal document structure varies by regime, but the integration pattern is consistent: complete the operation, receive the fiscal document, and print its contents on the receipt. POS code does not need to branch on regime — render whatever fields are present in the response.
+</Info>
 
 ## Next steps
 

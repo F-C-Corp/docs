@@ -3220,7 +3220,7 @@ components:
             - $ref: '#/components/schemas/Cashier'
             - type: "null"
         fiscal:
-          $ref: '#/components/schemas/FiscalData'
+          $ref: '#/components/schemas/FiscalDocument'
         references:
           $ref: '#/components/schemas/PosOperationReferences'
         metadata:
@@ -3275,82 +3275,87 @@ components:
         cursor:
           type: [string, "null"]
 
-    # ── Fiscal data ────────────────────────────────
+    # ── Fiscal document (polymorphic) ────────────────
 
-    FiscalData:
+    FiscalDocument:
+      description: |
+        Jurisdiction-specific fiscal output attached to every operation.
+        Discriminated by `regime` — each variant carries typed fields for its
+        fiscal security device and signing protocol.
+      oneOf:
+        - $ref: '#/components/schemas/TseFiscalDocument'
+        - $ref: '#/components/schemas/RksvFiscalDocument'
+        - $ref: '#/components/schemas/RtFiscalDocument'
+      discriminator:
+        propertyName: regime
+        mapping:
+          tse: '#/components/schemas/TseFiscalDocument'
+          rksv: '#/components/schemas/RksvFiscalDocument'
+          rt: '#/components/schemas/RtFiscalDocument'
+
+    # ── Germany — TSE ──────────────────────────────
+
+    TseFiscalDocument:
       type: object
       description: |
-        Jurisdiction-specific fiscal output. Present on all operations.
-
-        `start` is populated immediately when the operation is opened — this is
-        the fiscally-signed start event. `end` is populated on completion.
-
-        In Germany, both `start` and `end` carry independent TSE signatures and
-        transaction counter values. Both must be printed on the receipt.
+        Germany (KassenSichV). The TSE signs twice per operation — once at open
+        (`start_event`) and once at completion (`end_event`). Each event
+        consumes an independent transaction counter value. Both signatures must
+        be printed on the receipt.
+      required: [regime, document_type, transmission_status]
       properties:
-        jurisdiction:
+        regime:
           type: string
-          example: DE
-        document_type:
-          type: [string, "null"]
-          example: Kassenbeleg
+          const: tse
         document_number:
           type: [string, "null"]
           description: Assigned on completion
           example: "2026-004822"
+        document_type:
+          type: string
+          example: Kassenbeleg
         transmission_status:
-          type: [string, "null"]
+          type: string
           enum: [transmitted, pending, failed, not_required]
         transmitted_at:
           type: [string, "null"]
           format: date-time
-        start:
+        verification:
+          description: QR data for receipt printing (DSFinV-K format)
+          oneOf:
+            - $ref: '#/components/schemas/FiscalVerification'
+            - type: "null"
+        tse_serial:
+          type: string
+          description: Serial number of the TSE hardware module
+        client_id:
+          type: string
+          description: POS client identifier registered with the TSE
+        signature_algorithm:
+          type: string
+          description: Algorithm used by the TSE (e.g. `ecdsa-plain-SHA384`)
+          example: ecdsa-plain-SHA384
+        time_format:
+          type: string
+          description: Time format used by the TSE (e.g. `utcTime`)
+          example: utcTime
+        start_event:
           description: |
             Fiscal start event. Populated when the operation is opened.
             Must be stored by the POS and printed on the receipt.
           oneOf:
-            - $ref: '#/components/schemas/FiscalEvent'
+            - $ref: '#/components/schemas/TseSignatureEvent'
             - type: "null"
-        end:
+        end_event:
           description: |
             Fiscal end event. Populated when the operation is completed.
           oneOf:
-            - $ref: '#/components/schemas/FiscalEndEvent'
+            - $ref: '#/components/schemas/TseSignatureEvent'
             - type: "null"
-        jurisdiction_data:
-          type: [object, "null"]
-          description: |
-            Opaque jurisdiction-specific data. Store and pass to rendering as-is.
 
-            **Germany (DE):** `tse_serial`, `tse_signature_algorithm`,
-            `tse_time_format`, `tse_certificate_id`, `client_id`
-
-            **Italy (IT):** `rt_serial`, `rt_firmware`, `lottery_code`,
-            `zrep_number`, `daily_sequence`
-
-            **Austria (AT):** `rksv_cashbox_id`, `rksv_signature`, `rksv_counter`
-          additionalProperties: true
-        verification:
-          type: [object, "null"]
-          properties:
-            url:
-              type: string
-              format: uri
-            qr_data:
-              type: string
-              description: |
-                Data to encode in the QR code printed on the receipt.
-
-                **Germany:** DSFinV-K format —
-                `V0;ClientID;Algorithm;StartTime;EndTime;Amount;Counter;Signature`
-
-                **Italy:** URL to Agenzia delle Entrate verification page
-
-                **Austria:** Base64-encoded RKSV DEP receipt
-
-    FiscalEvent:
+    TseSignatureEvent:
       type: object
-      description: A single fiscally-signed event (start or end)
+      description: A single TSE-signed event (start or end of a transaction)
       properties:
         signed_at:
           type: string
@@ -3358,33 +3363,166 @@ components:
         transaction_counter:
           type: integer
           description: |
-            Monotonically increasing counter from the fiscal security device.
-            In Germany, the TSE increments this on every signed event — both
-            starts and ends each consume a counter value.
+            Monotonically increasing counter from the TSE. Each signed event
+            (start and end) consumes its own counter value.
           example: 4821
         signature:
           type: string
           format: byte
-          description: Base64-encoded signature from the fiscal security device
-        certificate_id:
-          type: string
+          description: Base64-encoded signature from the TSE
+        process_type:
+          type: [string, "null"]
+          description: |
+            Process type recorded in the TSE event.
+            Typically present on end events only.
+            Example: `Kassenbeleg-V1`
+        process_data:
+          type: [string, "null"]
+          description: |
+            Process data recorded in the TSE event.
+            Typically present on end events only.
+            Format: `Beleg^<tax_amounts_by_rate>^<payment_amounts_by_type>`
+            Example: `Beleg^42.50_0.00_0.00_0.00_0.00^42.50:Bar`
 
-    FiscalEndEvent:
-      allOf:
-        - $ref: '#/components/schemas/FiscalEvent'
-        - type: object
-          properties:
-            process_type:
-              type: [string, "null"]
-              description: |
-                Germany: process type recorded in the TSE end event.
-                Example: `Kassenbeleg-V1`
-            process_data:
-              type: [string, "null"]
-              description: |
-                Germany: process data recorded in the TSE end event.
-                Format: `Beleg^<tax_amounts_by_rate>^<payment_amounts_by_type>`
-                Example: `Beleg^42.50_0.00_0.00_0.00_0.00^42.50:Bar`
+    # ── Austria — RKSV ─────────────────────────────
+
+    RksvFiscalDocument:
+      type: object
+      description: |
+        Austria (RKSV). The security device signs once at completion, producing
+        a chained turnover counter that links each receipt to its predecessor.
+      required: [regime, document_type, transmission_status]
+      properties:
+        regime:
+          type: string
+          const: rksv
+        document_number:
+          type: [string, "null"]
+          description: Assigned on completion
+        document_type:
+          type: string
+          example: Beleg
+        transmission_status:
+          type: string
+          enum: [transmitted, pending, failed, not_required]
+        transmitted_at:
+          type: [string, "null"]
+          format: date-time
+        verification:
+          description: QR data for receipt printing (RKSV DEP format)
+          oneOf:
+            - $ref: '#/components/schemas/FiscalVerification'
+            - type: "null"
+        cashbox_id:
+          type: string
+          description: Registered cash-box identifier (Kassenidentifikationsnummer)
+        certificate_serial:
+          type: string
+          description: Serial number of the signing certificate
+        signature:
+          description: Populated when the operation is completed
+          oneOf:
+            - $ref: '#/components/schemas/RksvSignature'
+            - type: "null"
+
+    RksvSignature:
+      type: object
+      description: RKSV signature with chained turnover counter
+      properties:
+        signed_at:
+          type: string
+          format: date-time
+        transaction_counter:
+          type: integer
+          description: Monotonically increasing receipt counter
+        turnover_counter:
+          type: string
+          description: Encrypted, chained turnover counter (AES-ICM)
+        signature:
+          type: string
+          format: byte
+          description: Base64-encoded signature from the security device
+        certificate_serial:
+          type: string
+          description: Serial of the certificate used for this signature
+
+    # ── Italy — RT ─────────────────────────────────
+
+    RtFiscalDocument:
+      type: object
+      description: |
+        Italy (Registratore Telematico). The RT device signs once at completion
+        and assigns progressive numbering within daily closing periods.
+      required: [regime, document_type, transmission_status]
+      properties:
+        regime:
+          type: string
+          const: rt
+        document_number:
+          type: [string, "null"]
+          description: Assigned on completion
+        document_type:
+          type: string
+          example: documento commerciale
+        transmission_status:
+          type: string
+          enum: [transmitted, pending, failed, not_required]
+        transmitted_at:
+          type: [string, "null"]
+          format: date-time
+        verification:
+          description: QR data for receipt printing (Agenzia delle Entrate URL)
+          oneOf:
+            - $ref: '#/components/schemas/FiscalVerification'
+            - type: "null"
+        rt_serial:
+          type: string
+          description: Serial number of the RT device
+        rt_firmware:
+          type: string
+          description: Firmware version of the RT device
+        progressive_number:
+          type: [integer, "null"]
+          description: Progressive document number within the current daily closing. Assigned on completion.
+        daily_closing_number:
+          type: [integer, "null"]
+          description: Daily closing (chiusura giornaliera) sequence number. Assigned on completion.
+        lottery_code:
+          type: [string, "null"]
+          description: Customer lottery code for the receipt lottery (Lotteria degli Scontrini)
+        signature:
+          description: Populated when the operation is completed
+          oneOf:
+            - $ref: '#/components/schemas/RtSignature'
+            - type: "null"
+
+    RtSignature:
+      type: object
+      description: RT device signature
+      properties:
+        signed_at:
+          type: string
+          format: date-time
+        signature:
+          type: string
+          format: byte
+          description: Base64-encoded signature from the RT device
+
+    # ── Shared fiscal components ───────────────────
+
+    FiscalVerification:
+      type: object
+      description: Verification data for receipt printing (QR code / URL)
+      properties:
+        url:
+          type: [string, "null"]
+          format: uri
+          description: URL to a government verification page
+        qr_data:
+          type: [string, "null"]
+          description: |
+            Data to encode in the QR code printed on the receipt.
+            Format varies by regime.
 
     # ── Sale ──────────────────────────────────────
 
@@ -4346,7 +4484,7 @@ components:
           items:
             $ref: '#/components/schemas/Payment'
         fiscal:
-          $ref: '#/components/schemas/FiscalData'
+          $ref: '#/components/schemas/FiscalDocument'
         customer:
           oneOf:
             - $ref: '#/components/schemas/CustomerInput'
