@@ -65,7 +65,7 @@ info:
         open --> completed : POST .../complete\n🔏 fiscal end signed
         open --> abandoned : POST .../abandon\n(no fiscal document)
         open --> failed : fiscalization fails\n(no fiscal document)
-        completed --> voided : POST /registers/:id/voids\n🔏 fiscal reversal signed\n(same-day, before closing)
+        completed --> voided : POST /registers/:id/voids\n🔏 fiscal reversal signed\n(before closing)
 
         note right of open : PATCH mutations are free here\n(items, discounts, customer)
     ```
@@ -84,14 +84,14 @@ info:
         POS->>OpenFiskal: POST /sales
         OpenFiskal->>TSE: Sign start event
         TSE-->>OpenFiskal: counter=4821, sig=abc...
-        OpenFiskal-->>POS: fiscal.start (counter=4821)
+        OpenFiskal-->>POS: fiscal.start_event (counter=4821)
 
         Note over POS,OpenFiskal: PATCH /sales — free mutations (no fiscal event)
 
         POS->>OpenFiskal: POST /sales/complete
         OpenFiskal->>TSE: Sign end event
         TSE-->>OpenFiskal: counter=4822, sig=xyz...
-        OpenFiskal-->>POS: fiscal.end (counter=4822) + receipt
+        OpenFiskal-->>POS: fiscal.end_event (counter=4822) + receipt
     ```
 
     ### Concurrent Operations
@@ -122,7 +122,7 @@ info:
     | `sale` | Standard sale |
     | `refund` | Full or partial return |
     | `exchange` | Simultaneous refund + sale |
-    | `void` | Same-day cancellation (no new fiscal document) |
+    | `void` | Cancellation of a completed operation before the daily closing. Produces a fiscal reversal document. |
     | `cash_movement` | Cash in / cash out |
     | `deposit` | Prepayment or reservation |
     | `deposit_capture` | Finalization of a prior deposit |
@@ -199,11 +199,14 @@ tags:
       **Lifecycle:** `open` → `completed` (or `abandoned`)
   - name: Exchanges
     description: |
-      Atomic return + new sale. Fiscally generates two documents in most jurisdictions.
+      Atomic return + new sale in a single operation. The `returned_line_items` and
+      `new_line_items` are tracked separately, and payments settle the net difference.
+      A single fiscal document is produced covering the entire exchange.
   - name: Voids
     description: |
-      Same-day cancellation of a completed operation. Nullifies the original document.
-      Only available before the daily closing in most jurisdictions.
+      Cancellation of a completed operation before the daily closing. Produces a
+      fiscal reversal document and transitions the original to `voided`. After the
+      closing has been triggered, use a refund instead.
   - name: Cash Movements
     description: |
       Cash in and cash out events. Not a sale — no line items, no receipt.
@@ -219,7 +222,7 @@ tags:
   - name: Closings
     description: End-of-day and shift closing reports
   - name: Heartbeat
-    description: Register liveness, status monitoring, and directive delivery
+    description: Register liveness and status monitoring
   - name: Cash Drawer Openings
     description: |
       Fiscal log of cash drawer open events. Required in jurisdictions that
@@ -1128,7 +1131,7 @@ paths:
         Opens a new sale operation. This is a **fiscal event** — the platform
         records the start and, in jurisdictions that require it, signs it immediately.
 
-        The response includes `fiscal.start` with the start-side signature and
+        The response includes `fiscal.start_event` with the start-side signature and
         transaction counter. Store this — it must appear on the final receipt.
 
         Multiple sales can be open simultaneously on the same register (restaurant
@@ -1152,14 +1155,15 @@ paths:
           "state": "open",
           "started_at": "2026-02-25T19:02:11Z",
           "fiscal": {
-            "jurisdiction": "DE",
-            "start": {
+            "regime": "tse",
+            "tse_serial": "abc123def456",
+            "client_id": "Kasse1",
+            "start_event": {
               "signed_at": "2026-02-25T19:02:11Z",
               "transaction_counter": 4821,
-              "signature": "base64encodedStartSignature==",
-              "certificate_id": "cert_tse_01"
+              "signature": "base64encodedStartSignature=="
             },
-            "end": null
+            "end_event": null
           }
         }
         ```
@@ -1248,7 +1252,7 @@ paths:
         generates the fiscal document, and (where required) transmits to the
         tax authority.
 
-        The response includes the fully-formed operation with `fiscal.end` populated.
+        The response includes the fully-formed operation with `fiscal.end_event` populated.
         The receipt is now available at `GET /operations/:id/receipt`.
 
         ### Germany TSE Example
@@ -1258,27 +1262,25 @@ paths:
 
         ```json
         "fiscal": {
-          "jurisdiction": "DE",
+          "regime": "tse",
           "document_number": "2026-004822",
+          "document_type": "Kassenbeleg",
           "transmission_status": "not_required",
-          "start": {
+          "tse_serial": "TSE0123456789ABCDEF",
+          "client_id": "Kasse1",
+          "signature_algorithm": "ecdsa-plain-SHA256",
+          "time_format": "unixTime",
+          "start_event": {
             "signed_at": "2026-02-25T19:02:11Z",
             "transaction_counter": 4821,
             "signature": "base64encodedStartSignature=="
           },
-          "end": {
+          "end_event": {
             "signed_at": "2026-02-25T20:14:55Z",
             "transaction_counter": 4822,
             "signature": "base64encodedEndSignature==",
             "process_type": "Kassenbeleg-V1",
             "process_data": "Beleg^42.50_0.00_0.00_0.00_0.00^42.50:Bar"
-          },
-          "jurisdiction_data": {
-            "tse_serial": "TSE0123456789ABCDEF",
-            "tse_signature_algorithm": "ecdsa-plain-SHA256",
-            "tse_time_format": "unixTime",
-            "tse_certificate_id": "cert_tse_01",
-            "client_id": "Kasse1"
           },
           "verification": {
             "qr_data": "V0;Kasse1;ecdsa-plain-SHA256;2026-02-25T19:02:11.000Z;2026-02-25T20:14:55.000Z;42.50;4822;base64encodedEndSignature=="
@@ -1499,8 +1501,9 @@ paths:
       summary: Start an exchange
       description: |
         Opens a new exchange operation. An exchange is an atomic return + new sale
-        that references the original operation. Fiscally generates two documents
-        in most jurisdictions.
+        that references the original operation. Returned items and new items are
+        tracked separately in `returned_line_items` and `new_line_items`. Payments
+        settle the net difference. A single fiscal document covers the exchange.
       parameters:
         - $ref: '#/components/parameters/registerId'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -1984,14 +1987,15 @@ paths:
       operationId: createVoid
       summary: Void a completed operation
       description: |
-        Same-day cancellation of a completed operation. Unlike a refund, a void
-        nullifies the original fiscal document rather than creating a new one.
+        Cancellation of a completed operation. Produces a fiscal reversal document
+        and transitions the original operation to `voided`.
 
         - **Germany**: Storno-Buchung against the original TSE record
-        - **Italy**: Documento di annullamento — only valid same-day, before chiusura
+        - **Italy**: Documento di annullamento — before chiusura giornaliera
         - **Austria**: Reversal recorded in the RKSV signature chain
 
-        Only permitted before the daily closing. After closing, use a refund instead.
+        Only permitted before the daily closing has been triggered for the period
+        containing the original operation. After closing, use a refund instead.
       parameters:
         - $ref: '#/components/parameters/registerId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
@@ -2110,8 +2114,7 @@ paths:
         - **Austria**: Required for RKSV monthly and annual reports
 
         All open operations must be completed or abandoned before a daily closing
-        can be triggered. If a required closing is missed, OpenFiskal will trigger
-        it automatically via a heartbeat directive.
+        can be triggered.
       parameters:
         - $ref: '#/components/parameters/registerId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
@@ -3197,7 +3200,7 @@ components:
             open --> completed : POST .../complete\n🔏 fiscal end signed
             open --> abandoned : POST .../abandon
             open --> failed : fiscalization fault
-            completed --> voided : POST /voids\n🔏 fiscal reversal\n(same-day, before closing)
+            completed --> voided : POST /voids\n🔏 fiscal reversal\n(before closing)
 
             note right of open : PATCH mutations free here
         ```
@@ -3218,7 +3221,7 @@ components:
         | `open` | `POST .../complete` | `completed` |
         | `open` | `POST .../abandon` | `abandoned` |
         | `open` | fiscalization fault | `failed` |
-        | `completed` | `POST /voids` (same-day) | `voided` |
+        | `completed` | `POST /voids` (before closing) | `voided` |
 
     # ── Operation envelope ─────────────────────────
 
@@ -3560,6 +3563,7 @@ components:
 
     SaleStart:
       type: object
+      required: [external_id, cashier]
       description: |
         Minimal data needed to open a sale. Line items and payments are added
         via PATCH before completing. Only `external_id` and `cashier` are
@@ -4653,13 +4657,18 @@ components:
                   tax_amount:
                     type: integer
         fiscal:
-          type: object
-          additionalProperties: true
-          description: |
-            Jurisdiction-specific closing data.
-            Germany: `z_number`, DSFinV-K export status
-            Italy: `zrep_number`, RT transmission receipt
-            Austria: RKSV closing signature
+          description: Jurisdiction-specific closing data. Discriminated by `regime`.
+          oneOf:
+            - $ref: '#/components/schemas/TseClosingFiscal'
+            - $ref: '#/components/schemas/RksvClosingFiscal'
+            - $ref: '#/components/schemas/RtClosingFiscal'
+            - type: "null"
+          discriminator:
+            propertyName: regime
+            mapping:
+              tse: '#/components/schemas/TseClosingFiscal'
+              rksv: '#/components/schemas/RksvClosingFiscal'
+              rt: '#/components/schemas/RtClosingFiscal'
         created_at:
           type: string
           format: date-time
@@ -4683,6 +4692,79 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Closing'
+        cursor:
+          type: [string, "null"]
+
+    TseClosingFiscal:
+      type: object
+      description: TSE-specific closing data (Germany)
+      properties:
+        regime:
+          type: string
+          const: tse
+        z_number:
+          type: integer
+          description: Sequential Z-report number (Tagesabschluss)
+          example: 42
+        tse_serial:
+          type: string
+          example: abc123def456
+        signature:
+          type: string
+          format: byte
+          description: TSE signature over the closing event
+        transaction_counter:
+          type: integer
+          description: TSE transaction counter consumed by the closing
+        dsfinvk_export_id:
+          type: [string, "null"]
+          description: DSFinV-K export reference, if generated
+
+    RksvClosingFiscal:
+      type: object
+      description: RKSV-specific closing data (Austria)
+      properties:
+        regime:
+          type: string
+          const: rksv
+        closing_number:
+          type: integer
+          description: Sequential closing number
+          example: 42
+        cashbox_id:
+          type: string
+          example: KASSE-001
+        signature:
+          type: string
+          format: byte
+          description: RKSV closing signature
+        turnover_counter:
+          type: string
+          description: Encrypted cumulative turnover counter
+
+    RtClosingFiscal:
+      type: object
+      description: RT-specific closing data (Italy)
+      properties:
+        regime:
+          type: string
+          const: rt
+        zrep_number:
+          type: integer
+          description: Sequential Z-report number (chiusura giornaliera)
+          example: 42
+        rt_serial:
+          type: string
+          example: RTDEV001
+        daily_total_gross:
+          type: integer
+          description: Total gross for the day in minor currency units
+        transmission_status:
+          type: string
+          enum: [transmitted, pending, failed]
+        transmitted_at:
+          type: [string, "null"]
+          format: date-time
 
     # ── Heartbeat ─────────────────────────────────
 
@@ -4769,15 +4851,9 @@ components:
             Omit for unattended openings (float checks, manager access, etc.).
           example: op_01HXYZ
         cashier:
-          type: [object, "null"]
-          properties:
-            id:
-              type: string
-              description: Operator identifier as recorded in the POS
-              example: cashier_42
-            name:
-              type: [string, "null"]
-              example: Maria Rossi
+          oneOf:
+            - $ref: '#/components/schemas/Cashier'
+            - type: "null"
         reason:
           type: [string, "null"]
           description: |
@@ -4894,9 +4970,20 @@ components:
               type: string
               enum: [pending, active, inactive, error]
             fiscal_registration:
-              type: [object, "null"]
-              additionalProperties: true
-              description: Jurisdiction-specific registration details. Populated after activation.
+              description: |
+                Jurisdiction-specific registration details. `null` before activation,
+                populated after `POST /registers/:id/activate`. Discriminated by `regime`.
+              oneOf:
+                - $ref: '#/components/schemas/TseFiscalRegistration'
+                - $ref: '#/components/schemas/RksvFiscalRegistration'
+                - $ref: '#/components/schemas/RtFiscalRegistration'
+                - type: "null"
+              discriminator:
+                propertyName: regime
+                mapping:
+                  tse: '#/components/schemas/TseFiscalRegistration'
+                  rksv: '#/components/schemas/RksvFiscalRegistration'
+                  rt: '#/components/schemas/RtFiscalRegistration'
             created_at:
               type: string
               format: date-time
@@ -4911,6 +4998,69 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Register'
+
+    TseFiscalRegistration:
+      type: object
+      description: TSE registration details (Germany)
+      properties:
+        regime:
+          type: string
+          const: tse
+        tse_serial:
+          type: string
+          description: Serial number of the assigned TSE
+          example: abc123def456
+        client_id:
+          type: string
+          description: Client ID registered with the TSE
+          example: Kasse 1
+        signature_algorithm:
+          type: string
+          example: ecdsa-plain-SHA384
+        time_format:
+          type: string
+          example: utcTime
+        registered_at:
+          type: string
+          format: date-time
+
+    RksvFiscalRegistration:
+      type: object
+      description: RKSV registration details (Austria)
+      properties:
+        regime:
+          type: string
+          const: rksv
+        cashbox_id:
+          type: string
+          description: Registrierkassen-ID registered with FinanzOnline
+          example: KASSE-001
+        certificate_serial:
+          type: string
+          description: Serial of the signing certificate
+          example: abc123
+        registered_at:
+          type: string
+          format: date-time
+
+    RtFiscalRegistration:
+      type: object
+      description: RT registration details (Italy)
+      properties:
+        regime:
+          type: string
+          const: rt
+        rt_serial:
+          type: string
+          description: Serial number of the RT device (Matricola RT)
+          example: RTDEV001
+        rt_firmware:
+          type: string
+          description: Firmware version of the RT device
+          example: "2.1.0"
+        registered_at:
+          type: string
+          format: date-time
 
     RegisterStatus:
       type: object

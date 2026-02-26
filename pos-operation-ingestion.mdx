@@ -62,7 +62,7 @@ Every operation moves through these states:
 - **open → completed**: The POS submits final payment data and the fiscal device signs the end event. A fiscal document is generated and returned.
 - **open → failed**: A fiscalization fault occurs (e.g. the fiscal device is unreachable during signing).
 - **open → abandoned**: The POS explicitly cancels the operation. No end signature is produced. Abandoned operations still appear in the audit trail because the start was already signed.
-- **completed → voided**: A same-day reversal before the daily closing. A void is a separate fiscal operation that references the original and produces its own fiscal document.
+- **completed → voided**: A reversal before the daily closing. A void is a separate fiscal operation that references the original and produces its own fiscal reversal document. After the closing, use a refund instead.
 
 ```mermaid
 sequenceDiagram
@@ -92,7 +92,7 @@ Implement only the operation types that apply to your system. If your POS does n
 | `sale` | Customer buys something. The most common operation. |
 | `refund` | Full or partial return of a prior sale. References the original. |
 | `exchange` | Customer returns items and buys new ones in a single transaction. |
-| `void` | Same-day cancellation of a completed operation. Must happen before the daily closing. |
+| `void` | Cancellation of a completed operation before the daily closing. Produces a fiscal reversal document. |
 | `cash_movement` | Cash added to or removed from the drawer — opening float, safe drops, banking. Not a sale. |
 | `deposit` | Customer prepays or places a reservation. |
 | `deposit_capture` | Finalizes a prior deposit when the customer picks up or completes the purchase. |
