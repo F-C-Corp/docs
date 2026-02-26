@@ -1,6 +1,6 @@
 ---
-title: 'Getting Started'
-description: 'From setup token to first fiscalized sale in under an hour'
+title: "Getting Started"
+description: "From setup token to first fiscalized sale in under an hour"
 ---
 
 This guide walks you through a complete integration — from receiving your setup token to completing a fiscalized sale and printing a receipt. The examples use a German merchant (TSE jurisdiction) with sandbox URLs.
@@ -71,7 +71,6 @@ sequenceDiagram
       Store `client_secret` immediately in a secrets manager. It is returned **once** and cannot be retrieved again. The setup token is now consumed — it cannot be reused.
     </Warning>
   </Step>
-
   <Step title="Obtain a Bearer token">
     Exchange your client credentials for a short-lived Bearer token.
 
@@ -100,7 +99,6 @@ sequenceDiagram
       The token is valid for 1 hour. There is no refresh token — request a new one when the current one expires.
     </Tip>
   </Step>
-
   <Step title="Create an organization">
     An organization represents the merchant — the legal entity operating the POS.
 
@@ -140,7 +138,6 @@ sequenceDiagram
 
     Note the returned `id` — use it as the `OpenFiskal-Organization` header on all subsequent requests scoped to this merchant.
   </Step>
-
   <Step title="Create a location">
     A location is a physical point of sale — a store, restaurant, or kiosk.
 
@@ -171,7 +168,6 @@ sequenceDiagram
     }
     ```
   </Step>
-
   <Step title="Create a register">
     A register is the fiscal unit — in Germany, it maps to a TSE-bound device.
 
@@ -200,7 +196,6 @@ sequenceDiagram
 
     The register starts in `pending` fiscal state. It must be activated before it can accept operations.
   </Step>
-
   <Step title="Activate the register">
     Activation initializes the fiscal security device. For Germany, this sets up the TSE and establishes the signature chain. The call is idempotent — safe to retry.
 
@@ -230,7 +225,6 @@ sequenceDiagram
       For server-side integrations, the platform Bearer token already authorizes all register operations. Only pass `issue_register_credential: true` for device-direct integrations (EV chargers, unattended kiosks).
     </Info>
   </Step>
-
   <Step title="Start a sale">
     Opening a sale is a **fiscal event**. The TSE signs the start immediately. Store the returned signature and transaction counter — they must appear on the final receipt.
 
@@ -274,7 +268,6 @@ sequenceDiagram
       The `fiscal.start_event` data is required on the printed receipt. Do not discard it.
     </Warning>
   </Step>
-
   <Step title="Add line items">
     While the sale is open, add items via PATCH. This is **not** a fiscal event — no signatures are produced. The `line_items` array replaces the current list entirely.
 
@@ -339,7 +332,6 @@ sequenceDiagram
       To add an item to an existing list, include all current items plus the new one. The array is a full replacement, not an append.
     </Tip>
   </Step>
-
   <Step title="Complete with payment">
     Completing the sale is a **fiscal event**. The TSE signs the end, and OpenFiskal generates the fiscal document. At least one payment is required.
 
@@ -390,7 +382,6 @@ sequenceDiagram
         ```
       </Tab>
     </Tabs>
-
     The response includes the completed operation with the full fiscal document:
 
     ```json
@@ -422,7 +413,6 @@ sequenceDiagram
     }
     ```
   </Step>
-
   <Step title="Retrieve the receipt">
     The receipt is available as JSON or PDF immediately after completion.
 
@@ -494,16 +484,16 @@ sequenceDiagram
 ## What's next
 
 <CardGroup cols={2}>
-  <Card title="Authentication" icon="key" href="/auth">
+  <Card icon="key" href="/auth" title="Authentication">
     Credential types, token flows, and organization scoping.
   </Card>
-  <Card title="Register Lifecycle" icon="microchip" href="/register-lifecycle">
+  <Card icon="microchip" href="/register-lifecycle" title="Register Lifecycle">
     Fleet management — commissioning, monitoring, and decommissioning registers.
   </Card>
-  <Card title="POS Operations" icon="cash-register" href="/pos-operation-ingestion">
+  <Card icon="cash-register" href="/pos-operation-ingestion" title="POS Operations">
     The full operation lifecycle — start, mutate, complete, abandon.
   </Card>
-  <Card title="Schemas" icon="database" href="/api-reference/schemas/sale-operation">
+  <Card icon="database" href="/api-reference/schemas/sale-operation" title="Schemas">
     Detailed schema definitions for operations, line items, and payments.
   </Card>
 </CardGroup>
