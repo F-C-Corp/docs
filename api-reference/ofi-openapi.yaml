@@ -179,7 +179,35 @@ tags:
   - name: Locations
     description: Physical or logical points of sale
   - name: Registers
-    description: Individual POS terminals or logical fiscal devices
+    description: |
+      Individual POS terminals or logical fiscal devices.
+
+      A register has two states: `active` (accepting operations) and `archived`
+      (permanently retired). Fiscal compliance capabilities are managed separately
+      via **Fiscal Bindings**.
+  - name: Fiscal Bindings
+    description: |
+      A FiscalBinding represents the link between a register and a fiscal compliance
+      capability (TSE in Germany, RKSV certificate in Austria, RT device in Italy).
+
+      A register can have one active binding at a time. Past bindings are retained
+      for audit history. Bindings can be replaced atomically — the old binding is
+      decommissioned and a new one provisioned in a single call.
+
+      ### Lifecycle
+
+      ```
+      provisioning ──► active ──► decommissioned
+                         │
+                       error ──► active (recover)
+                         │
+                       decommissioned
+      ```
+
+      - **provisioning**: Fiscal device is being initialized (TSE, RT, RKSV)
+      - **active**: Ready to sign operations
+      - **error**: Fiscal device failure (recoverable)
+      - **decommissioned**: Permanently retired
   - name: Operations
     description: |
       Unified read surface across all operation types. Use the typed endpoints
@@ -701,8 +729,9 @@ paths:
       operationId: createRegister
       summary: Create a register
       description: |
-        A register is the core fiscal unit. It maps to a TSE-bound device in Germany,
-        an RKSV signature chain in Austria, or an RT device in Italy.
+        Creates a register in `active` state with no fiscal binding. The register
+        is a POS device — it becomes fiscally operational once a fiscal binding
+        is provisioned via `POST /registers/:id/fiscal-bindings`.
 
         The platform maintains the authoritative list of all open operations per register.
         If a register crashes and reconnects, it reconciles against this state.
@@ -771,7 +800,14 @@ paths:
       tags: [Registers]
       operationId: activateRegister
       summary: Activate a register
+      deprecated: true
       description: |
+        **Deprecated.** Use `POST /registers/:id/fiscal-bindings` instead.
+
+        This endpoint is retained for backward compatibility. Under the hood it
+        creates a fiscal binding for the register. New integrations should use
+        the fiscal bindings API directly.
+
         Triggers jurisdiction-specific fiscal registration:
         - **Germany**: Initializes the TSE, establishes the signature chain
         - **Italy**: Activates the RT device with Agenzia delle Entrate
@@ -817,12 +853,14 @@ paths:
     post:
       tags: [Registers]
       operationId: deactivateRegister
-      summary: Deactivate a register
+      summary: Archive a register
       description: |
-        Fiscally decommissions a register and triggers jurisdiction-specific
-        deregistration where required. Cannot be undone.
+        Archives a register and decommissions its active fiscal binding (if any).
+        Triggers jurisdiction-specific fiscal deregistration. Cannot be undone.
 
-        Any active register credential for this register is automatically revoked.
+        The register transitions to `archived` state. Any active register
+        credential is automatically revoked. If the register has an active fiscal
+        binding, it is decommissioned first.
       parameters:
         - $ref: '#/components/parameters/registerId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
@@ -912,6 +950,227 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+
+  # ─────────────────────────────────────────────
+  # FISCAL BINDINGS
+  # ─────────────────────────────────────────────
+
+  /registers/{registerId}/fiscal-bindings:
+    post:
+      tags: [Fiscal Bindings]
+      operationId: createFiscalBinding
+      summary: Create a fiscal binding
+      description: |
+        Provisions a new fiscal binding for the register, triggering
+        jurisdiction-specific fiscal device initialization:
+        - **Germany**: Initializes the TSE, establishes the signature chain
+        - **Italy**: Activates the RT device with the Agenzia delle Entrate
+        - **Austria**: Establishes the RKSV signature chain, registers AES key
+
+        The register must not already have an active fiscal binding. To replace
+        an existing binding, use `POST /registers/:id/fiscal-bindings/replace`.
+
+        The binding starts in `provisioning` state and transitions to `active`
+        once the fiscal device is initialized.
+
+        ### Register Credentials (Optional)
+
+        Pass `issue_register_credential: true` to receive a register-scoped API
+        key in the response. Use this for device-direct integrations (EV chargers,
+        unattended kiosks). The key is returned **once only** — store it immediately
+        and push to the device over a secure provisioning channel.
+      parameters:
+        - $ref: '#/components/parameters/registerId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FiscalBindingCreate'
+      responses:
+        '201':
+          description: Fiscal binding created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FiscalBindingResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Register already has an active fiscal binding
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    get:
+      tags: [Fiscal Bindings]
+      operationId: listFiscalBindings
+      summary: List fiscal binding history
+      description: |
+        Returns all fiscal bindings for a register, ordered by creation time
+        (most recent first). Includes active, decommissioned, and error bindings.
+      parameters:
+        - $ref: '#/components/parameters/registerId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
+      responses:
+        '200':
+          description: List of fiscal bindings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FiscalBindingList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /registers/{registerId}/fiscal-bindings/replace:
+    post:
+      tags: [Fiscal Bindings]
+      operationId: replaceFiscalBinding
+      summary: Replace the active fiscal binding
+      description: |
+        Atomically decommissions the current active fiscal binding and provisions
+        a new one. The register ID stays the same — POS routing is unaffected.
+
+        The old binding transitions to `decommissioned` (with `replaced_by` set),
+        and the new binding is created with `replaces` referencing the old one.
+
+        The register must have an active fiscal binding. All open operations must
+        be completed or abandoned first.
+      parameters:
+        - $ref: '#/components/parameters/registerId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FiscalBindingReplace'
+      responses:
+        '200':
+          description: Fiscal binding replaced
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FiscalBindingReplaceResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: No active binding to replace, or open operations exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /fiscal-bindings/{fiscalBindingId}:
+    get:
+      tags: [Fiscal Bindings]
+      operationId: getFiscalBinding
+      summary: Retrieve a fiscal binding
+      parameters:
+        - name: fiscalBindingId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
+      responses:
+        '200':
+          description: Fiscal binding retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FiscalBinding'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /fiscal-bindings/{fiscalBindingId}/recover:
+    post:
+      tags: [Fiscal Bindings]
+      operationId: recoverFiscalBinding
+      summary: Recover a fiscal binding from error state
+      description: |
+        Attempts to recover a fiscal binding that is in `error` state.
+        Re-initializes the connection to the fiscal device and, if successful,
+        transitions the binding back to `active`.
+
+        If the underlying device issue has not been resolved, the call will fail
+        and the binding remains in `error`.
+      parameters:
+        - name: fiscalBindingId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
+      responses:
+        '200':
+          description: Fiscal binding recovered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FiscalBinding'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Binding is not in error state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /fiscal-bindings/{fiscalBindingId}/decommission:
+    post:
+      tags: [Fiscal Bindings]
+      operationId: decommissionFiscalBinding
+      summary: Decommission a fiscal binding
+      description: |
+        Permanently retires a fiscal binding and triggers jurisdiction-specific
+        fiscal deregistration. Cannot be undone.
+
+        All open operations on the register must be completed or abandoned first.
+        The register's `active_fiscal_binding` becomes `null`.
+      parameters:
+        - name: fiscalBindingId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FiscalBindingDecommission'
+      responses:
+        '200':
+          description: Fiscal binding decommissioned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FiscalBinding'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Open operations exist or binding already decommissioned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   # ─────────────────────────────────────────────
   # OPERATIONS (unified read surface)
@@ -3320,6 +3579,10 @@ components:
         regime:
           type: string
           const: tse
+        fiscal_binding_id:
+          type: string
+          description: ID of the fiscal binding that signed this document
+          example: fb_01HXYZ
         document_number:
           type: [string, "null"]
           description: Assigned on completion
@@ -3409,6 +3672,10 @@ components:
         regime:
           type: string
           const: rksv
+        fiscal_binding_id:
+          type: string
+          description: ID of the fiscal binding that signed this document
+          example: fb_01HXYZ
         document_number:
           type: [string, "null"]
           description: Assigned on completion
@@ -3471,6 +3738,10 @@ components:
         regime:
           type: string
           const: rt
+        fiscal_binding_id:
+          type: string
+          description: ID of the fiscal binding that signed this document
+          example: fb_01HXYZ
         document_number:
           type: [string, "null"]
           description: Assigned on completion
@@ -4986,13 +5257,34 @@ components:
               const: register
             location_id:
               type: string
+            state:
+              type: string
+              enum: [active, archived]
+              description: |
+                - `active`: The register is operational and can accept operations
+                  (when it has an active fiscal binding).
+                - `archived`: The register has been permanently retired. Cannot be undone.
+            active_fiscal_binding:
+              description: |
+                The currently active fiscal binding, expanded inline. `null` if no
+                binding has been provisioned yet or if the current binding is not in
+                `active` state.
+              oneOf:
+                - $ref: '#/components/schemas/FiscalBinding'
+                - type: "null"
             fiscal_state:
               type: string
               enum: [pending, active, inactive, error]
-            fiscal_registration:
+              deprecated: true
               description: |
-                Jurisdiction-specific registration details. `null` before activation,
-                populated after `POST /registers/:id/activate`. Discriminated by `regime`.
+                **Deprecated.** Use `state` on the register and `state` on the
+                `active_fiscal_binding` instead. Computed from the register state
+                and active fiscal binding state for backward compatibility.
+            fiscal_registration:
+              deprecated: true
+              description: |
+                **Deprecated.** Use `active_fiscal_binding.fiscal_registration` instead.
+                Computed from the active binding for backward compatibility.
               oneOf:
                 - $ref: '#/components/schemas/TseFiscalRegistration'
                 - $ref: '#/components/schemas/RksvFiscalRegistration'
@@ -5132,6 +5424,166 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/RegisterStatus'
+
+    # ── Fiscal Binding ─────────────────────────────
+
+    FiscalBinding:
+      type: object
+      description: |
+        A FiscalBinding represents the link between a register and a fiscal
+        compliance capability. A register can have one active binding at a time,
+        with a full history of past bindings.
+      properties:
+        id:
+          type: string
+          example: fb_01HXYZ
+        object:
+          type: string
+          const: fiscal_binding
+        register_id:
+          type: string
+          example: reg_01HXYZ
+        state:
+          type: string
+          enum: [provisioning, active, error, decommissioned]
+          description: |
+            - `provisioning`: Fiscal device is being initialized
+            - `active`: Ready to sign operations — the only state that accepts fiscal events
+            - `error`: Fiscal device failure (recoverable via `/recover`)
+            - `decommissioned`: Permanently retired (terminal)
+        jurisdiction:
+          type: string
+          enum: [IT, DE, AT]
+        fiscal_registration:
+          description: |
+            Jurisdiction-specific registration details. `null` while in `provisioning`
+            state, populated once the fiscal device is initialized. Discriminated by `regime`.
+          oneOf:
+            - $ref: '#/components/schemas/TseFiscalRegistration'
+            - $ref: '#/components/schemas/RksvFiscalRegistration'
+            - $ref: '#/components/schemas/RtFiscalRegistration'
+            - type: "null"
+          discriminator:
+            propertyName: regime
+            mapping:
+              tse: '#/components/schemas/TseFiscalRegistration'
+              rksv: '#/components/schemas/RksvFiscalRegistration'
+              rt: '#/components/schemas/RtFiscalRegistration'
+        reason:
+          type: [string, "null"]
+          description: |
+            Human-readable reason for the current state. Present on `error`
+            (failure reason) and `decommissioned` (retirement reason).
+          example: TSE hardware end-of-life
+        replaces:
+          type: [string, "null"]
+          description: ID of the previous binding this one replaced, if any
+          example: fb_00HXYZ
+        replaced_by:
+          type: [string, "null"]
+          description: ID of the binding that replaced this one, if any
+          example: fb_02HXYZ
+        provisioned_at:
+          type: [string, "null"]
+          format: date-time
+          description: When the fiscal device was successfully initialized
+        decommissioned_at:
+          type: [string, "null"]
+          format: date-time
+          description: When the binding was decommissioned
+        created_at:
+          type: string
+          format: date-time
+
+    FiscalBindingList:
+      type: object
+      properties:
+        object:
+          type: string
+          const: list
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/FiscalBinding'
+
+    FiscalBindingCreate:
+      type: object
+      properties:
+        issue_register_credential:
+          type: boolean
+          default: false
+          description: |
+            If `true`, a register-scoped API key is issued and returned
+            in the response. Only needed for device-direct integrations.
+
+    FiscalBindingResponse:
+      type: object
+      description: |
+        Response to fiscal binding creation. Always includes the full binding
+        object. `register_api_key` is only present if `issue_register_credential: true`
+        was requested.
+      properties:
+        object:
+          type: string
+          const: fiscal_binding_response
+        fiscal_binding:
+          $ref: '#/components/schemas/FiscalBinding'
+        register:
+          $ref: '#/components/schemas/Register'
+        register_api_key:
+          type: [string, "null"]
+          description: |
+            Register-scoped API key. **Returned once only** — store immediately
+            and push to the device over a secure channel. `null` if
+            `issue_register_credential` was not requested.
+          example: ofk_reg_live_...
+        credential_issued:
+          type: boolean
+          description: Whether a register credential was issued in this response
+
+    FiscalBindingReplace:
+      type: object
+      properties:
+        reason:
+          type: string
+          description: Human-readable reason for the replacement
+          example: TSE hardware end-of-life
+        issue_register_credential:
+          type: boolean
+          default: false
+          description: |
+            If `true`, a register-scoped API key is issued for the new binding.
+
+    FiscalBindingReplaceResponse:
+      type: object
+      description: |
+        Atomic replacement of a fiscal binding. The old binding is decommissioned
+        and a new one provisioned in a single call.
+      properties:
+        object:
+          type: string
+          const: fiscal_binding_replacement
+        old_binding:
+          $ref: '#/components/schemas/FiscalBinding'
+        new_binding:
+          $ref: '#/components/schemas/FiscalBinding'
+        register:
+          $ref: '#/components/schemas/Register'
+        register_api_key:
+          type: [string, "null"]
+          description: |
+            Register-scoped API key for the new binding. `null` if
+            `issue_register_credential` was not requested.
+        credential_issued:
+          type: boolean
+
+    FiscalBindingDecommission:
+      type: object
+      properties:
+        reason:
+          type: string
+          description: Human-readable reason for decommissioning
+          example: Hardware replacement scheduled
 
     # ── Verification ──────────────────────────────
 
