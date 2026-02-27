@@ -179,9 +179,11 @@ The receipt is a denormalized snapshot — issuer details, line items, totals, p
 
 ## What a printed receipt looks like
 
-A compliant German fiscal receipt must include the fields shown below. OpenFiskal returns all of them in the receipt object — your POS just prints what it receives.
+OpenFiskal returns all required fiscal fields in the receipt object — your POS just prints what it receives. The fiscal footer varies by jurisdiction.
 
-<div style={{ maxWidth: 340, margin: '24px auto', fontFamily: 'monospace', fontSize: 13, lineHeight: 1.6, background: '#fafafa', border: '1px solid #e5e5e5', borderRadius: 8, padding: '24px 20px', whiteSpace: 'pre', overflowX: 'auto' }}>
+<Tabs>
+  <Tab title="Germany (TSE)">
+    <div style={{ maxWidth: 340, margin: '24px auto', fontFamily: 'monospace', fontSize: 13, lineHeight: 1.6, background: '#fafafa', border: '1px solid #e5e5e5', borderRadius: 8, padding: '24px 20px', whiteSpace: 'pre', overflowX: 'auto' }}>
 {`         Mustermann GmbH
        Friedrichstraße 42
           10117 Berlin
@@ -210,11 +212,89 @@ A compliant German fiscal receipt must include the fields shown below. OpenFiska
   Sig: base64encodedEndSig...
 
   ┌────────────┐
-  │            │  DSFinV-K QR code
-  │  QR CODE   │  encoded from
-  │            │  fiscal.verification
-  └────────────┘  .qr_data`}
-</div>
+  │            │  TSE
+  │  QR CODE   │  Signature
+  │            │
+  └────────────┘`}
+    </div>
+
+    German receipts require dual TSE signatures (start + end), both transaction counters, both timestamps, and a DSFinV-K QR code.
+  </Tab>
+  <Tab title="Austria (RKSV)">
+    <div style={{ maxWidth: 340, margin: '24px auto', fontFamily: 'monospace', fontSize: 13, lineHeight: 1.6, background: '#fafafa', border: '1px solid #e5e5e5', borderRadius: 8, padding: '24px 20px', whiteSpace: 'pre', overflowX: 'auto' }}>
+{`       Beispiel Gastro KG
+        Mariahilfer Str. 88
+            1070 Wien
+       UID: ATU12345678
+
+  Kassa 1          Wien Neubau
+  Beleg-Nr: 1047
+  26.02.2026  13:22
+  Kellner: Stefan M.
+ ─────────────────────────────────
+  1x Tafelspitz              14,90 €
+  2x Grüner Veltliner         9,60 €
+  1x Apfelstrudel              6,50 €
+ ─────────────────────────────────
+  Netto                   25,83 €
+  USt 10%                  3,17 €
+  SUMME                   31,00 €
+ ─────────────────────────────────
+  Bar                     31,00 €
+ ─────────────────────────────────
+
+  Kassen-ID: KASSE1-AT
+  Beleg:  1047
+  Umsatzzähler: enc-turnover...
+  Sig: base64encodedSig...
+
+  ┌────────────┐
+  │            │  RKSV
+  │  QR CODE   │  Signature
+  │            │
+  └────────────┘`}
+    </div>
+
+    Austrian receipts use RKSV chained signatures — only the end event is signed, but each signature chains to the previous one. The receipt includes the turnover counter (encrypted) and a verification QR code.
+  </Tab>
+  <Tab title="Italy (RT)">
+    <div style={{ maxWidth: 340, margin: '24px auto', fontFamily: 'monospace', fontSize: 13, lineHeight: 1.6, background: '#fafafa', border: '1px solid #e5e5e5', borderRadius: 8, padding: '24px 20px', whiteSpace: 'pre', overflowX: 'auto' }}>
+{`      Trattoria Da Marco SRL
+        Via Roma 15
+         20121 Milano
+      P.IVA: IT01234567890
+
+  Cassa 1           Milano Centro
+  Doc. N.: 0042-0008
+  26.02.2026  14:05
+  Operatore: Giulia B.
+ ─────────────────────────────────
+  1x Risotto ai funghi    12,00 €
+  2x Chianti Classico     16,00 €
+  1x Tiramisù              6,00 €
+ ─────────────────────────────────
+  Imponibile              28,33 €
+  IVA 10%                  2,83 €
+  IVA 22%                  2,84 €
+  TOTALE                  34,00 €
+ ─────────────────────────────────
+  Carta ****3891           34,00 €
+ ─────────────────────────────────
+
+  RT N.: RTABCD1234567890
+  Doc: 0042-0008
+  Chiusura giorn.: 0042
+
+  ┌────────────┐
+  │            │  DCW
+  │  QR CODE   │  Number
+  │            │
+  └────────────┘`}
+    </div>
+
+    Italian receipts use the RT (Registratore Telematico) device. The fiscal footer includes the RT serial number, document number, and daily closing number. The RT transmits data to the Agenzia delle Entrate automatically.
+  </Tab>
+</Tabs>
 
 ### Mapping receipt fields to the API response
 
@@ -224,17 +304,14 @@ A compliant German fiscal receipt must include the fields shown below. OpenFiska
 | Address | `issuer.address` |
 | Tax ID | `issuer.tax_id` |
 | Register | `issuer.register_label` |
-| Beleg-Nr (receipt number) | `operation.sequence_number` |
+| Receipt number | `operation.sequence_number` |
 | Date/time | `operation.completed_at` |
 | Cashier | `operation.cashier.display_name` |
 | Line items | `line_items[].description`, `quantity`, `unit_price` |
 | Tax breakdown | `totals.tax_breakdown[]` |
 | Total | `totals.total_gross` |
 | Payment method | `payments[].method`, `payments[].card.last4` |
-| TSE serial | `fiscal.tse_serial` |
-| Start counter / time | `fiscal.start_event.transaction_counter`, `signed_at` |
-| End counter / time | `fiscal.end_event.transaction_counter`, `signed_at` |
-| Signature | `fiscal.end_event.signature` |
+| Fiscal data | `fiscal.*` (varies by regime — see [Jurisdiction differences](#jurisdiction-differences)) |
 | QR code data | `fiscal.verification.qr_data` |
 
 <Info>
