@@ -24,7 +24,7 @@ Registers have two states:
 - **active**: The register exists and can accept operations (when it has an active fiscal unit).
 - **archived**: Permanently retired. Cannot be undone.
 
-A register starts in `active` state with no fiscal unit (`active_fiscal_unit: null`). It becomes fiscally operational once a binding is provisioned.
+A register starts in `active` state with no fiscal unit (`active_fiscal_unit: null`). It becomes fiscally operational once a fiscal unit is provisioned.
 
 ## Fiscal unit lifecycle
 
@@ -41,7 +41,7 @@ provisioning ──► active ──► decommissioned
 - **provisioning**: The fiscal device is being initialized (TSE setup, RT activation, RKSV key registration). Automatic — transitions to `active` on success.
 - **active**: The fiscal device is initialized and ready to sign operations. This is the only state that accepts sales, refunds, closings, and other fiscal events.
 - **error**: The fiscal device encountered a failure (e.g. TSE hardware fault, RT communication error). Recoverable via `POST /fiscal-units/:id/recover`.
-- **decommissioned**: The binding has been permanently retired. Fiscal deregistration has been triggered with the relevant authority. Cannot be undone.
+- **decommissioned**: The fiscal unit has been permanently retired. Fiscal deregistration has been triggered with the relevant authority. Cannot be undone.
 
 ## Commissioning
 
@@ -123,7 +123,7 @@ provisioning ──► active ──► decommissioned
     }
     ```
 
-    The binding is now `active` and the register is ready to accept operations.
+    The fiscal unit is now `active` and the register is ready to accept operations.
 
     <Info>
       For device-direct integrations (EV chargers, unattended kiosks), pass `issue_register_credential: true` to receive a register-scoped API key. For server-side integrations, the platform API key already covers all register operations.
@@ -131,7 +131,7 @@ provisioning ──► active ──► decommissioned
   </Step>
 
   <Step title="Start sending heartbeats">
-    Once the binding is active, the register should send periodic heartbeats (every 30–60 seconds) so OpenFiskal can monitor its health.
+    Once the fiscal unit is active, the register should send periodic heartbeats (every 30–60 seconds) so OpenFiskal can monitor its health.
 
     ```bash
     curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/heartbeat \
@@ -199,14 +199,15 @@ To check all registers at a location in one call:
 
 ```bash
 curl https://api.openfiskal.com/v1/locations/loc_01HXYZ/registers/status \
-  -H "Authorization: Bearer $API_KEY"
+  -H "Authorization: Bearer $API_KEY" \
+  -H "OpenFiskal-Organization: org_01HXYZ"
 ```
 
 This returns the status of every register at the location — useful for dashboards and alerting.
 
 ## Error recovery
 
-If a fiscal device fails (TSE hardware fault, RT communication error), the fiscal unit transitions to `error`. Operations on the register will be rejected until the binding is recovered.
+If a fiscal device fails (TSE hardware fault, RT communication error), the fiscal unit transitions to `error`. Operations on the register will be rejected until the fiscal unit is recovered.
 
 To recover, call the recover endpoint:
 
@@ -216,7 +217,7 @@ curl -X POST https://api.openfiskal.com/v1/fiscal-units/fu_01HXYZ/recover \
   -H "OpenFiskal-Organization: org_01HXYZ"
 ```
 
-If the underlying device issue has been resolved, the binding returns to `active`. If the device is still unreachable, the call will fail and the binding remains in `error`.
+If the underlying device issue has been resolved, the fiscal unit returns to `active`. If the device is still unreachable, the call will fail and the fiscal unit remains in `error`.
 
 <Warning>
   Operations that were in-flight when the device failed remain in `open` state. Check `GET /registers/:id/status` for open operations and either complete or cancel them once the device recovers.
@@ -259,11 +260,11 @@ curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/fiscal-units/rep
 }
 ```
 
-All open operations must be completed or cancelled before replacing. The old binding's operations remain in the system for audit purposes.
+All open operations must be completed or cancelled before replacing. The old fiscal unit's operations remain in the system for audit purposes.
 
-### Viewing binding history
+### Viewing fiscal unit history
 
-To see all bindings (past and present) for a register:
+To see all fiscal units (past and present) for a register:
 
 ```bash
 curl https://api.openfiskal.com/v1/registers/reg_01HXYZ/fiscal-units \
@@ -287,7 +288,7 @@ curl -X POST https://api.openfiskal.com/v1/fiscal-units/fu_01HXYZ/decommission \
   }'
 ```
 
-This triggers jurisdiction-specific fiscal deregistration. The register remains `active` and can have a new binding provisioned later.
+This triggers jurisdiction-specific fiscal deregistration. The register remains `active` and can have a new fiscal unit provisioned later.
 
 ### Archiving a register
 
@@ -323,7 +324,7 @@ The previous key is revoked immediately. The new key is returned in the response
 
 ## Backward compatibility
 
-The `POST /registers/:id/activate` endpoint is deprecated but continues to work. Under the hood, it creates a fiscal unit. The register response includes deprecated `fiscal_state` and `fiscal_registration` fields derived from the active binding.
+The `POST /registers/:id/activate` endpoint is deprecated but continues to work. Under the hood, it creates a fiscal unit. The register response includes deprecated `fiscal_state` and `fiscal_registration` fields derived from the active fiscal unit.
 
 New integrations should use the fiscal units API directly.
 

@@ -135,7 +135,7 @@ info:
 
     ## Authentication
 
-    All API requests require a platform API key sent as a Bearer token.
+    All API requests require a platform API key sent in the `Authorization: Bearer` header.
     Platform integrators (POS vendors acting on behalf of merchants) pass an additional
     `OpenFiskal-Organization` header to scope requests to a specific merchant.
 
@@ -388,7 +388,7 @@ paths:
 
         This endpoint is unauthenticated — the setup token is the sole proof
         of identity. It can only be used once. After successful exchange, use
-        the returned API key as a Bearer token on all subsequent requests.
+        the returned API key in the `Authorization: Bearer` header on all subsequent requests.
 
         If the token has already been consumed or has expired, the endpoint
         returns `401`.
@@ -764,7 +764,7 @@ paths:
         and push to the device over a secure provisioning channel.
 
         Server-side platform integrations (Shopify-style) should omit this — the
-        platform token already covers all register operations.
+        platform API key already covers all register operations.
 
         See the Security Model section in the API overview for full guidance.
       parameters:
@@ -892,7 +892,7 @@ paths:
           $ref: '#/components/responses/NotFound'
 
   # ─────────────────────────────────────────────
-  # FISCAL BINDINGS
+  # FISCAL UNITS
   # ─────────────────────────────────────────────
 
   /registers/{registerId}/fiscal-units:
@@ -2406,7 +2406,7 @@ paths:
         jurisdictions.
 
         Register devices authenticate using `X-Register-Api-Key` rather than
-        a full OAuth token, suitable for resource-constrained hardware.
+        a platform API key, suitable for resource-constrained hardware.
       parameters:
         - $ref: '#/components/parameters/registerId'
       security:
@@ -3254,7 +3254,7 @@ components:
       description: |
         Merchant organization ID. Required for platform integrators acting on
         behalf of a specific merchant. Omit when using an organization-scoped
-        token directly.
+        API key directly.
       example: org_01HXYZ
 
     Limit:
@@ -3416,6 +3416,8 @@ components:
             - type: "null"
         fiscal:
           $ref: '#/components/schemas/FiscalDocument'
+        fiscal_state:
+          $ref: '#/components/schemas/FiscalState'
         references:
           $ref: '#/components/schemas/PosOperationReferences'
         metadata:
@@ -5353,14 +5355,14 @@ components:
           items:
             $ref: '#/components/schemas/RegisterStatus'
 
-    # ── Fiscal Binding ─────────────────────────────
+    # ── Fiscal Unit ───────────────────────────────
 
     FiscalUnit:
       type: object
       description: |
         A FiscalUnit represents the link between a register and a fiscal
-        compliance capability. A register can have one active binding at a time,
-        with a full history of past bindings.
+        compliance capability. A register can have one active fiscal unit at a time,
+        with a full history of past fiscal units.
       properties:
         id:
           type: string

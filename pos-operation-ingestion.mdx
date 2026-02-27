@@ -19,7 +19,7 @@ A POS operation is anything that happens at a register that has fiscal relevance
   <Step title="Start">
     The POS notifies OpenFiskal that an event has begun — a sale opened, a refund initiated, or cash moved.
 
-    This is already a fiscal event. The fiscal security device signs the start immediately. OpenFiskal returns the start signature and transaction counter. **Store these values — they are required on the receipt.**
+    Whether this triggers a fiscal recording depends on the regime. In Germany (TSE), the start is signed immediately — OpenFiskal returns the start signature and transaction counter. **Store these values — they are required on the receipt.** In Austria (RKSV) and Italy (RT), the fiscal device records only at completion; the start call is still required but does not produce fiscal data.
   </Step>
   <Step title="Mutate (optional)">
     While the operation is open, the POS may update it freely — adding line items, applying discounts, or attaching customer data. These mutations are not fiscal events and do not produce signatures or counter values.
@@ -49,6 +49,12 @@ An operation has two independent states:
 - **open**: The operation is in progress. Line items, discounts, and customer data can be added or changed freely (mutations are not fiscal events).
 - **completed**: The POS has finalized the operation — payment collected, sale done.
 - **cancelled**: The POS cancelled the operation before completion. The POS resets.
+
+    ```bash
+    curl -X POST https://api.openfiskal.com/v1/sales/{id}/cancel \
+      -H "Authorization: Bearer $API_KEY" \
+      -H "OpenFiskal-Organization: org_01HXYZ"
+    ```
 
 #### Fiscal state
 
