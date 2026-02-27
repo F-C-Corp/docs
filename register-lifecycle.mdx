@@ -219,7 +219,7 @@ curl -X POST https://api.openfiskal.com/v1/fiscal-units/fu_01HXYZ/recover \
 If the underlying device issue has been resolved, the binding returns to `active`. If the device is still unreachable, the call will fail and the binding remains in `error`.
 
 <Warning>
-  Operations that were in-flight when the device failed remain in `open` state. Check `GET /registers/:id/status` for open operations and either complete or abandon them once the device recovers.
+  Operations that were in-flight when the device failed remain in `open` state. Check `GET /registers/:id/status` for open operations and either complete or cancel them once the device recovers.
 </Warning>
 
 ## Replacing a fiscal unit
@@ -259,7 +259,7 @@ curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/fiscal-units/rep
 }
 ```
 
-All open operations must be completed or abandoned before replacing. The old binding's operations remain in the system for audit purposes.
+All open operations must be completed or cancelled before replacing. The old binding's operations remain in the system for audit purposes.
 
 ### Viewing binding history
 
@@ -302,7 +302,7 @@ curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/deactivate \
 This archives the register and decommissions any active fiscal unit. The register transitions to `archived` state.
 
 <Warning>
-  Archiving is permanent and cannot be undone. Any active register API key is automatically revoked. All open operations must be completed or abandoned first — the call returns `409 Conflict` otherwise.
+  Archiving is permanent and cannot be undone. Any active register API key is automatically revoked. All open operations must be completed or cancelled first — the call returns `409 Conflict` otherwise.
 </Warning>
 
 ## Credential management
@@ -334,7 +334,7 @@ New integrations should use the fiscal units API directly.
     End-to-end walkthrough from setup token to first sale.
   </Card>
   <Card title="POS Operations" icon="cash-register" href="/pos-operation-ingestion">
-    The operation lifecycle — start, mutate, complete, abandon.
+    The operation lifecycle — start, mutate, complete, cancel.
   </Card>
   <Card title="Authentication" icon="key" href="/auth">
     API key types, organization scoping, and key management.

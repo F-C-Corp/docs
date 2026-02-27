@@ -33,25 +33,52 @@ A POS operation is anything that happens at a register that has fiscal relevance
 
 ### State machine
 
-Every operation moves through these states:
+An operation has two independent states:
+
+- **Operation state** — tracks the POS lifecycle: is the sale open, completed, or cancelled?
+- **Fiscal state** — tracks fiscalization: has the fiscal device successfully recorded the event?
+
+#### Operation state
 
 ```
-start ■ ──► [open] ──► complete ■ ──► [completed] ──► void ■ ──► [voided]
-              │
-              └──► abandon ──► [abandoned]
+[open] ──► [completed]
+  │
+  └──► [cancelled]
 ```
 
-> **■** = fiscal event (signed by the fiscal security device). While `open`, the operation can be **mutated** freely (add items, discounts, customer data) — mutations are not fiscal events. Terminal states: `completed`, `abandoned`, `voided`.
+- **open**: The operation is in progress. Line items, discounts, and customer data can be added or changed freely (mutations are not fiscal events).
+- **completed**: The POS has finalized the operation — payment collected, sale done.
+- **cancelled**: The POS cancelled the operation before completion. The POS resets.
 
-- **start → open**: The fiscal device signs the start event. The POS receives a signature and transaction counter. This is irreversible — once started, the operation must be completed or explicitly abandoned.
-- **open → open** *(mutate)*: Line items, discounts, and customer data can be added or changed freely. Mutations are not fiscal events — no signatures are produced.
-- **open → completed**: The POS submits final payment data and the fiscal device signs the end event. A fiscal document is generated and returned.
-- **open → abandoned**: The POS explicitly cancels the operation. No end signature is produced. Abandoned operations still appear in the audit trail because the start was already signed.
-- **completed → voided**: A reversal before the daily closing. A void is a separate fiscal operation that references the original and produces its own fiscal reversal document. After the closing, use a refund instead.
+#### Fiscal state
+
+```
+[pending] ──► [succeeded]
+  │
+  └──► [failed]
+```
+
+- **pending**: Fiscalization has not yet been attempted or is in progress.
+- **succeeded**: The fiscal device successfully recorded the event. Fiscal data (signatures, counters, document numbers) is available.
+- **failed**: Fiscalization failed (device unreachable, transmission error). The POS should retry.
+
+#### How they relate
+
+| Operation state | Fiscal state | Meaning |
+|---|---|---|
+| `open` | `pending` | Sale in progress, not yet fiscalized |
+| `open` | `succeeded` | Start event recorded (regime-dependent, e.g. Germany TSE) |
+| `completed` | `pending` | Sale finished, fiscalization not yet confirmed |
+| `completed` | `succeeded` | Happy path — fiscal data available, print the receipt |
+| `completed` | `failed` | Sale finished but fiscalization failed — retry |
+| `cancelled` | `pending` | Sale cancelled before any fiscal event |
+| `cancelled` | `succeeded` | Sale cancelled, but start was already recorded (e.g. Germany TSE) |
 
 <Info>
-  If a fiscalization fault occurs (e.g. the fiscal device is unreachable), the API returns an error — the operation stays in its current state and the POS can retry. There is no `failed` state.
+  The POS drives the operation state. OpenFiskal drives the fiscal state. Your POS should always check `fiscal.state` before printing — only print fiscal data on the receipt when it is `succeeded`.
 </Info>
+
+To reverse a completed operation before the daily closing, create a separate `void` operation that references the original. After the closing, use a `refund` instead.
 
 ```mermaid
 sequenceDiagram
@@ -60,19 +87,19 @@ sequenceDiagram
     participant FD as Fiscal Device
 
     POS->>OF: POST /sales
-    OF->>FD: Sign start
-    FD-->>OF: Signature + counter
+    OF->>FD: Record start
+    FD-->>OF: Fiscal data
     OF-->>POS: Operation (open) + start_event
 
     POS->>OF: PATCH /sales/:id (items, discounts)
     OF-->>POS: Updated operation
 
     POS->>OF: POST /sales/:id/complete
-    OF->>FD: Sign end
-    FD-->>OF: Signature + counter
+    OF->>FD: Record end
+    FD-->>OF: Fiscal data
     OF-->>POS: Completed operation + fiscal document
 
-    note over POS: Print receipt with<br/>returned fiscal data
+    note over POS: Print the returned fiscal data<br/>on the receipt — this is your<br/>responsibility as the POS vendor
 ```
 
 ## Operation types
@@ -91,7 +118,7 @@ Implement only the operation types that apply to your system. If your POS does n
 | `training` | Staff practice transaction. Not fiscalized — no real fiscal document is generated. |
 
 <Info>
-  Every operation type follows the same lifecycle: **start → mutate → complete** (or **abandon**). The API surface is identical across all types.
+  Every operation type follows the same lifecycle: **start → mutate → complete** (or **cancel**). The API surface is identical across all types.
 </Info>
 
 ## POS vendor responsibilities
@@ -104,9 +131,9 @@ As the POS vendor, your integration must:
 
 3. **Manage concurrent open operations.** Multiple operations may be open simultaneously on the same register (e.g., a restaurant serving several tables). The POS manages the user interface; OpenFiskal manages the fiscal state.
 
-4. **Complete or abandon every operation.** Any operation that has been started must eventually be completed or explicitly abandoned. Open operations block the daily closing.
+4. **Complete or cancel every operation.** Any operation that has been started must eventually be completed or explicitly cancelled. Open operations block the daily closing.
 
-5. **Trigger the daily closing.** At the end of the business day or shift, call `POST /registers/:id/closings`. OpenFiskal generates the fiscal closing report required by the jurisdiction. All open operations must be completed or abandoned first.
+5. **Trigger the daily closing.** At the end of the business day or shift, call `POST /registers/:id/closings`. OpenFiskal generates the fiscal closing report required by the jurisdiction. All open operations must be completed or cancelled first.
 
 ## What OpenFiskal handles
 

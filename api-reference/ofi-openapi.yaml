@@ -54,19 +54,25 @@ info:
 
     ## Operation Lifecycle
 
-    Every operation moves through the following states. The state transitions
-    marked with 🔏 are **fiscal events** — they are signed by the fiscal security
-    device and cannot be undone.
+    An operation has two independent states:
+
+    - **Operation state** (`state`) — tracks the POS lifecycle: open, completed, or cancelled.
+    - **Fiscal state** (`fiscal.state`) — tracks fiscalization: pending, succeeded, or failed.
 
     ```mermaid
     stateDiagram-v2
         direction TB
-        [*] --> open : POST /registers/:id/sales\nPOST /registers/:id/refunds\n🔏 fiscal start signed
-        open --> completed : POST .../complete\n🔏 fiscal end signed
-        open --> abandoned : POST .../abandon\n(no fiscal document)
-        completed --> voided : POST /registers/:id/voids\n🔏 fiscal reversal signed\n(before closing)
-
-        note right of open : PATCH mutations are free here\n(items, discounts, customer)
+        state "Operation State" as OS {
+            [*] --> open : POST /sales, /refunds
+            open --> completed : POST .../complete
+            open --> cancelled : POST .../cancel
+            note right of open : PATCH mutations free here
+        }
+        state "Fiscal State" as FS {
+            [*] --> pending
+            pending --> succeeded : fiscal device recorded
+            pending --> failed : device error
+        }
     ```
 
     ### Fiscal Event Detail
@@ -109,7 +115,7 @@ info:
 
     All four hold TSE-signed start events on register `reg_01`.
     Each completes independently when payment is confirmed.
-    The daily closing can only happen once all are completed or abandoned.
+    The daily closing can only happen once all are completed or cancelled.
 
     ## Operation Types
 
@@ -216,14 +222,14 @@ tags:
     description: |
       Standard sale operations. The most common operation type.
 
-      **Lifecycle:** `open` → `completed` (or `abandoned`)
+      **Lifecycle:** `open` → `completed` (or `cancelled`)
 
       Both the start and end are fiscal events. In Germany, both are TSE-signed.
   - name: Refunds
     description: |
       Full or partial return of a prior sale. Must reference the original operation.
 
-      **Lifecycle:** `open` → `completed` (or `abandoned`)
+      **Lifecycle:** `open` → `completed` (or `cancelled`)
   - name: Exchanges
     description: |
       Atomic return + new sale in a single operation. The `returned_line_items` and
@@ -232,8 +238,8 @@ tags:
   - name: Voids
     description: |
       Cancellation of a completed operation before the daily closing. Produces a
-      fiscal reversal document and transitions the original to `voided`. After the
-      closing has been triggered, use a refund instead.
+      fiscal reversal document that references the original. The original operation
+      remains in `completed` state. After the closing, use a refund instead.
   - name: Cash Movements
     description: |
       Cash in and cash out events. Not a sale — no line items, no receipt.
@@ -976,7 +982,7 @@ paths:
         and the new binding is created with `replaces` referencing the old one.
 
         The register must have an active fiscal unit. All open operations must
-        be completed or abandoned first.
+        be completed or cancelled first.
       parameters:
         - $ref: '#/components/parameters/registerId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
@@ -1074,7 +1080,7 @@ paths:
         Permanently retires a fiscal unit and triggers jurisdiction-specific
         fiscal deregistration. Cannot be undone.
 
-        All open operations on the register must be completed or abandoned first.
+        All open operations on the register must be completed or cancelled first.
         The register's `active_fiscal_unit` becomes `null`.
       parameters:
         - name: fiscalUnitId
@@ -1483,14 +1489,14 @@ paths:
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
 
-  /sales/{operationId}/abandon:
+  /sales/{operationId}/cancel:
     post:
       tags: [Sales]
-      operationId: abandonSale
-      summary: Abandon a sale
+      operationId: cancelSale
+      summary: Cancel a sale
       description: |
         Explicitly closes an open sale without completing it. No fiscal document
-        is generated, but the abandonment is recorded. In Germany, the open TSE
+        is generated, but the cancellation is recorded. In Germany, the open TSE
         transaction is properly closed to maintain chain integrity.
 
         Use this when a customer walks away, a table is cleared, or a transaction
@@ -1502,10 +1508,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AbandonRequest'
+              $ref: '#/components/schemas/CancelRequest'
       responses:
         '200':
-          description: Sale abandoned
+          description: Sale cancelled
           content:
             application/json:
               schema:
@@ -1634,17 +1640,17 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
-  /refunds/{operationId}/abandon:
+  /refunds/{operationId}/cancel:
     post:
       tags: [Refunds]
-      operationId: abandonRefund
-      summary: Abandon a refund
+      operationId: cancelRefund
+      summary: Cancel a refund
       parameters:
         - $ref: '#/components/parameters/operationId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
       responses:
         '200':
-          description: Refund abandoned
+          description: Refund cancelled
           content:
             application/json:
               schema:
@@ -1778,11 +1784,11 @@ paths:
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
 
-  /exchanges/{operationId}/abandon:
+  /exchanges/{operationId}/cancel:
     post:
       tags: [Exchanges]
-      operationId: abandonExchange
-      summary: Abandon an exchange
+      operationId: cancelExchange
+      summary: Cancel an exchange
       parameters:
         - $ref: '#/components/parameters/operationId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
@@ -1790,10 +1796,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AbandonRequest'
+              $ref: '#/components/schemas/CancelRequest'
       responses:
         '200':
-          description: Exchange abandoned
+          description: Exchange cancelled
           content:
             application/json:
               schema:
@@ -1892,11 +1898,11 @@ paths:
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
 
-  /deposits/{operationId}/abandon:
+  /deposits/{operationId}/cancel:
     post:
       tags: [Deposits]
-      operationId: abandonDeposit
-      summary: Abandon a deposit
+      operationId: cancelDeposit
+      summary: Cancel a deposit
       parameters:
         - $ref: '#/components/parameters/operationId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
@@ -1904,10 +1910,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AbandonRequest'
+              $ref: '#/components/schemas/CancelRequest'
       responses:
         '200':
-          description: Deposit abandoned
+          description: Deposit cancelled
           content:
             application/json:
               schema:
@@ -2006,11 +2012,11 @@ paths:
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
 
-  /deposit-captures/{operationId}/abandon:
+  /deposit-captures/{operationId}/cancel:
     post:
       tags: [Deposit Captures]
-      operationId: abandonDepositCapture
-      summary: Abandon a deposit capture
+      operationId: cancelDepositCapture
+      summary: Cancel a deposit capture
       parameters:
         - $ref: '#/components/parameters/operationId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
@@ -2018,10 +2024,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AbandonRequest'
+              $ref: '#/components/schemas/CancelRequest'
       responses:
         '200':
-          description: Deposit capture abandoned
+          description: Deposit capture cancelled
           content:
             application/json:
               schema:
@@ -2118,11 +2124,11 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
-  /training/{operationId}/abandon:
+  /training/{operationId}/cancel:
     post:
       tags: [Training]
-      operationId: abandonTraining
-      summary: Abandon a training operation
+      operationId: cancelTraining
+      summary: Cancel a training operation
       parameters:
         - $ref: '#/components/parameters/operationId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
@@ -2130,10 +2136,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AbandonRequest'
+              $ref: '#/components/schemas/CancelRequest'
       responses:
         '200':
-          description: Training operation abandoned
+          description: Training operation cancelled
           content:
             application/json:
               schema:
@@ -2156,7 +2162,7 @@ paths:
       summary: Void a completed operation
       description: |
         Cancellation of a completed operation. Produces a fiscal reversal document
-        and transitions the original operation to `voided`.
+        that references the original. The original operation remains in `completed` state.
 
         - **Germany**: Storno-Buchung against the original TSE record
         - **Italy**: Documento di annullamento — before chiusura giornaliera
@@ -2281,7 +2287,7 @@ paths:
         - **Germany**: `Tagesabschluss` — required for DSFinV-K compliance
         - **Austria**: Required for RKSV monthly and annual reports
 
-        All open operations must be completed or abandoned before a daily closing
+        All open operations must be completed or cancelled before a daily closing
         can be triggered.
       parameters:
         - $ref: '#/components/parameters/registerId'
@@ -3343,43 +3349,39 @@ components:
       enum:
         - open
         - completed
-        - abandoned
-        - voided
+        - cancelled
       description: |
-        The current lifecycle state of the operation. Transitions are
+        The POS lifecycle state of the operation. Transitions are
         one-directional and enforced server-side — invalid transitions
         return `409 Conflict`.
 
-        ```mermaid
-        stateDiagram-v2
-            direction TB
-            [*] --> open : POST /registers/:id/sales\n🔏 fiscal start signed
-            open --> completed : POST .../complete\n🔏 fiscal end signed
-            open --> abandoned : POST .../abandon
-            completed --> voided : POST /voids\n🔏 fiscal reversal\n(before closing)
-
-            note right of open : PATCH mutations free here
-        ```
-
-        ### Terminal states
-
-        | State | Fiscal document |
-        |-------|----------------|
-        | `completed` | ✅ Yes |
-        | `abandoned` | ❌ No |
-        | `voided` | ✅ (reversal) |
-
-        If a fiscalization fault occurs (e.g. the fiscal device is
-        unreachable), the API returns an error — the operation stays
-        in its current state and the POS can retry.
+        - `open` — operation in progress, mutations allowed
+        - `completed` — POS finalized the operation (payment collected)
+        - `cancelled` — POS cancelled before completion
 
         ### Valid transitions
 
         | From | Event | To |
         |------|-------|----|
         | `open` | `POST .../complete` | `completed` |
-        | `open` | `POST .../abandon` | `abandoned` |
-        | `completed` | `POST /voids` (before closing) | `voided` |
+        | `open` | `POST .../cancel` | `cancelled` |
+
+    FiscalState:
+      type: string
+      enum:
+        - pending
+        - succeeded
+        - failed
+      description: |
+        The fiscalization state of the operation, tracked independently
+        from the operation state.
+
+        - `pending` — fiscalization not yet attempted or in progress
+        - `succeeded` — fiscal device recorded the event, fiscal data available
+        - `failed` — fiscalization failed (device unreachable, transmission error)
+
+        The POS should check `fiscal.state` before printing — only print
+        fiscal data on the receipt when it is `succeeded`.
 
     # ── Operation envelope ─────────────────────────
 
@@ -3754,12 +3756,12 @@ components:
             If `true`, a register-scoped API key is issued and returned
             in the response. Only needed for device-direct integrations.
 
-    AbandonRequest:
+    CancelRequest:
       type: object
       properties:
         reason:
           type: string
-          description: Human-readable reason for abandoning the operation
+          description: Human-readable reason for cancelling the operation
           example: Customer cancelled
 
     ClosingRequest:

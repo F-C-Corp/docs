@@ -130,10 +130,10 @@ When operations arrive late, OpenFiskal handles the fiscal outcome per regime. Y
 
 ## Daily closing
 
-All queued operations must be synced and either completed or abandoned before calling `POST /registers/:id/closings`.
+All queued operations must be synced and either completed or cancelled before calling `POST /registers/:id/closings`.
 
 <Warning>
-  The closing endpoint returns `409 Conflict` if open operations remain on the register. Drain the queue and complete or abandon every operation before triggering the closing.
+  The closing endpoint returns `409 Conflict` if open operations remain on the register. Drain the queue and complete or cancel every operation before triggering the closing.
 </Warning>
 
 If the register was offline for part of the day, the closing sequence is:
@@ -154,13 +154,13 @@ Your POS must implement the following to support offline operation:
 - **Device-side timestamps** — record `occurred_at` from the register's local clock at the time of the event.
 - **Provisional receipts** — print a non-fiscal receipt for the customer at the time of sale, and make the fiscal receipt available after sync.
 - **Clock accuracy** — compare `server_time` from heartbeat responses against the local clock and alert on significant drift.
-- **Queue drain before closing** — block the daily closing until all queued operations are synced and completed or abandoned.
+- **Queue drain before closing** — block the daily closing until all queued operations are synced and completed or cancelled.
 
 ## Next steps
 
 <CardGroup cols={2}>
   <Card title="POS Operations" icon="cash-register" href="/pos-operation-ingestion">
-    The operation lifecycle — start, mutate, complete, abandon.
+    The operation lifecycle — start, mutate, complete, cancel.
   </Card>
   <Card title="Register Lifecycle" icon="microchip" href="/register-lifecycle">
     Commissioning, monitoring, and decommissioning registers.

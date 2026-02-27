@@ -134,7 +134,7 @@ Server-side integrations should use platform API keys exclusively. The platform 
 A register API key is scoped to a single register and authorizes only register-level operations:
 
 - **Heartbeats** — `POST /registers/:id/heartbeat`
-- **Sales, refunds, and other operations** — start, mutate, complete, abandon
+- **Sales, refunds, and other operations** — start, mutate, complete, cancel
 - **Cash drawer openings** — `POST /registers/:id/cash-drawer-openings`
 - **Daily closings** — `POST /registers/:id/closings`
 
@@ -263,6 +263,6 @@ For guidance on choosing between server-side and device-direct integration archi
     End-to-end walkthrough from setup token to first sale.
   </Card>
   <Card title="POS Operations" icon="cash-register" href="/pos-operation-ingestion">
-    The operation lifecycle — start, mutate, complete, abandon.
+    The operation lifecycle — start, mutate, complete, cancel.
   </Card>
 </CardGroup>
