@@ -53,20 +53,26 @@ start ■ ──► [open] ──► complete ■ ──► [completed] ──�
   If a fiscalization fault occurs (e.g. the fiscal device is unreachable), the API returns an error — the operation stays in its current state and the POS can retry. There is no `failed` state.
 </Info>
 
-```
-POS                    OpenFiskal              Fiscal Device
- │                         │                        │
- ├── POST /sales ─────────►│                        │
- │                         ├── sign start ─────────►│
- │                         │◄── signature + counter ┤
- │◄── operation (open) ────┤                        │
- │                         │                        │
- │  PATCH /sales/:id ─────►│  (add items, discounts)│
- │                         │                        │
- ├── POST /sales/:id/complete ►│                    │
- │                         ├── sign end ───────────►│
- │                         │◄── signature + counter ┤
- │◄── completed + fiscal ──┤                        │
+```mermaid
+sequenceDiagram
+    participant POS
+    participant OF as OpenFiskal
+    participant FD as Fiscal Device
+
+    POS->>OF: POST /sales
+    OF->>FD: Sign start
+    FD-->>OF: Signature + counter
+    OF-->>POS: Operation (open) + start_event
+
+    POS->>OF: PATCH /sales/:id (items, discounts)
+    OF-->>POS: Updated operation
+
+    POS->>OF: POST /sales/:id/complete
+    OF->>FD: Sign end
+    FD-->>OF: Signature + counter
+    OF-->>POS: Completed operation + fiscal document
+
+    note over POS: Print receipt with<br/>returned fiscal data
 ```
 
 ## Operation types
@@ -238,7 +244,7 @@ The `fiscal` field on every operation is a `FiscalDocument` — a discriminated 
 
 <CardGroup cols={2}>
   <Card title="Authentication" icon="key" href="/auth">
-    Set up your platform credentials and learn about the token flow.
+    API key types, organization scoping, and key management.
   </Card>
   <Card title="Receipts" icon="receipt" href="/receipts">
     Retrieve, render, and deliver fiscal receipts after completion.
