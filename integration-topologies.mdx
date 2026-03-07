@@ -122,11 +122,12 @@ For device-direct integrations, provisioning involves three steps — all done f
 <Steps>
   <Step title="Create the register">
     ```bash
-    curl -X POST https://api.openfiskal.com/v1/locations/loc_01HXYZ/registers \
+    curl -X POST https://api.openfiskal.com/v1/registers \
       -H "Authorization: Bearer $API_KEY" \
       -H "OpenFiskal-Organization: org_01HXYZ" \
       -H "Content-Type: application/json" \
       -d '{
+        "location_id": "loc_01HXYZ",
         "label": "Charger A-042",
         "jurisdiction": "DE"
       }'

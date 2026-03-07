@@ -23,6 +23,7 @@ This guide walks you through a complete integration — from receiving your setu
 
     ```bash
     curl -X POST https://sandbox.api.openfiskal.com/v1/auth/bootstrap \
+      -H "OpenFiskal-Organization: org_01HXYZ" \
       -H "Content-Type: application/json" \
       -d '{
         "setup_token": "ofk_setup_abc123def456",
@@ -52,6 +53,7 @@ This guide walks you through a complete integration — from receiving your setu
     ```bash
     curl -X POST https://sandbox.api.openfiskal.com/v1/organizations \
       -H "Authorization: Bearer ofk_platform_live_abc123..." \
+      -H "OpenFiskal-Organization: org_01HXYZ" \
       -H "Content-Type: application/json" \
       -d '{
         "legal_name": "Mustermann GmbH",
@@ -89,8 +91,9 @@ This guide walks you through a complete integration — from receiving your setu
     A location is a physical point of sale — a store, restaurant, or kiosk.
 
     ```bash
-    curl -X POST https://sandbox.api.openfiskal.com/v1/organizations/org_01HXYZ/locations \
+    curl -X POST https://sandbox.api.openfiskal.com/v1/locations \
       -H "Authorization: Bearer ofk_platform_live_abc123..." \
+      -H "OpenFiskal-Organization: org_01HXYZ" \
       -H "Content-Type: application/json" \
       -d '{
         "name": "Berlin Mitte",
@@ -119,11 +122,12 @@ This guide walks you through a complete integration — from receiving your setu
     A register is a POS device. Creating one is lightweight — it's just metadata.
 
     ```bash
-    curl -X POST https://sandbox.api.openfiskal.com/v1/locations/loc_01HXYZ/registers \
+    curl -X POST https://sandbox.api.openfiskal.com/v1/registers \
       -H "Authorization: Bearer ofk_platform_live_abc123..." \
       -H "OpenFiskal-Organization: org_01HXYZ" \
       -H "Content-Type: application/json" \
       -d '{
+        "location_id": "loc_01HXYZ",
         "label": "Kasse 1",
         "jurisdiction": "DE"
       }'

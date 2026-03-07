@@ -50,11 +50,12 @@ provisioning ──► active ──► decommissioned
     A register belongs to a location. Provide a label and the jurisdiction it operates in.
 
     ```bash
-    curl -X POST https://api.openfiskal.com/v1/locations/loc_01HXYZ/registers \
+    curl -X POST https://api.openfiskal.com/v1/registers \
       -H "Authorization: Bearer $API_KEY" \
       -H "OpenFiskal-Organization: org_01HXYZ" \
       -H "Content-Type: application/json" \
       -d '{
+        "location_id": "loc_01HXYZ",
         "label": "Kasse 2",
         "jurisdiction": "DE"
       }'
@@ -198,7 +199,7 @@ curl https://api.openfiskal.com/v1/registers/reg_01HXYZ/status \
 To check all registers at a location in one call:
 
 ```bash
-curl https://api.openfiskal.com/v1/locations/loc_01HXYZ/registers/status \
+curl "https://api.openfiskal.com/v1/registers/status?location_id=loc_01HXYZ" \
   -H "Authorization: Bearer $API_KEY" \
   -H "OpenFiskal-Organization: org_01HXYZ"
 ```

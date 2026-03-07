@@ -29,6 +29,7 @@ After signing a partnership agreement, OpenFiskal emails a one-time setup token 
 
 ```bash
 curl -X POST https://api.openfiskal.com/v1/auth/bootstrap \
+  -H "OpenFiskal-Organization: org_01HXYZ" \
   -H "Content-Type: application/json" \
   -d '{
     "setup_token": "ofk_setup_abc123def456",
@@ -82,7 +83,8 @@ Revocation is instant — any request using the old key will return `401` immedi
 
 ```bash
 curl -X POST https://api.openfiskal.com/v1/auth/api-keys/key_01HXYZ/rotate \
-  -H "Authorization: Bearer ofk_platform_live_abc123..."
+  -H "Authorization: Bearer ofk_platform_live_abc123..." \
+  -H "OpenFiskal-Organization: org_01HXYZ"
 ```
 
 The rotation endpoint atomically issues a new key and revokes the old one in a single call. Use the create-then-revoke pattern above if you need overlap.
@@ -174,12 +176,13 @@ The device includes the key in the `X-Register-Api-Key` header:
 ```bash
 curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/sales \
   -H "X-Register-Api-Key: ofk_reg_live_..." \
+  -H "OpenFiskal-Organization: org_01HXYZ" \
   -H "Idempotency-Key: sale-charger42-20260226-001" \
   -H "Content-Type: application/json" \
   -d '{ "...": "..." }'
 ```
 
-No `OpenFiskal-Organization` header is needed — the key is already scoped to a specific register and organization.
+Include `OpenFiskal-Organization` on this request as well to keep request scoping explicit and consistent across integrations.
 
 ### Key rotation
 

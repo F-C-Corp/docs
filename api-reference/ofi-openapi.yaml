@@ -393,6 +393,8 @@ paths:
         If the token has already been consumed or has expired, the endpoint
         returns `401`.
       security: []
+      parameters:
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       requestBody:
         required: true
         content:
@@ -421,6 +423,8 @@ paths:
       description: |
         Returns all active API keys for your platform account.
         Key values are masked — only the prefix and last four characters are shown.
+      parameters:
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       responses:
         '200':
           description: List of platform API keys
@@ -440,6 +444,8 @@ paths:
         separate keys per environment.
 
         The `api_key` value is returned only once at creation time.
+      parameters:
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       requestBody:
         required: true
         content:
@@ -474,6 +480,7 @@ paths:
           required: true
           schema:
             type: string
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       responses:
         '204':
           description: API key revoked
@@ -493,6 +500,7 @@ paths:
         Returns all organizations under your platform account. Use this to
         enumerate the merchants you have onboarded.
       parameters:
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Cursor'
       responses:
@@ -509,6 +517,8 @@ paths:
       tags: [Organizations]
       operationId: createOrganization
       summary: Create an organization
+      parameters:
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       requestBody:
         required: true
         content:
@@ -532,6 +542,7 @@ paths:
       summary: Retrieve an organization
       parameters:
         - $ref: '#/components/parameters/organizationId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       responses:
         '200':
           description: Organization retrieved
@@ -548,6 +559,7 @@ paths:
       summary: Update an organization
       parameters:
         - $ref: '#/components/parameters/organizationId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       requestBody:
         required: true
         content:
@@ -573,13 +585,13 @@ paths:
   # LOCATIONS
   # ─────────────────────────────────────────────
 
-  /organizations/{organizationId}/locations:
+  /locations:
     post:
       tags: [Locations]
       operationId: createLocation
       summary: Create a location
       parameters:
-        - $ref: '#/components/parameters/organizationId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       requestBody:
         required: true
         content:
@@ -605,7 +617,7 @@ paths:
       operationId: listLocations
       summary: List locations
       parameters:
-        - $ref: '#/components/parameters/organizationId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       responses:
         '200':
           description: List of locations
@@ -663,7 +675,7 @@ paths:
   # REGISTERS
   # ─────────────────────────────────────────────
 
-  /locations/{locationId}/registers:
+  /registers:
     post:
       tags: [Registers]
       operationId: createRegister
@@ -676,7 +688,6 @@ paths:
         The platform maintains the authoritative list of all open operations per register.
         If a register crashes and reconnects, it reconciles against this state.
       parameters:
-        - $ref: '#/components/parameters/locationId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
       requestBody:
         required: true
@@ -701,9 +712,9 @@ paths:
     get:
       tags: [Registers]
       operationId: listRegisters
-      summary: List registers at a location
+      summary: List registers
       parameters:
-        - $ref: '#/components/parameters/locationId'
+        - $ref: '#/components/parameters/locationIdQuery'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
       responses:
         '200':
@@ -872,13 +883,14 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /locations/{locationId}/registers/status:
+  /registers/status:
     get:
       tags: [Registers]
       operationId: listRegisterStatuses
-      summary: Get status for all registers at a location
+      summary: Get status for registers
       parameters:
-        - $ref: '#/components/parameters/locationId'
+        - $ref: '#/components/parameters/locationIdQuery'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       responses:
         '200':
           description: Register status overview
@@ -2409,6 +2421,7 @@ paths:
         a platform API key, suitable for resource-constrained hardware.
       parameters:
         - $ref: '#/components/parameters/registerId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       security:
         - BearerAuth: []
         - RegisterApiKey: []
@@ -2451,6 +2464,7 @@ paths:
         Register devices authenticate using `X-Register-Api-Key`.
       parameters:
         - $ref: '#/components/parameters/registerId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       security:
         - BearerAuth: []
         - RegisterApiKey: []
@@ -2545,6 +2559,7 @@ paths:
           schema:
             type: string
           example: DE-2026-004822
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       responses:
         '200':
           description: Receipt verified
@@ -2843,6 +2858,7 @@ paths:
         is blocked until a replacement is provisioned.
       parameters:
         - $ref: '#/components/parameters/organizationId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       requestBody:
         required: true
         content:
@@ -2871,6 +2887,7 @@ paths:
       summary: List fiscal certificates
       parameters:
         - $ref: '#/components/parameters/organizationId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
         - name: jurisdiction
           in: query
           schema:
@@ -2896,6 +2913,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/organizationId'
         - $ref: '#/components/parameters/certificateId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       responses:
         '200':
           description: Certificate retrieved
@@ -2920,6 +2938,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/organizationId'
         - $ref: '#/components/parameters/certificateId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       responses:
         '204':
           description: Certificate revoked
@@ -2961,6 +2980,7 @@ paths:
         on subsequent reads.
       parameters:
         - $ref: '#/components/parameters/organizationId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
       requestBody:
         required: true
         content:
@@ -2994,6 +3014,7 @@ paths:
         Credential values are masked in the response.
       parameters:
         - $ref: '#/components/parameters/organizationId'
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
         - name: portal_type
           in: query
           schema:
@@ -3184,6 +3205,15 @@ components:
         type: string
       example: loc_01HXYZ
 
+    locationIdQuery:
+      name: location_id
+      in: query
+      required: false
+      schema:
+        type: string
+      description: Filter results to a single location.
+      example: loc_01HXYZ
+
     registerId:
       name: registerId
       in: path
@@ -3248,13 +3278,11 @@ components:
     OpenFiskalOrganization:
       name: OpenFiskal-Organization
       in: header
-      required: false
+      required: true
       schema:
         type: string
       description: |
-        Merchant organization ID. Required for platform integrators acting on
-        behalf of a specific merchant. Omit when using an organization-scoped
-        API key directly.
+        Merchant organization ID. Include this header on all requests.
       example: org_01HXYZ
 
     Limit:
@@ -5160,11 +5188,14 @@ components:
 
     RegisterCreate:
       type: object
-      required: [label, jurisdiction]
+      required: [label, jurisdiction, location_id]
       properties:
         label:
           type: string
           example: Kasse 1
+        location_id:
+          type: string
+          example: loc_01HXYZ
         jurisdiction:
           type: string
           enum: [IT, DE, AT]
