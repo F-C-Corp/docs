@@ -1,4 +1,0 @@
-interface:
-  display_name: "Shopify OpenFiskal Dev Preview"
-  short_description: "Run OpenFiskal Shopify app in dev and open admin app page"
-  default_prompt: "Start OpenFiskal Shopify dev with the dev TOML config and open the app in the configured Shopify admin store for testing."
