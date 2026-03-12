@@ -82,7 +82,7 @@ Revocation is instant — any request using the old key will return `401` immedi
 
 ## Organization scoping
 
-A platform API key can act on behalf of any merchant organization under your platform account. Include the `OpenFiskal-Organization` header to scope each request:
+A platform API key can act on behalf of any merchant organization under your platform account. Include the `OpenFiskal-Organization` header on merchant-scoped requests:
 
 ```bash
 curl https://api.openfiskal.com/v1/registers \
@@ -92,7 +92,9 @@ curl https://api.openfiskal.com/v1/registers \
 
 There is no need to obtain a separate key per organization. The same key works across all merchants.
 
-**Why explicit scoping:** Requiring the organization header on every request prevents accidental cross-tenant operations. Unlike implicit scoping (where a credential is silently bound to one tenant), explicit scoping makes the target organization visible in every request — easier to audit, harder to misroute.
+Platform-scoped endpoints such as `POST /auth/bootstrap`, `GET /organizations`, `POST /organizations`, and platform API key management do not require this header.
+
+**Why explicit scoping:** Requiring the organization header on merchant-scoped platform requests prevents accidental cross-tenant operations. Unlike implicit scoping (where a credential is silently bound to one tenant), explicit scoping makes the target organization visible in every request — easier to audit, harder to misroute.
 
 ## API key management
 
@@ -167,13 +169,12 @@ The device includes the key in the `X-Register-Api-Key` header:
 ```bash
 curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/sales \
   -H "X-Register-Api-Key: ofk_reg_live_..." \
-  -H "OpenFiskal-Organization: org_01HXYZ" \
   -H "Idempotency-Key: sale-charger42-20260226-001" \
   -H "Content-Type: application/json" \
   -d '{ "...": "..." }'
 ```
 
-Include `OpenFiskal-Organization` on this request as well to keep request scoping explicit and consistent across integrations.
+No `OpenFiskal-Organization` header is required here. The register API key is already scoped to a single register and merchant organization.
 
 ### Key rotation
 
