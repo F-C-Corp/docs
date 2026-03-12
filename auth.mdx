@@ -92,7 +92,7 @@ curl https://api.openfiskal.com/v1/registers \
 
 There is no need to obtain a separate key per organization. The same key works across all merchants.
 
-Platform-scoped endpoints such as `POST /auth/bootstrap`, `GET /organizations`, `POST /organizations`, and platform API key management do not require this header.
+Platform-scoped endpoints such as `POST /auth/bootstrap`, `GET /organizations`, `POST /organizations`, and the API key management endpoints (`GET /auth/api-keys`, `POST /auth/api-keys`, and `DELETE /auth/api-keys/{keyId}`) do not require this header.
 
 **Why explicit scoping:** Requiring the organization header on merchant-scoped platform requests prevents accidental cross-tenant operations. Unlike implicit scoping (where a credential is silently bound to one tenant), explicit scoping makes the target organization visible in every request — easier to audit, harder to misroute.
 
