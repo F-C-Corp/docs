@@ -29,7 +29,6 @@ After signing a partnership agreement, OpenFiskal emails a one-time setup token 
 
 ```bash
 curl -X POST https://api.openfiskal.com/v1/auth/bootstrap \
-  -H "OpenFiskal-Organization: org_01HXYZ" \
   -H "Content-Type: application/json" \
   -d '{
     "setup_token": "ofk_setup_abc123def456",
