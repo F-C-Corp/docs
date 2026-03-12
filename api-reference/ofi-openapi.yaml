@@ -1366,6 +1366,12 @@ paths:
         Opens a new sale operation. This is a **fiscal event** — the platform
         records the start and, in jurisdictions that require it, signs it immediately.
 
+        Authentication rules:
+        - **Server-side:** `Authorization: Bearer ...` plus `OpenFiskal-Organization`
+        - **Device-direct:** `X-Register-Api-Key: ...` only
+        - Do not send both credential types on the same request
+        - The `registerId` in the path must match the register bound to the register API key
+
         The response includes `fiscal.start_event` with the start-side signature and
         transaction counter. Store this — it must appear on the final receipt.
 
@@ -2433,6 +2439,12 @@ paths:
       description: |
         Triggers an end-of-day or shift closing. Closings are first-class fiscal
         events — not just summary reports.
+
+        Authentication rules:
+        - **Server-side:** `Authorization: Bearer ...` plus `OpenFiskal-Organization`
+        - **Device-direct:** `X-Register-Api-Key: ...` only
+        - Do not send both credential types on the same request
+        - The `registerId` in the path must match the register bound to the register API key
 
         - **Italy**: `chiusura giornaliera` — required daily, transmitted to RT
         - **Germany**: `Tagesabschluss` — required for DSFinV-K compliance
