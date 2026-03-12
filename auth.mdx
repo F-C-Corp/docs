@@ -82,7 +82,7 @@ Revocation is instant — any request using the old key will return `401` immedi
 
 ## Organization scoping
 
-A platform API key can act on behalf of any merchant organization under your platform account. Include the `OpenFiskal-Organization` header to scope each request:
+A platform API key can act on behalf of any merchant organization under your platform account. Include the `OpenFiskal-Organization` header on merchant-scoped requests:
 
 ```bash
 curl https://api.openfiskal.com/v1/registers \
@@ -92,7 +92,22 @@ curl https://api.openfiskal.com/v1/registers \
 
 There is no need to obtain a separate key per organization. The same key works across all merchants.
 
-**Why explicit scoping:** Requiring the organization header on every request prevents accidental cross-tenant operations. Unlike implicit scoping (where a credential is silently bound to one tenant), explicit scoping makes the target organization visible in every request — easier to audit, harder to misroute.
+Platform-scoped endpoints such as `POST /auth/bootstrap`, `GET /organizations`, `POST /organizations`, and the API key management endpoints (`GET /auth/api-keys`, `POST /auth/api-keys`, and `DELETE /auth/api-keys/{keyId}`) do not require this header.
+
+**Why explicit scoping:** Requiring the organization header on merchant-scoped platform requests prevents accidental cross-tenant operations. Unlike implicit scoping (where a credential is silently bound to one tenant), explicit scoping makes the target organization visible in every request — easier to audit, harder to misroute.
+
+## Which credential and header should you send?
+
+| Request type | `Authorization` | `X-Register-Api-Key` | `OpenFiskal-Organization` | Typical endpoints |
+|---|---|---|---|---|
+| Bootstrap your first platform key | No | No | No | `POST /auth/bootstrap` |
+| Platform-scoped administration | Yes, platform key | No | No | `GET /organizations`, `POST /organizations`, `POST /auth/api-keys` |
+| Merchant-scoped platform request | Yes, platform key | No | Yes | `POST /registers`, `POST /registers/:id/sales`, `GET /operations/:id/receipt` |
+| Device-direct register request | No | Yes, register key | No | `POST /registers/:id/sales`, `POST /sales/:id/complete`, `POST /registers/:id/closings`, `POST /registers/:id/heartbeat` |
+
+<Tip>
+  Treat `OpenFiskal-Organization` as a tenant selector for platform credentials only. Register credentials already carry tenant and register scope inside the key itself.
+</Tip>
 
 ## API key management
 
@@ -167,13 +182,26 @@ The device includes the key in the `X-Register-Api-Key` header:
 ```bash
 curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/sales \
   -H "X-Register-Api-Key: ofk_reg_live_..." \
-  -H "OpenFiskal-Organization: org_01HXYZ" \
   -H "Idempotency-Key: sale-charger42-20260226-001" \
   -H "Content-Type: application/json" \
   -d '{ "...": "..." }'
 ```
 
-Include `OpenFiskal-Organization` on this request as well to keep request scoping explicit and consistent across integrations.
+No `OpenFiskal-Organization` header is required here. The register API key is already scoped to a single register and merchant organization.
+
+### Validation and failure cases
+
+Use these rules when constructing requests:
+
+- A platform key on a merchant-scoped endpoint without `OpenFiskal-Organization` is rejected because the target merchant is ambiguous.
+- A register-authenticated request must not send `OpenFiskal-Organization`. Register keys are already tenant-scoped.
+- A request must not send both `Authorization` and `X-Register-Api-Key`. Choose one authentication mode.
+- A register API key may only be used with the register it was issued for. If the `registerId` in the path does not match the key's bound register, the request is rejected.
+
+In practice, you should expect:
+
+- `400 Bad Request` for invalid credential combinations or invalid scoping headers.
+- `401 Unauthorized` for missing, expired, revoked, or mismatched credentials.
 
 ### Key rotation
 

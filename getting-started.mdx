@@ -23,7 +23,6 @@ This guide walks you through a complete integration — from receiving your setu
 
     ```bash
     curl -X POST https://sandbox.api.openfiskal.com/v1/auth/bootstrap \
-      -H "OpenFiskal-Organization: org_01HXYZ" \
       -H "Content-Type: application/json" \
       -d '{
         "setup_token": "ofk_setup_abc123def456",
@@ -53,7 +52,6 @@ This guide walks you through a complete integration — from receiving your setu
     ```bash
     curl -X POST https://sandbox.api.openfiskal.com/v1/organizations \
       -H "Authorization: Bearer ofk_platform_live_abc123..." \
-      -H "OpenFiskal-Organization: org_01HXYZ" \
       -H "Content-Type: application/json" \
       -d '{
         "legal_name": "Mustermann GmbH",

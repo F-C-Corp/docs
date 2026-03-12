@@ -68,7 +68,7 @@ flowchart LR
 
 1. During provisioning, your backend creates the register, creates a fiscal unit, and activates it with `issue_register_credential: true`. This returns a one-time register API key.
 2. You securely push the API key to the device (over a provisioning channel, device management platform, or at manufacturing time).
-3. The device includes the key in the `X-Register-Api-Key` header for all API calls.
+3. The device includes the key in the `X-Register-Api-Key` header for all API calls. No `OpenFiskal-Organization` header is required on device-authenticated requests.
 
 **When to use it:**
 

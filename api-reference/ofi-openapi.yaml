@@ -135,16 +135,22 @@ info:
 
     ## Authentication
 
-    All API requests require a platform API key sent in the `Authorization: Bearer` header.
-    Platform integrators (POS vendors acting on behalf of merchants) pass an additional
-    `OpenFiskal-Organization` header to scope requests to a specific merchant.
+    All API requests require either a platform API key sent in the
+    `Authorization: Bearer` header or, for device-direct register traffic,
+    a register API key sent in the `X-Register-Api-Key` header.
+
+    Platform integrators (POS vendors acting on behalf of merchants) pass an
+    additional `OpenFiskal-Organization` header on merchant-scoped requests to
+    scope actions to a specific merchant. Platform-scoped endpoints such as
+    bootstrap, organization onboarding, and platform key management omit it.
 
     ```
     Authorization: Bearer ofk_platform_...
     OpenFiskal-Organization: org_01HXYZ
     ```
 
-    Register devices use a separate long-lived API key via the `X-Register-Api-Key` header.
+    Register devices use a separate long-lived API key via the
+    `X-Register-Api-Key` header and do not need to send an organization header.
 
     ## Idempotency
 
@@ -394,8 +400,6 @@ paths:
         If the token has already been consumed or has expired, the endpoint
         returns `401`.
       security: []
-      parameters:
-        - $ref: '#/components/parameters/OpenFiskalOrganization'
       requestBody:
         required: true
         content:
@@ -424,8 +428,6 @@ paths:
       description: |
         Returns all active API keys for your platform account.
         Key values are masked — only the prefix and last four characters are shown.
-      parameters:
-        - $ref: '#/components/parameters/OpenFiskalOrganization'
       responses:
         '200':
           description: List of platform API keys
@@ -445,8 +447,6 @@ paths:
         separate keys per environment.
 
         The `api_key` value is returned only once at creation time.
-      parameters:
-        - $ref: '#/components/parameters/OpenFiskalOrganization'
       requestBody:
         required: true
         content:
@@ -481,7 +481,6 @@ paths:
           required: true
           schema:
             type: string
-        - $ref: '#/components/parameters/OpenFiskalOrganization'
       responses:
         '204':
           description: API key revoked
@@ -501,7 +500,6 @@ paths:
         Returns all organizations under your platform account. Use this to
         enumerate the merchants you have onboarded.
       parameters:
-        - $ref: '#/components/parameters/OpenFiskalOrganization'
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Cursor'
       responses:
@@ -518,8 +516,6 @@ paths:
       tags: [Organizations]
       operationId: createOrganization
       summary: Create an organization
-      parameters:
-        - $ref: '#/components/parameters/OpenFiskalOrganization'
       requestBody:
         required: true
         content:
@@ -1347,6 +1343,9 @@ paths:
         - $ref: '#/components/parameters/DateTo'
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Cursor'
+      security:
+        - BearerAuth: []
+        - RegisterApiKey: []
       responses:
         '200':
           description: Paginated list of sales
@@ -1366,6 +1365,12 @@ paths:
       description: |
         Opens a new sale operation. This is a **fiscal event** — the platform
         records the start and, in jurisdictions that require it, signs it immediately.
+
+        Authentication rules:
+        - **Server-side:** `Authorization: Bearer ...` plus `OpenFiskal-Organization`
+        - **Device-direct:** `X-Register-Api-Key: ...` only
+        - Do not send both credential types on the same request
+        - The `registerId` in the path must match the register bound to the register API key
 
         The response includes `fiscal.start_event` with the start-side signature and
         transaction counter. Store this — it must appear on the final receipt.
@@ -1407,6 +1412,9 @@ paths:
         - $ref: '#/components/parameters/registerId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
         - $ref: '#/components/parameters/IdempotencyKey'
+      security:
+        - BearerAuth: []
+        - RegisterApiKey: []
       requestBody:
         required: true
         content:
@@ -1433,6 +1441,9 @@ paths:
       parameters:
         - $ref: '#/components/parameters/operationId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
+      security:
+        - BearerAuth: []
+        - RegisterApiKey: []
       responses:
         '200':
           description: Sale retrieved
@@ -1458,6 +1469,9 @@ paths:
       parameters:
         - $ref: '#/components/parameters/operationId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
+      security:
+        - BearerAuth: []
+        - RegisterApiKey: []
       requestBody:
         required: true
         content:
@@ -1530,6 +1544,9 @@ paths:
         - $ref: '#/components/parameters/operationId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
         - $ref: '#/components/parameters/IdempotencyKey'
+      security:
+        - BearerAuth: []
+        - RegisterApiKey: []
       requestBody:
         required: true
         content:
@@ -1563,6 +1580,9 @@ paths:
       parameters:
         - $ref: '#/components/parameters/operationId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
+      security:
+        - BearerAuth: []
+        - RegisterApiKey: []
       requestBody:
         content:
           application/json:
@@ -1604,6 +1624,9 @@ paths:
         - $ref: '#/components/parameters/registerId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
         - $ref: '#/components/parameters/IdempotencyKey'
+      security:
+        - BearerAuth: []
+        - RegisterApiKey: []
       requestBody:
         required: true
         content:
@@ -1628,6 +1651,9 @@ paths:
       parameters:
         - $ref: '#/components/parameters/operationId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
+      security:
+        - BearerAuth: []
+        - RegisterApiKey: []
       responses:
         '200':
           description: Refund retrieved
@@ -1650,6 +1676,9 @@ paths:
       parameters:
         - $ref: '#/components/parameters/operationId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
+      security:
+        - BearerAuth: []
+        - RegisterApiKey: []
       requestBody:
         required: true
         content:
@@ -1679,6 +1708,9 @@ paths:
         - $ref: '#/components/parameters/operationId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
         - $ref: '#/components/parameters/IdempotencyKey'
+      security:
+        - BearerAuth: []
+        - RegisterApiKey: []
       requestBody:
         required: true
         content:
@@ -1707,6 +1739,9 @@ paths:
       parameters:
         - $ref: '#/components/parameters/operationId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
+      security:
+        - BearerAuth: []
+        - RegisterApiKey: []
       responses:
         '200':
           description: Refund cancelled
@@ -1740,6 +1775,9 @@ paths:
         - $ref: '#/components/parameters/registerId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
         - $ref: '#/components/parameters/IdempotencyKey'
+      security:
+        - BearerAuth: []
+        - RegisterApiKey: []
       requestBody:
         required: true
         content:
@@ -1768,6 +1806,9 @@ paths:
       parameters:
         - $ref: '#/components/parameters/operationId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
+      security:
+        - BearerAuth: []
+        - RegisterApiKey: []
       responses:
         '200':
           description: Exchange retrieved
@@ -1790,6 +1831,9 @@ paths:
       parameters:
         - $ref: '#/components/parameters/operationId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
+      security:
+        - BearerAuth: []
+        - RegisterApiKey: []
       requestBody:
         required: true
         content:
@@ -1821,6 +1865,9 @@ paths:
         - $ref: '#/components/parameters/operationId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
         - $ref: '#/components/parameters/IdempotencyKey'
+      security:
+        - BearerAuth: []
+        - RegisterApiKey: []
       requestBody:
         required: true
         content:
@@ -1851,6 +1898,9 @@ paths:
       parameters:
         - $ref: '#/components/parameters/operationId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
+      security:
+        - BearerAuth: []
+        - RegisterApiKey: []
       requestBody:
         content:
           application/json:
@@ -1886,6 +1936,9 @@ paths:
         - $ref: '#/components/parameters/registerId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
         - $ref: '#/components/parameters/IdempotencyKey'
+      security:
+        - BearerAuth: []
+        - RegisterApiKey: []
       requestBody:
         required: true
         content:
@@ -1914,6 +1967,9 @@ paths:
       parameters:
         - $ref: '#/components/parameters/operationId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
+      security:
+        - BearerAuth: []
+        - RegisterApiKey: []
       responses:
         '200':
           description: Deposit retrieved
@@ -1935,6 +1991,9 @@ paths:
         - $ref: '#/components/parameters/operationId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
         - $ref: '#/components/parameters/IdempotencyKey'
+      security:
+        - BearerAuth: []
+        - RegisterApiKey: []
       requestBody:
         required: true
         content:
@@ -1965,6 +2024,9 @@ paths:
       parameters:
         - $ref: '#/components/parameters/operationId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
+      security:
+        - BearerAuth: []
+        - RegisterApiKey: []
       requestBody:
         content:
           application/json:
@@ -2000,6 +2062,9 @@ paths:
         - $ref: '#/components/parameters/registerId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
         - $ref: '#/components/parameters/IdempotencyKey'
+      security:
+        - BearerAuth: []
+        - RegisterApiKey: []
       requestBody:
         required: true
         content:
@@ -2028,6 +2093,9 @@ paths:
       parameters:
         - $ref: '#/components/parameters/operationId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
+      security:
+        - BearerAuth: []
+        - RegisterApiKey: []
       responses:
         '200':
           description: Deposit capture retrieved
@@ -2049,6 +2117,9 @@ paths:
         - $ref: '#/components/parameters/operationId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
         - $ref: '#/components/parameters/IdempotencyKey'
+      security:
+        - BearerAuth: []
+        - RegisterApiKey: []
       requestBody:
         required: true
         content:
@@ -2079,6 +2150,9 @@ paths:
       parameters:
         - $ref: '#/components/parameters/operationId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
+      security:
+        - BearerAuth: []
+        - RegisterApiKey: []
       requestBody:
         content:
           application/json:
@@ -2115,6 +2189,9 @@ paths:
         - $ref: '#/components/parameters/registerId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
         - $ref: '#/components/parameters/IdempotencyKey'
+      security:
+        - BearerAuth: []
+        - RegisterApiKey: []
       requestBody:
         required: true
         content:
@@ -2143,6 +2220,9 @@ paths:
       parameters:
         - $ref: '#/components/parameters/operationId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
+      security:
+        - BearerAuth: []
+        - RegisterApiKey: []
       responses:
         '200':
           description: Training operation retrieved
@@ -2164,6 +2244,9 @@ paths:
         - $ref: '#/components/parameters/operationId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
         - $ref: '#/components/parameters/IdempotencyKey'
+      security:
+        - BearerAuth: []
+        - RegisterApiKey: []
       requestBody:
         content:
           application/json:
@@ -2191,6 +2274,9 @@ paths:
       parameters:
         - $ref: '#/components/parameters/operationId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
+      security:
+        - BearerAuth: []
+        - RegisterApiKey: []
       requestBody:
         content:
           application/json:
@@ -2233,6 +2319,9 @@ paths:
         - $ref: '#/components/parameters/registerId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
         - $ref: '#/components/parameters/IdempotencyKey'
+      security:
+        - BearerAuth: []
+        - RegisterApiKey: []
       requestBody:
         required: true
         content:
@@ -2257,6 +2346,9 @@ paths:
       parameters:
         - $ref: '#/components/parameters/operationId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
+      security:
+        - BearerAuth: []
+        - RegisterApiKey: []
       responses:
         '200':
           description: Void retrieved
@@ -2289,6 +2381,9 @@ paths:
         - $ref: '#/components/parameters/registerId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
         - $ref: '#/components/parameters/IdempotencyKey'
+      security:
+        - BearerAuth: []
+        - RegisterApiKey: []
       requestBody:
         required: true
         content:
@@ -2317,6 +2412,9 @@ paths:
       parameters:
         - $ref: '#/components/parameters/operationId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
+      security:
+        - BearerAuth: []
+        - RegisterApiKey: []
       responses:
         '200':
           description: Cash movement retrieved
@@ -2342,6 +2440,12 @@ paths:
         Triggers an end-of-day or shift closing. Closings are first-class fiscal
         events — not just summary reports.
 
+        Authentication rules:
+        - **Server-side:** `Authorization: Bearer ...` plus `OpenFiskal-Organization`
+        - **Device-direct:** `X-Register-Api-Key: ...` only
+        - Do not send both credential types on the same request
+        - The `registerId` in the path must match the register bound to the register API key
+
         - **Italy**: `chiusura giornaliera` — required daily, transmitted to RT
         - **Germany**: `Tagesabschluss` — required for DSFinV-K compliance
         - **Austria**: Required for RKSV monthly and annual reports
@@ -2352,6 +2456,9 @@ paths:
         - $ref: '#/components/parameters/registerId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
         - $ref: '#/components/parameters/IdempotencyKey'
+      security:
+        - BearerAuth: []
+        - RegisterApiKey: []
       requestBody:
         content:
           application/json:
@@ -3226,7 +3333,7 @@ components:
       description: |
         Platform API key sent as `Authorization: Bearer ofk_platform_...`.
         Platform integrators also pass `OpenFiskal-Organization: org_xxx`
-        to act on behalf of a merchant.
+        on merchant-scoped requests to act on behalf of a merchant.
     RegisterApiKey:
       type: apiKey
       in: header
@@ -3315,9 +3422,8 @@ components:
       required: false
       schema:
         type: string
-        format: uuid
       description: |
-        Unique key to make the request idempotent. If a request with this key
+        Client-generated opaque string used to make the request idempotent. If a request with this key
         was already processed, the original response is returned without
         re-executing the operation. Strongly recommended on all `start` and
         `complete` actions — these are fiscal events and must not be duplicated.
@@ -3325,11 +3431,14 @@ components:
     OpenFiskalOrganization:
       name: OpenFiskal-Organization
       in: header
-      required: true
+      required: false
       schema:
         type: string
       description: |
-        Merchant organization ID. Include this header on all requests.
+        Merchant organization ID. Include this header on merchant-scoped
+        platform requests. Omit it for platform-scoped endpoints such as
+        bootstrap, organization onboarding, and platform key management, and
+        for register-authenticated device-direct requests.
       example: org_01HXYZ
 
     Limit:
@@ -5226,9 +5335,7 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/CashDrawerOpening'
-        has_more:
-          type: boolean
-        next_cursor:
+        cursor:
           type: [string, "null"]
 
     # ── Register ──────────────────────────────────
@@ -5317,9 +5424,7 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Register'
-        has_more:
-          type: boolean
-        next_cursor:
+        cursor:
           type: [string, "null"]
 
     TseFiscalRegistration:
