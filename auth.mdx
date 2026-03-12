@@ -81,14 +81,6 @@ To rotate a platform API key without downtime:
 
 Revocation is instant — any request using the old key will return `401` immediately.
 
-```bash
-curl -X POST https://api.openfiskal.com/v1/auth/api-keys/key_01HXYZ/rotate \
-  -H "Authorization: Bearer ofk_platform_live_abc123..." \
-  -H "OpenFiskal-Organization: org_01HXYZ"
-```
-
-The rotation endpoint atomically issues a new key and revokes the old one in a single call. Use the create-then-revoke pattern above if you need overlap.
-
 ## Organization scoping
 
 A platform API key can act on behalf of any merchant organization under your platform account. Include the `OpenFiskal-Organization` header to scope each request:
@@ -144,10 +136,10 @@ It cannot access other registers, list organizations, manage credentials, or per
 
 ### Issuing a register API key
 
-Pass `issue_register_credential: true` when creating a fiscal unit:
+Pass `issue_register_credential: true` when activating a fiscal unit:
 
 ```bash
-curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/fiscal-units \
+curl -X POST https://api.openfiskal.com/v1/fiscal-units/fu_01HXYZ/activate \
   -H "Authorization: Bearer ofk_platform_live_abc123..." \
   -H "OpenFiskal-Organization: org_01HXYZ" \
   -H "Content-Type: application/json" \

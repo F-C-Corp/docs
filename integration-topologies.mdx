@@ -66,7 +66,7 @@ flowchart LR
 
 **How it works:**
 
-1. During provisioning, your backend creates the register and fiscal unit with `issue_register_credential: true`. This returns a one-time register API key.
+1. During provisioning, your backend creates the register, creates a fiscal unit, and activates it with `issue_register_credential: true`. This returns a one-time register API key.
 2. You securely push the API key to the device (over a provisioning channel, device management platform, or at manufacturing time).
 3. The device includes the key in the `X-Register-Api-Key` header for all API calls.
 
@@ -117,7 +117,7 @@ This is common for EV charging networks: a fleet management platform provisions 
 
 ## Provisioning device-direct registers
 
-For device-direct integrations, provisioning involves three steps — all done from your backend using platform API keys:
+For device-direct integrations, provisioning involves four steps — all done from your backend using platform API keys:
 
 <Steps>
   <Step title="Create the register">
@@ -133,11 +133,27 @@ For device-direct integrations, provisioning involves three steps — all done f
       }'
     ```
   </Step>
-  <Step title="Create a fiscal unit with a register API key">
+  <Step title="Create a fiscal unit">
+    ```bash
+    curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/fiscal-units \
+      -H "Authorization: Bearer $API_KEY" \
+      -H "OpenFiskal-Organization: org_01HXYZ"
+    ```
+
+    ```json
+    {
+      "object": "fiscal_unit_response",
+      "fiscal_unit": { "id": "fu_01HXYZ", "state": "created" },
+      "register_api_key": null,
+      "credential_issued": false
+    }
+    ```
+  </Step>
+  <Step title="Activate with a register API key">
     Pass `issue_register_credential: true` to receive a device-scoped API key.
 
     ```bash
-    curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/fiscal-units \
+    curl -X POST https://api.openfiskal.com/v1/fiscal-units/fu_01HXYZ/activate \
       -H "Authorization: Bearer $API_KEY" \
       -H "OpenFiskal-Organization: org_01HXYZ" \
       -H "Content-Type: application/json" \

@@ -203,13 +203,14 @@ tags:
       ### Lifecycle
 
       ```
-      provisioning ──► active ──► decommissioned
-                         │
-                       error ──► active (recover)
-                         │
-                       decommissioned
+      created ──► provisioning ──► active ──► decommissioned
+                                      │
+                                    error ──► active (recover)
+                                      │
+                                    decommissioned
       ```
 
+      - **created**: Record exists, device not provisioned, no billing
       - **provisioning**: Fiscal device is being initialized (TSE, RT, RKSV)
       - **active**: Ready to sign operations
       - **error**: Fiscal device failure (recoverable)
@@ -681,9 +682,12 @@ paths:
       operationId: createRegister
       summary: Create a register
       description: |
-        Creates a register in `active` state with no fiscal unit. The register
-        is a POS device — it becomes fiscally operational once a fiscal unit
-        is provisioned via `POST /registers/:id/fiscal-units`.
+        Creates a register as a first-class resource in `active` state with no
+        fiscal unit. The register carries `location_id` as an attribute rather
+        than being nested under a location-specific creation endpoint.
+
+        The register becomes fiscally operational once a fiscal unit is
+        provisioned via `POST /registers/:id/fiscal-units`.
 
         The platform maintains the authoritative list of all open operations per register.
         If a register crashes and reconnects, it reconciles against this state.
@@ -714,6 +718,8 @@ paths:
       operationId: listRegisters
       summary: List registers
       parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/locationIdQuery'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
       responses:
@@ -842,7 +848,7 @@ paths:
         the new key to the device before the next operation attempt.
 
         A register credential must have been previously issued via
-        `POST /registers/:id/activate` with `issue_register_credential: true`.
+        `POST /fiscal-units/:id/activate` with `issue_register_credential: true`.
       parameters:
         - $ref: '#/components/parameters/registerId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
@@ -913,24 +919,12 @@ paths:
       operationId: createFiscalUnit
       summary: Create a fiscal unit
       description: |
-        Provisions a new fiscal unit for the register, triggering
-        jurisdiction-specific fiscal device initialization:
-        - **Germany**: Initializes the TSE, establishes the signature chain
-        - **Italy**: Activates the RT device with the Agenzia delle Entrate
-        - **Austria**: Establishes the RKSV signature chain, registers AES key
+        Creates a new fiscal unit for the register in `created` state. No
+        fiscal device provisioning occurs and no billing begins until the
+        unit is explicitly activated via `POST /fiscal-units/:id/activate`.
 
-        The register must not already have an active fiscal unit. To replace
-        an existing binding, use `POST /registers/:id/fiscal-units/replace`.
-
-        The binding starts in `provisioning` state and transitions to `active`
-        once the fiscal device is initialized.
-
-        ### Register Credentials (Optional)
-
-        Pass `issue_register_credential: true` to receive a register-scoped API
-        key in the response. Use this for device-direct integrations (EV chargers,
-        unattended kiosks). The key is returned **once only** — store it immediately
-        and push to the device over a secure provisioning channel.
+        The register must not already have an active or pending fiscal unit.
+        To replace an existing binding, use `POST /registers/:id/fiscal-units/replace`.
       parameters:
         - $ref: '#/components/parameters/registerId'
         - $ref: '#/components/parameters/OpenFiskalOrganization'
@@ -953,7 +947,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
-          description: Register already has an active fiscal unit
+          description: Register already has an active or pending fiscal unit
           content:
             application/json:
               schema:
@@ -992,6 +986,8 @@ paths:
 
         The old binding transitions to `decommissioned` (with `replaced_by` set),
         and the new binding is created with `replaces` referencing the old one.
+        The replacement is automatic — the new unit skips the `created` state
+        and goes directly to `provisioning` → `active`.
 
         The register must have an active fiscal unit. All open operations must
         be completed or cancelled first.
@@ -1045,6 +1041,57 @@ paths:
                 $ref: '#/components/schemas/FiscalUnit'
         '404':
           $ref: '#/components/responses/NotFound'
+
+  /fiscal-units/{fiscalUnitId}/activate:
+    post:
+      tags: [Fiscal Units]
+      operationId: activateFiscalUnit
+      summary: Activate a fiscal unit
+      description: |
+        Triggers provisioning of the fiscal device and starts billing.
+        The fiscal unit must be in `created` state.
+
+        The unit transitions from `created` → `provisioning` → `active`
+        once the jurisdiction-specific fiscal device is initialized:
+        - **Germany**: Initializes the TSE, establishes the signature chain
+        - **Italy**: Activates the RT device with the Agenzia delle Entrate
+        - **Austria**: Establishes the RKSV signature chain, registers AES key
+
+        ### Register Credentials (Optional)
+
+        Pass `issue_register_credential: true` to receive a register-scoped API
+        key in the response. Use this for device-direct integrations (EV chargers,
+        unattended kiosks). The key is returned **once only** — store it immediately
+        and push to the device over a secure provisioning channel.
+      parameters:
+        - name: fiscalUnitId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/OpenFiskalOrganization'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FiscalUnitActivate'
+      responses:
+        '200':
+          description: Fiscal unit activated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FiscalUnitResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Fiscal unit is not in `created` state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /fiscal-units/{fiscalUnitId}/recover:
     post:
@@ -5195,6 +5242,7 @@ components:
           example: Kasse 1
         location_id:
           type: string
+          description: ID of the location this register is assigned to.
           example: loc_01HXYZ
         jurisdiction:
           type: string
@@ -5216,8 +5264,6 @@ components:
             object:
               type: string
               const: register
-            location_id:
-              type: string
             state:
               type: string
               enum: [active, archived]
@@ -5271,6 +5317,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Register'
+        has_more:
+          type: boolean
+        next_cursor:
+          type: [string, "null"]
 
     TseFiscalRegistration:
       type: object
@@ -5406,8 +5456,9 @@ components:
           example: reg_01HXYZ
         state:
           type: string
-          enum: [provisioning, active, error, decommissioned]
+          enum: [created, provisioning, active, error, decommissioned]
           description: |
+            - `created`: Record exists but the fiscal device has not been provisioned. No billing. Activate to begin provisioning.
             - `provisioning`: Fiscal device is being initialized
             - `active`: Ready to sign operations — the only state that accepts fiscal events
             - `error`: Fiscal device failure (recoverable via `/recover`)
@@ -5417,8 +5468,9 @@ components:
           enum: [IT, DE, AT]
         fiscal_registration:
           description: |
-            Jurisdiction-specific registration details. `null` while in `provisioning`
-            state, populated once the fiscal device is initialized. Discriminated by `regime`.
+            Jurisdiction-specific registration details. `null` while in `created` or
+            `provisioning` state, populated once the fiscal device is initialized.
+            Discriminated by `regime`.
           oneOf:
             - $ref: '#/components/schemas/TseFiscalRegistration'
             - $ref: '#/components/schemas/RksvFiscalRegistration'
@@ -5469,6 +5521,16 @@ components:
 
     FiscalUnitCreate:
       type: object
+      description: |
+        Request body for creating a fiscal unit. The unit is created in
+        `created` state — no provisioning or billing occurs until it is
+        activated via `POST /fiscal-units/:id/activate`.
+
+    FiscalUnitActivate:
+      type: object
+      description: |
+        Request body for activating a fiscal unit. Triggers provisioning
+        of the jurisdiction-specific fiscal device and starts billing.
       properties:
         issue_register_credential:
           type: boolean
@@ -5480,9 +5542,11 @@ components:
     FiscalUnitResponse:
       type: object
       description: |
-        Response to fiscal unit creation. Always includes the full binding
-        object. `register_api_key` is only present if `issue_register_credential: true`
-        was requested.
+        Response to fiscal unit creation or activation. Always includes the
+        full binding object. On creation the fiscal unit is in `created` state.
+        On activation, the fiscal unit transitions to `provisioning` then `active`.
+        `register_api_key` is only present if `issue_register_credential: true`
+        was requested during activation.
       properties:
         object:
           type: string

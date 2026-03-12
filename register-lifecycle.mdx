@@ -7,7 +7,7 @@ description: 'How registers and fiscal units are commissioned, monitored, and de
 
 A **register** is a POS device in OpenFiskal — a terminal, kiosk, or logical endpoint that processes operations. A **fiscal unit** is the link between that register and a fiscal compliance capability (TSE in Germany, RKSV certificate in Austria, RT device in Italy).
 
-Creating a register is cheap — it's just metadata. Provisioning a fiscal unit is what initializes the expensive fiscal device. This separation lets you:
+Creating a register is cheap — it's just metadata. Creating a fiscal unit is also lightweight — activating it is what provisions the fiscal device and starts billing. This separation lets you:
 
 - Manage the fiscal device independently from the POS device
 - Replace a fiscal device without creating a new register
@@ -31,13 +31,14 @@ A register starts in `active` state with no fiscal unit (`active_fiscal_unit: nu
 A fiscal unit tracks the provisioning, operation, and retirement of a single fiscal device instance:
 
 ```
-provisioning ──► active ──► decommissioned
-                   │
-                 error ──► active (recover)
-                   │
-                 decommissioned
+created ──► provisioning ──► active ──► decommissioned
+                                │
+                              error ──► active (recover)
+                                │
+                              decommissioned
 ```
 
+- **created**: The fiscal unit record exists but the fiscal device has not been provisioned. No billing occurs. Activate via `POST /fiscal-units/:id/activate` to begin provisioning.
 - **provisioning**: The fiscal device is being initialized (TSE setup, RT activation, RKSV key registration). Automatic — transitions to `active` on success.
 - **active**: The fiscal device is initialized and ready to sign operations. This is the only state that accepts sales, refunds, closings, and other fiscal events.
 - **error**: The fiscal device encountered a failure (e.g. TSE hardware fault, RT communication error). Recoverable via `POST /fiscal-units/:id/recover`.
@@ -47,7 +48,7 @@ provisioning ──► active ──► decommissioned
 
 <Steps>
   <Step title="Create the register">
-    A register belongs to a location. Provide a label and the jurisdiction it operates in.
+    A register is a first-class resource. Set `location_id` to associate it with a location.
 
     ```bash
     curl -X POST https://api.openfiskal.com/v1/registers \
@@ -78,14 +79,53 @@ provisioning ──► active ──► decommissioned
   </Step>
 
   <Step title="Create a fiscal unit">
-    Provisioning a fiscal unit initializes the jurisdiction-specific fiscal device:
+    Creating a fiscal unit is lightweight — it creates a record in `created` state without provisioning any fiscal device or incurring costs.
+
+    ```bash
+    curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/fiscal-units \
+      -H "Authorization: Bearer $API_KEY" \
+      -H "OpenFiskal-Organization: org_01HXYZ"
+    ```
+
+    ```json
+    {
+      "object": "fiscal_unit_response",
+      "fiscal_unit": {
+        "id": "fu_01HXYZ",
+        "object": "fiscal_unit",
+        "register_id": "reg_01HXYZ",
+        "state": "created",
+        "jurisdiction": "DE",
+        "fiscal_registration": null,
+        "replaces": null,
+        "replaced_by": null,
+        "provisioned_at": null,
+        "decommissioned_at": null,
+        "created_at": "2026-02-26T10:00:00Z"
+      },
+      "register": {
+        "id": "reg_01HXYZ",
+        "object": "register",
+        "state": "active",
+        "active_fiscal_unit": null
+      },
+      "register_api_key": null,
+      "credential_issued": false
+    }
+    ```
+
+    The fiscal unit exists but is not yet provisioned — the register still cannot process operations.
+  </Step>
+
+  <Step title="Activate the fiscal unit">
+    Activating triggers jurisdiction-specific fiscal device initialization and starts billing:
 
     - **Germany**: Initializes the TSE, establishes the signature chain
     - **Italy**: Activates the RT device with the Agenzia delle Entrate
     - **Austria**: Establishes the RKSV signature chain, registers the AES key with FinanzOnline
 
     ```bash
-    curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/fiscal-units \
+    curl -X POST https://api.openfiskal.com/v1/fiscal-units/fu_01HXYZ/activate \
       -H "Authorization: Bearer $API_KEY" \
       -H "OpenFiskal-Organization: org_01HXYZ"
     ```
@@ -325,7 +365,7 @@ The previous key is revoked immediately. The new key is returned in the response
 
 ## Backward compatibility
 
-The `POST /registers/:id/activate` endpoint is deprecated but continues to work. Under the hood, it creates a fiscal unit. The register response includes deprecated `fiscal_state` and `fiscal_registration` fields derived from the active fiscal unit.
+The `POST /registers/:id/activate` endpoint is deprecated but continues to work. Under the hood, it creates and auto-activates a fiscal unit, skipping the `created` state. The register response includes deprecated `fiscal_state` and `fiscal_registration` fields derived from the active fiscal unit.
 
 New integrations should use the fiscal units API directly.
 

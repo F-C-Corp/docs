@@ -149,10 +149,44 @@ This guide walks you through a complete integration — from receiving your setu
     The register is `active` but has no fiscal unit yet — it cannot process operations until one is provisioned.
   </Step>
   <Step title="Create a fiscal unit">
-    A fiscal unit initializes the fiscal security device. For Germany, this sets up the TSE and establishes the signature chain.
+    Creating a fiscal unit is lightweight — it creates a record without provisioning the fiscal device or starting billing.
 
     ```bash
     curl -X POST https://sandbox.api.openfiskal.com/v1/registers/reg_01HXYZ/fiscal-units \
+      -H "Authorization: Bearer ofk_platform_live_abc123..." \
+      -H "OpenFiskal-Organization: org_01HXYZ"
+    ```
+
+    ```json
+    {
+      "object": "fiscal_unit_response",
+      "fiscal_unit": {
+        "id": "fu_01HXYZ",
+        "object": "fiscal_unit",
+        "register_id": "reg_01HXYZ",
+        "state": "created",
+        "jurisdiction": "DE",
+        "fiscal_registration": null,
+        "provisioned_at": null,
+        "created_at": "2026-02-26T10:03:30Z"
+      },
+      "register": {
+        "id": "reg_01HXYZ",
+        "state": "active",
+        "active_fiscal_unit": null
+      },
+      "register_api_key": null,
+      "credential_issued": false
+    }
+    ```
+
+    The fiscal unit exists in `created` state — the register cannot process operations yet.
+  </Step>
+  <Step title="Activate the fiscal unit">
+    Activating provisions the fiscal security device and starts billing. For Germany, this sets up the TSE and establishes the signature chain.
+
+    ```bash
+    curl -X POST https://sandbox.api.openfiskal.com/v1/fiscal-units/fu_01HXYZ/activate \
       -H "Authorization: Bearer ofk_platform_live_abc123..." \
       -H "OpenFiskal-Organization: org_01HXYZ"
     ```
