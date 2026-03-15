@@ -1,290 +1,77 @@
 ---
-title: 'Authentication'
-description: 'Credential types, API key usage, and how to scope requests to merchant organizations'
+title: "Authentication"
+description: "How authentication and organization scoping work in the OpenFiskal API"
 ---
 
-## Security model
+## API key creation
 
-Fiscalization data is legally sensitive — signatures, transaction counters, and audit trails that tax authorities rely on. The authentication model is designed around four principles:
-
-1. **TLS required.** All API traffic must use HTTPS (TLS 1.2 or higher). Plain HTTP connections are rejected. Credentials and fiscal data are never transmitted in cleartext.
-2. **Static keys over TLS.** Platform API keys are long-lived and sent directly in the `Authorization` header. With TLS enforced on every request, static keys provide the same wire-level protection as short-lived tokens — without the complexity of token exchange, caching, and expiry handling.
-3. **Scoped credentials for devices.** Register API keys are locked to a single register. A compromised device cannot access other registers, other merchants, or administrative endpoints.
-4. **Secrets shown once.** API keys are returned exactly once at creation time. There is no "retrieve key" endpoint — reducing the window for interception.
-5. **Safe error responses.** Authentication failures return identical error structures regardless of whether the credential exists or is simply wrong — preventing credential enumeration.
-
-## Credential types
-
-| Credential | Format | Lifetime | Scope | Use case |
-|---|---|---|---|---|
-| **Platform API key** | `ofk_platform_...` | Long-lived (until rotated/revoked) | All organizations, all registers | Server-side integration |
-| **Register API key** | `ofk_reg_...` | Long-lived (until rotated) | Single register only | Device-direct integration |
-| **Merchant credentials** | Login-based | Session-scoped | Single organization, read-mostly | Merchant portal (coming soon) |
-
-## Credential bootstrapping
-
-Before you can authenticate, you need your first credential. This happens once, out-of-band.
-
-After signing a partnership agreement, OpenFiskal emails a one-time setup token (`ofk_setup_...`) to your technical contact. Exchange it for your first platform API key:
-
-```bash
-curl -X POST https://api.openfiskal.com/v1/auth/bootstrap \
-  -H "Content-Type: application/json" \
-  -d '{
-    "setup_token": "ofk_setup_abc123def456",
-    "label": "Production"
-  }'
-```
-
-```json
-{
-  "object": "platform_api_key",
-  "id": "key_01HXYZ",
-  "api_key": "ofk_platform_live_abc123...",
-  "label": "Production",
-  "created_at": "2026-02-26T10:00:00Z"
-}
-```
+Create API keys in the tenant dashboard. Each key is tenant-scoped and country-scoped.
 
 <Warning>
-  Store `api_key` immediately in a secrets manager. It is returned **once** and cannot be retrieved again. The setup token is consumed on use — it cannot be reused.
+  Store the key in your secrets manager. Treat it like any other production secret.
 </Warning>
 
-**Why this is secure:** The setup token is delivered out-of-band (email to a known contact), is single-use, and expires after 48 hours. The bootstrap endpoint is the only unauthenticated credential endpoint. After bootstrap, all credential management requires an existing API key — preventing unauthorized credential creation. If a setup token is not consumed within the expiry window, contact OpenFiskal to issue a replacement.
+## Use the standard authorization header
 
-## Platform API keys
-
-Platform API keys authenticate server-side integrations. The key goes directly in the `Authorization: Bearer` header on every request — no token exchange needed.
-
-### Using a platform API key
+Although the credential is an API key, the API uses the standard HTTP bearer pattern:
 
 ```bash
-curl https://api.openfiskal.com/v1/registers \
-  -H "Authorization: Bearer ofk_platform_live_abc123..." \
-  -H "OpenFiskal-Organization: org_01HXYZ"
+-H "Authorization: Bearer ofk_live_abc123..."
 ```
 
-That's it. No token endpoint, no expiry handling, no refresh logic.
-
-<Warning>
-  A platform API key has access to **all organizations and registers** under your platform account. Protect it accordingly: store it in a secrets manager, never expose it to client-side code, device firmware, or version control. If the key is compromised, revoke it immediately and create a replacement.
-</Warning>
-
-### Key rotation
-
-To rotate a platform API key without downtime:
-
-1. Create a new key via `POST /auth/api-keys`.
-2. Deploy the new key to your servers.
-3. Revoke the old key via `DELETE /auth/api-keys/{id}`.
-
-Revocation is instant — any request using the old key will return `401` immediately.
+This is preferable to a custom auth header because it works better with standard API tooling, gateways, SDKs, proxies, and security middleware.
 
 ## Organization scoping
 
-A platform API key can act on behalf of any merchant organization under your platform account. Include the `OpenFiskal-Organization` header on merchant-scoped requests:
+For every organization-scoped request, also send:
 
 ```bash
-curl https://api.openfiskal.com/v1/registers \
-  -H "Authorization: Bearer ofk_platform_live_abc123..." \
-  -H "OpenFiskal-Organization: org_01HXYZ"
+-H "X-OpenFiskal-Organization: org_01HXYZ"
 ```
 
-There is no need to obtain a separate key per organization. The same key works across all merchants.
-
-Platform-scoped endpoints such as `POST /auth/bootstrap`, `GET /organizations`, `POST /organizations`, and the API key management endpoints (`GET /auth/api-keys`, `POST /auth/api-keys`, and `DELETE /auth/api-keys/{keyId}`) do not require this header.
-
-**Why explicit scoping:** Requiring the organization header on merchant-scoped platform requests prevents accidental cross-tenant operations. Unlike implicit scoping (where a credential is silently bound to one tenant), explicit scoping makes the target organization visible in every request — easier to audit, harder to misroute.
-
-## Which credential and header should you send?
-
-| Request type | `Authorization` | `X-Register-Api-Key` | `OpenFiskal-Organization` | Typical endpoints |
-|---|---|---|---|---|
-| Bootstrap your first platform key | No | No | No | `POST /auth/bootstrap` |
-| Platform-scoped administration | Yes, platform key | No | No | `GET /organizations`, `POST /organizations`, `POST /auth/api-keys` |
-| Merchant-scoped platform request | Yes, platform key | No | Yes | `POST /registers`, `POST /registers/:id/sales`, `GET /operations/:id/receipt` |
-| Device-direct register request | No | Yes, register key | No | `POST /registers/:id/sales`, `POST /sales/:id/complete`, `POST /registers/:id/closings`, `POST /registers/:id/heartbeat` |
-
-<Tip>
-  Treat `OpenFiskal-Organization` as a tenant selector for platform credentials only. Register credentials already carry tenant and register scope inside the key itself.
-</Tip>
-
-## API key management
-
-Platform API keys can be created, listed, and revoked:
-
-| Endpoint | Purpose |
-|---|---|
-| `POST /auth/api-keys` | Issue a new platform API key |
-| `GET /auth/api-keys` | List all active keys (key values are masked) |
-| `DELETE /auth/api-keys/{id}` | Permanently revoke a key |
-
-<Tip>
-  Issue separate keys per environment (production, staging). Rotate periodically — always create the replacement before revoking the old one, so there is no gap in access.
-</Tip>
-
-## Register API keys
-
-Register API keys are long-lived, device-scoped credentials for hardware that calls the API directly — without routing through a backend server.
-
-### When to use register API keys
-
-Use register API keys only for **device-direct integrations** where the hardware cannot route through a backend:
-
-- EV chargers
-- Unattended kiosks and vending machines
-- Embedded POS terminals without server connectivity
-
-Server-side integrations should use platform API keys exclusively. The platform API key already authorizes all register operations — there is no reason to distribute device-level keys if your backend is making the calls.
-
-### What a register API key can do
-
-A register API key is scoped to a single register and authorizes only register-level operations:
-
-- **Heartbeats** — `POST /registers/:id/heartbeat`
-- **Sales, refunds, and other operations** — start, mutate, complete, cancel
-- **Cash drawer openings** — `POST /registers/:id/cash-drawer-openings`
-- **Daily closings** — `POST /registers/:id/closings`
-
-It cannot access other registers, list organizations, manage credentials, or perform any administrative action. If a device is compromised, the blast radius is limited to that single register.
-
-### Issuing a register API key
-
-Pass `issue_register_credential: true` when activating a fiscal unit:
+Together, a typical organization-scoped request looks like this:
 
 ```bash
-curl -X POST https://api.openfiskal.com/v1/fiscal-units/fu_01HXYZ/activate \
-  -H "Authorization: Bearer ofk_platform_live_abc123..." \
-  -H "OpenFiskal-Organization: org_01HXYZ" \
-  -H "Content-Type: application/json" \
-  -d '{ "issue_register_credential": true }'
+curl https://api.openfiskal.com/v1/operations \
+  -H "Authorization: Bearer ofk_live_abc123..." \
+  -H "X-OpenFiskal-Organization: org_01HXYZ"
 ```
 
-```json
-{
-  "object": "fiscal_unit_response",
-  "fiscal_unit": { "id": "fu_01HXYZ", "state": "active" },
-  "register_api_key": "ofk_reg_live_...",
-  "credential_issued": true
-}
-```
+Organization-scoped resources include:
 
-<Warning>
-  The API key is returned **once**. Store it immediately and deliver it to the device over a secure channel (MDM, provisioning API, factory burn). It cannot be retrieved again.
-</Warning>
+- Locations
+- Registers
+- Register fiscalizations
+- Operations
+- Exports
 
-Register API keys do not expire automatically — they remain valid until explicitly rotated or the register is archived. For devices deployed in physically accessible locations (EV chargers, outdoor kiosks), implement a periodic rotation schedule and store the key in encrypted storage or a secure enclave where the hardware supports it.
+You do not need `X-OpenFiskal-Organization` when you create, update, or delete the organization itself.
 
-### Using a register API key
+## Why this design
 
-The device includes the key in the `X-Register-Api-Key` header:
-
-```bash
-curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/sales \
-  -H "X-Register-Api-Key: ofk_reg_live_..." \
-  -H "Idempotency-Key: sale-charger42-20260226-001" \
-  -H "Content-Type: application/json" \
-  -d '{ "...": "..." }'
-```
-
-No `OpenFiskal-Organization` header is required here. The register API key is already scoped to a single register and merchant organization.
-
-### Validation and failure cases
-
-Use these rules when constructing requests:
-
-- A platform key on a merchant-scoped endpoint without `OpenFiskal-Organization` is rejected because the target merchant is ambiguous.
-- A register-authenticated request must not send `OpenFiskal-Organization`. Register keys are already tenant-scoped.
-- A request must not send both `Authorization` and `X-Register-Api-Key`. Choose one authentication mode.
-- A register API key may only be used with the register it was issued for. If the `registerId` in the path does not match the key's bound register, the request is rejected.
-
-In practice, you should expect:
-
-- `400 Bad Request` for invalid credential combinations or invalid scoping headers.
-- `401 Unauthorized` for missing, expired, revoked, or mismatched credentials.
-
-### Key rotation
-
-If a device is compromised, lost, or replaced, rotate the key immediately from your backend:
-
-```bash
-curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/credentials/rotate \
-  -H "Authorization: Bearer ofk_platform_live_abc123..." \
-  -H "OpenFiskal-Organization: org_01HXYZ"
-```
-
-The old key is revoked **instantly** — any request using it will return `401`. Push the new key to the replacement device before it attempts any API calls.
-
-<Info>
-  Key rotation requires a platform API key, not the register API key itself. A compromised device cannot rotate its own key to lock out the legitimate owner.
-</Info>
-
-## Merchant credentials
-
-<Info>
-  Merchant credentials are coming soon. This section describes the planned model.
-</Info>
-
-Merchant credentials are login-based credentials for the OpenFiskal merchant portal. They are scoped to a single organization and provide read-mostly access — merchants can view receipts, monitor registers, and access reports, but cannot modify fiscal configuration or manage platform-level resources.
-
-### Three-tier permission model
-
-| Tier | Credential | Scope | Typical actions |
-|---|---|---|---|
-| **Platform** | Platform API key | All organizations | Create orgs, provision registers, process operations, manage keys |
-| **Merchant** | Portal login | Single organization | View receipts, monitor register health, access reports |
-| **Device** | Register API key | Single register | Process operations, send heartbeats |
-
-Platform credentials are for POS vendors building integrations. Merchant credentials are for the merchants themselves. Device credentials are for autonomous hardware.
+- Authentication uses a standard header instead of a custom one.
+- Merchant context stays explicit on every scoped request.
+- The same API key can operate across multiple organizations inside the same tenant and country scope.
 
 ## Idempotency
 
-All mutating endpoints accept an `Idempotency-Key` header. Including one is **strongly recommended** for `start` and `complete` actions — retrying a fiscalization event without an idempotency key risks creating duplicate fiscal records.
+For mutating requests, especially operation start and operation completion, send an `Idempotency-Key` header so retries remain safe:
 
 ```bash
-curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/sales \
-  -H "Authorization: Bearer ofk_platform_live_abc123..." \
-  -H "OpenFiskal-Organization: org_01HXYZ" \
-  -H "Idempotency-Key: sale_abc123_start" \
+curl -X POST https://api.openfiskal.com/v1/operations \
+  -H "Authorization: Bearer ofk_live_abc123..." \
+  -H "X-OpenFiskal-Organization: org_01HXYZ" \
+  -H "Idempotency-Key: op-order-1001-start" \
   -H "Content-Type: application/json" \
   -d '{ "...": "..." }'
 ```
 
-If a request with the same idempotency key has already been processed, the original response is returned without creating a new fiscal event. This makes retries safe — critical for [offline replay](/offline-guidance) where the same queue entry may be sent multiple times.
+## Recommended handling
 
-Idempotency keys are retained for 7 days. Requests replayed within this window are guaranteed to be deduplicated. For offline scenarios exceeding 7 days, generate a new idempotency key before retrying — the operation ID (client-generated UUID) still prevents duplicate fiscal records.
+- Reject organization-scoped requests that are missing either `Authorization` or `X-OpenFiskal-Organization`.
+- Return `401` when authentication is missing or invalid.
+- Return `403` when the API key is valid but not allowed to access the requested tenant, country, or organization.
 
-## Rate limiting
+## Next step
 
-All endpoints are rate-limited. Authentication endpoints (`/auth/bootstrap`) enforce stricter limits to prevent brute-force attacks on credentials. Repeated failed authentication attempts from the same source trigger progressive backoff.
-
-When a rate limit is exceeded, the API returns `429 Too Many Requests` with a `Retry-After` header indicating when the next request will be accepted.
-
-## Audit trail
-
-OpenFiskal logs all authentication events:
-
-- API key usage (first use, last use per key)
-- Failed authentication attempts (platform API key and register API key)
-- Key creation and revocation
-- Register API key rotation
-
-These events are available through the platform audit log. Failed authentication attempts are surfaced in monitoring — a spike in failures for a specific key or register may indicate a compromise attempt.
-
-## Topology reference
-
-For guidance on choosing between server-side and device-direct integration architectures, see [Integration Topologies](/integration-topologies).
-
-## Next steps
-
-<CardGroup cols={2}>
-  <Card title="Integration Topologies" icon="sitemap" href="/integration-topologies">
-    Server-side vs device-direct — choosing the right architecture.
-  </Card>
-  <Card title="Getting Started" icon="rocket" href="/getting-started">
-    End-to-end walkthrough from setup token to first sale.
-  </Card>
-  <Card title="POS Operations" icon="cash-register" href="/pos-operation-ingestion">
-    The operation lifecycle — start, mutate, complete, cancel.
-  </Card>
-</CardGroup>
+Continue with [Getting Started](/getting-started) for the full onboarding and operation flow.
