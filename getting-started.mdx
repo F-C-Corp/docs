@@ -137,7 +137,7 @@ You only omit `X-OpenFiskal-Organization` when you create, update, or delete the
     Fiscalization is modeled as a register sub-resource so the target register is explicit.
 
     ```bash
-    curl -X POST https://sandbox.api.openfiskal.com/v1/registers/reg_01HXYZ/fiscalizations \
+    curl -X POST https://sandbox.api.openfiskal.com/v1/registers/reg_01HXYZ/fiscalize \
       -H "Authorization: Bearer ofk_live_abc123..." \
       -H "X-OpenFiskal-Organization: org_01HXYZ"
     ```
@@ -326,41 +326,3 @@ You only omit `X-OpenFiskal-Organization` when you create, update, or delete the
     ```
   </Step>
 </Steps>
-
-## Final endpoint set
-
-The documentation is now centered on this API surface:
-
-- `POST /organizations`
-- `PATCH /organizations/:id`
-- `DELETE /organizations/:id`
-- `POST /locations`
-- `GET /locations`
-- `GET /locations/:id`
-- `PATCH /locations/:id`
-- `DELETE /locations/:id`
-- `POST /registers`
-- `GET /registers`
-- `GET /registers/:id`
-- `PATCH /registers/:id`
-- `DELETE /registers/:id`
-- `POST /registers/:id/fiscalizations`
-- `POST /operations`
-- `GET /operations`
-- `GET /operations/:id`
-- `PATCH /operations/:id`
-- `PATCH /operations/:id/completion`
-- `POST /exports`
-- `GET /exports/:id`
-- `GET /exports/:id/download`
-
-## Why this shape is better
-
-- Auth uses the standard `Authorization` header instead of a custom API key header.
-- Fiscalization targets a concrete register resource.
-- Completion is modeled as an operation sub-resource instead of a verb endpoint.
-- Export status and export download are separate, which is easier for asynchronous clients.
-- `country_code` is explicit and documented as ISO 3166-1 alpha-3.
-- Registers also carry `country_code`, which supports mixed-country fleets in one tenant.
-- `op_revision` gives you optimistic concurrency control similar to fiskaly's `tx_revision`.
-- `fiscal_information` uses a country-discriminated envelope with `country_code`, `regime`, and country-specific `data`.
