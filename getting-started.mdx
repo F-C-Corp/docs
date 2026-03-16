@@ -1,9 +1,9 @@
 ---
-title: "Getting Started"
+title: "Getting started"
 description: "Create your API key, onboard a merchant, and complete your first operation"
 ---
 
-This guide walks you through the smallest useful OpenFiskal integration. You create an API key in the tenant dashboard, onboard a merchant, create its location and register, trigger fiscalization for that register, and then process operations.
+This guide walks you through the smallest useful OpenFiskal integration. You create an API key in the tenant dashboard, onboard a merchant, create its location and register, and then process operations from your backend.
 
 <Info>
   All examples use `https://sandbox.api.openfiskal.com/v1`. Replace with `https://api.openfiskal.com/v1` when you go live.
@@ -14,6 +14,7 @@ This guide walks you through the smallest useful OpenFiskal integration. You cre
 - An OpenFiskal tenant
 - A tenant-scoped, country-scoped API key created in your tenant dashboard
 - `curl` or an HTTP client
+- A backend service that holds the API key securely
 
 ## Authentication model
 
@@ -30,8 +31,6 @@ Every organization-scoped request must also include:
 ```
 
 This header value is the organization ID returned by `POST /organizations`, not your API key.
-
-You only omit `X-OpenFiskal-Organization` when you create, update, or delete the organization itself.
 
 ## Step by step
 
@@ -59,21 +58,10 @@ You only omit `X-OpenFiskal-Organization` when you create, update, or delete the
       }'
     ```
 
-    ```json
-    {
-      "id": "org_01HXYZ",
-      "legal_name": "Mustermann GmbH",
-      "country_code": "DEU",
-      "tax_id": "DE123456789",
-      "created_at": "2026-02-26T10:01:00Z",
-      "updated_at": "2026-02-26T10:01:00Z"
-    }
-    ```
-
-    Note the returned `id`. Use it as the `X-OpenFiskal-Organization` header on every organization-scoped request that follows.
+    The returned `id` becomes the `X-OpenFiskal-Organization` header on every organization-scoped request that follows.
   </Step>
   <Step title="Create a location">
-    A location is a physical point of sale such as a store, restaurant, or kiosk.
+    A location is a physical point of sale such as a store or restaurant.
 
     ```bash
     curl -X POST https://sandbox.api.openfiskal.com/v1/locations \
@@ -91,20 +79,9 @@ You only omit `X-OpenFiskal-Organization` when you create, update, or delete the
         "timezone": "Europe/Berlin"
       }'
     ```
-
-    ```json
-    {
-      "id": "loc_01HXYZ",
-      "organization_id": "org_01HXYZ",
-      "name": "Berlin Mitte",
-      "timezone": "Europe/Berlin",
-      "created_at": "2026-02-26T10:02:00Z",
-      "updated_at": "2026-02-26T10:02:00Z"
-    }
-    ```
   </Step>
   <Step title="Create a register">
-    A register is the device or logical checkout that will create operations.
+    A register is the logical checkout or terminal that creates operations.
 
     ```bash
     curl -X POST https://sandbox.api.openfiskal.com/v1/registers \
@@ -117,38 +94,6 @@ You only omit `X-OpenFiskal-Organization` when you create, update, or delete the
         "name": "Register 1",
         "external_id": "pos-register-1"
       }'
-    ```
-
-    ```json
-    {
-      "id": "reg_01HXYZ",
-      "organization_id": "org_01HXYZ",
-      "location_id": "loc_01HXYZ",
-      "country_code": "DEU",
-      "name": "Register 1",
-      "external_id": "pos-register-1",
-      "status": "active",
-      "created_at": "2026-02-26T10:03:00Z",
-      "updated_at": "2026-02-26T10:03:00Z"
-    }
-    ```
-  </Step>
-  <Step title="Trigger fiscalization for the register">
-    Fiscalization is modeled as a register sub-resource so the target register is explicit.
-
-    ```bash
-    curl -X POST https://sandbox.api.openfiskal.com/v1/registers/reg_01HXYZ/fiscalize \
-      -H "Authorization: Bearer ofk_live_abc123..." \
-      -H "X-OpenFiskal-Organization: org_01HXYZ"
-    ```
-
-    ```json
-    {
-      "id": "rfj_01HXYZ",
-      "register_id": "reg_01HXYZ",
-      "status": "queued",
-      "created_at": "2026-02-26T10:04:00Z"
-    }
     ```
   </Step>
   <Step title="Start an operation">
@@ -172,17 +117,9 @@ You only omit `X-OpenFiskal-Organization` when you create, update, or delete the
         }
       }'
     ```
-
-    ```json
-    {
-      "operation_id": "op_01HXYZ",
-      "op_revision": 1,
-      "status": "open"
-    }
-    ```
   </Step>
   <Step title="Update the operation while it is open">
-    You can patch the operation as long as it is not completed yet. `op_revision` is caller-driven. Start returns `1`, so the first mutation must send `2`.
+    You can patch the operation as long as it is still `open`. `op_revision` is caller-driven. Start returns `1`, so the first mutation must send `2`.
 
     ```bash
     curl -X PATCH https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ \
@@ -207,14 +144,12 @@ You only omit `X-OpenFiskal-Organization` when you create, update, or delete the
         }
       }'
     ```
-
-    After a successful update, the operation revision is now `2`. Read the operation again or use the returned representation and increment from there for the next mutation.
   </Step>
   <Step title="Complete the operation">
     Completion is modeled as an operation sub-resource and includes the reconciled payment transactions. Because the previous successful mutation used revision `2`, completion now sends `3`.
 
     ```bash
-    curl -X PATCH https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ/completion \
+    curl -X PATCH https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ/complete \
       -H "Authorization: Bearer ofk_live_abc123..." \
       -H "X-OpenFiskal-Organization: org_01HXYZ" \
       -H "Idempotency-Key: op-order-1001-complete" \
@@ -237,43 +172,26 @@ You only omit `X-OpenFiskal-Organization` when you create, update, or delete the
         ]
       }'
     ```
+  </Step>
+  <Step title="Cancel an open operation when needed">
+    If the customer abandons the checkout before completion, cancel the existing open operation. Because the previous successful mutation used revision `2`, cancellation would now send `3`.
 
-    ```json
-    {
-      "operation_id": "op_01HXYZ",
-      "op_revision": 3,
-      "status": "completed",
-      "fiscal_information": {
-        "regime": "KassenSichV",
-        "document_number": "2026-000123",
-        "document_type": "Kassenbeleg",
-        "tse_serial": "TSE0123456789ABCDEF",
-        "client_id": "Kasse1",
-        "signature_algorithm": "ecdsa-plain-SHA384",
-        "time_format": "utcTime",
-        "start_event": {
-          "signed_at": "2026-02-25T19:02:11Z",
-          "transaction_counter": 4821,
-          "signature": "base64encodedStartSignature=="
-        },
-        "end_event": {
-          "signed_at": "2026-02-25T20:14:55Z",
-          "transaction_counter": 4822,
-          "signature": "base64encodedEndSignature==",
-          "process_type": "Kassenbeleg-V1",
-          "process_data": "Beleg^42.50_0.00_0.00_0.00_0.00^42.50:Bar"
-        },
-        "verification": {
-          "qr_data": "V0;Kasse1;ecdsa-plain-SHA384;2026-02-25T19:02:11;2026-02-25T20:14:55;42.50;4822;base64encodedEndSignature=="
-        }
-      }
-    }
+    ```bash
+    curl -X PATCH https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ/cancel \
+      -H "Authorization: Bearer ofk_live_abc123..." \
+      -H "X-OpenFiskal-Organization: org_01HXYZ" \
+      -H "Idempotency-Key: op-order-1001-cancel" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "op_revision": 3,
+        "reason": "customer_abandoned_checkout"
+      }'
     ```
 
-    After completion, `fiscal_information` contains both the start and end signatures, as required by KassenSichV. Both must be printed on the receipt. The `qr_data` value follows the DSFinV-K QR format and is printed verbatim on the receipt.
+    Use cancellation only for operations that are still `open`. Completed operations remain completed.
   </Step>
   <Step title="Read and list operations">
-    Use `GET /operations` to list operations and `GET /operations/:id` to read one operation, including its current `op_revision`.
+    Use `GET /operations` to list operations and `GET /operations/{id}` to read one operation, including its current `op_revision`.
 
     ```bash
     curl https://sandbox.api.openfiskal.com/v1/operations \
@@ -296,33 +214,10 @@ You only omit `X-OpenFiskal-Organization` when you create, update, or delete the
         "to": "2026-02-29T23:59:59Z"
       }'
     ```
-
-    ```json
-    {
-      "id": "exp_01HXYZ",
-      "status": "queued",
-      "type": "operations",
-      "format": "csv",
-      "created_at": "2026-02-26T12:10:00Z",
-      "completed_at": null,
-      "download_url": null
-    }
-    ```
-  </Step>
-  <Step title="Check export status and download">
-    Read the export job first. Download only after it is completed.
-
-    ```bash
-    curl https://sandbox.api.openfiskal.com/v1/exports/exp_01HXYZ \
-      -H "Authorization: Bearer ofk_live_abc123..." \
-      -H "X-OpenFiskal-Organization: org_01HXYZ"
-    ```
-
-    ```bash
-    curl -L https://sandbox.api.openfiskal.com/v1/exports/exp_01HXYZ/download \
-      -H "Authorization: Bearer ofk_live_abc123..." \
-      -H "X-OpenFiskal-Organization: org_01HXYZ" \
-      -o export.csv
-    ```
   </Step>
 </Steps>
+
+## Next steps
+
+- Read [POS operations](/pos-operation-ingestion) for the operation lifecycle in more detail
+- Read [Hosted Receipts API](/hosted-receipts-api) for receipt retrieval, rendering, and delivery

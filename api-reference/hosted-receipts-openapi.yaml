@@ -1,0 +1,404 @@
+openapi: 3.1.0
+info:
+  title: OpenFiskal hosted receipts API
+  version: 1.0.0
+  license:
+    name: Proprietary
+  description: |
+    OpenFiskal exposes a hosted receipts API for retrieving, rendering, and
+    delivering completed receipts.
+
+    Authentication uses the same server-to-server bearer token and
+    `X-OpenFiskal-Organization` scoping model as the core fiscalization API.
+
+servers:
+  - url: https://api.openfiskal.com/v1
+    description: Production
+  - url: https://sandbox.api.openfiskal.com/v1
+    description: Sandbox
+
+tags:
+  - name: Receipts
+    description: Retrieve, render, and deliver hosted receipts.
+
+paths:
+  /receipts/{receiptId}:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationHeader'
+    get:
+      tags: [Receipts]
+      summary: Get receipt
+      description: Read a hosted receipt by receipt ID.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ReceiptId'
+      responses:
+        '200':
+          description: Receipt returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Receipt'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /operations/{operationId}/receipt:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationHeader'
+    get:
+      tags: [Receipts]
+      summary: Get receipt by operation
+      description: Read the hosted receipt generated for a completed operation.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OperationId'
+      responses:
+        '200':
+          description: Receipt returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Receipt'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /receipts/{receiptId}/pdf:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationHeader'
+    get:
+      tags: [Receipts]
+      summary: Download receipt PDF
+      description: Download a rendered PDF for the hosted receipt.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ReceiptId'
+      responses:
+        '200':
+          description: Receipt PDF downloaded
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /receipts/{receiptId}/send:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationHeader'
+    post:
+      tags: [Receipts]
+      summary: Send receipt
+      description: Send a hosted receipt by email or SMS.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ReceiptId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReceiptSendRequest'
+      responses:
+        '202':
+          description: Receipt delivery accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReceiptDelivery'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: API key
+  parameters:
+    OrganizationHeader:
+      name: X-OpenFiskal-Organization
+      in: header
+      required: true
+      schema:
+        type: string
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema:
+        type: string
+    ReceiptId:
+      name: receiptId
+      in: path
+      required: true
+      schema:
+        type: string
+    OperationId:
+      name: operationId
+      in: path
+      required: true
+      schema:
+        type: string
+  responses:
+    BadRequest:
+      description: Request body or parameters were invalid.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Authentication is missing or invalid.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: The API key does not have access to the requested resource.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: The requested resource was not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: The requested receipt is not available in the requested state.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    UnprocessableEntity:
+      description: The payload was syntactically valid but could not be processed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    RateLimited:
+      description: The caller exceeded the allowed request rate.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Error:
+      type: object
+      additionalProperties: false
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            request_id:
+              type: string
+            details:
+              type: object
+              additionalProperties: true
+          required: [code, message]
+      required: [error]
+    Receipt:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        operation_id:
+          type: string
+        organization_id:
+          type: string
+        location_id:
+          type: string
+        register_id:
+          type: string
+        external_reference:
+          type: [string, 'null']
+        status:
+          type: string
+          enum: [available, archived]
+        currency:
+          type: string
+        issued_at:
+          type: string
+          format: date-time
+        issuer:
+          $ref: '#/components/schemas/ReceiptIssuer'
+        line_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReceiptLineItem'
+        totals:
+          $ref: '#/components/schemas/ReceiptTotals'
+        payments:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReceiptPayment'
+        fiscal:
+          type: object
+          additionalProperties: true
+        links:
+          $ref: '#/components/schemas/ReceiptLinks'
+        metadata:
+          type: object
+          additionalProperties: true
+      required:
+        [id, operation_id, organization_id, location_id, register_id, status, currency, issued_at, issuer, line_items, totals, payments, links]
+    ReceiptIssuer:
+      type: object
+      additionalProperties: false
+      properties:
+        legal_name:
+          type: string
+        tax_id:
+          type: [string, 'null']
+        location_name:
+          type: string
+        register_name:
+          type: string
+        address:
+          type: object
+          additionalProperties: false
+          properties:
+            line1:
+              type: string
+            city:
+              type: string
+            postal_code:
+              type: string
+            country_code:
+              type: string
+          required: [line1, city, postal_code, country_code]
+      required: [legal_name, location_name, register_name, address]
+    ReceiptLineItem:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        description:
+          type: string
+        quantity:
+          type: number
+        unit_price:
+          type: integer
+        total_amount:
+          type: integer
+        tax_rate:
+          type: [string, 'null']
+        tax_amount:
+          type: [integer, 'null']
+      required: [description, quantity, unit_price, total_amount]
+    ReceiptTotals:
+      type: object
+      additionalProperties: false
+      properties:
+        total_gross:
+          type: integer
+        total_net:
+          type: integer
+        total_tax:
+          type: integer
+      required: [total_gross, total_net, total_tax]
+    ReceiptPayment:
+      type: object
+      additionalProperties: false
+      properties:
+        method:
+          type: string
+        amount:
+          type: integer
+        details:
+          type: object
+          additionalProperties: true
+      required: [method, amount]
+    ReceiptLinks:
+      type: object
+      additionalProperties: false
+      properties:
+        self:
+          type: string
+          format: uri
+        pdf:
+          type: string
+          format: uri
+        hosted:
+          type: string
+          format: uri
+      required: [self, pdf, hosted]
+    ReceiptSendRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        channel:
+          type: string
+          enum: [email, sms]
+        recipient:
+          type: string
+        locale:
+          type: [string, 'null']
+      required: [channel, recipient]
+    ReceiptDelivery:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        receipt_id:
+          type: string
+        channel:
+          type: string
+          enum: [email, sms]
+        recipient:
+          type: string
+        status:
+          type: string
+          enum: [queued, sent, failed]
+        created_at:
+          type: string
+          format: date-time
+      required: [id, receipt_id, channel, recipient, status, created_at]

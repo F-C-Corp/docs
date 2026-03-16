@@ -3,6 +3,13 @@ title: "Authentication"
 description: "How authentication and organization scoping work in the OpenFiskal API"
 ---
 
+## API scope
+
+<Warning>
+  The OpenFiskal API currently supports server-to-server communication only.
+  Do not embed API keys in POS devices, mobile apps, browsers, or other client-side surfaces.
+</Warning>
+
 ## API key creation
 
 Create API keys in the tenant dashboard. Each key is tenant-scoped and country-scoped.
@@ -19,7 +26,7 @@ Although the credential is an API key, the API uses the standard HTTP bearer pat
 -H "Authorization: Bearer ofk_live_abc123..."
 ```
 
-This is preferable to a custom auth header because it works better with standard API tooling, gateways, SDKs, proxies, and security middleware.
+This keeps the API compatible with standard API tooling, gateways, proxies, and security middleware.
 
 ## Organization scoping
 
@@ -45,18 +52,13 @@ Organization-scoped resources include:
 - Registers
 - Operations
 - Exports
+- Receipts
 
-You do not need `X-OpenFiskal-Organization` when you create, update, or delete the organization itself.
-
-## Why this design
-
-- Authentication uses a standard header instead of a custom one.
-- Merchant context stays explicit on every scoped request.
-- The same API key can operate across multiple organizations inside the same tenant and country scope.
+You do not need `X-OpenFiskal-Organization` when you create, update, delete, or read the organization itself.
 
 ## Idempotency
 
-For mutating requests, especially operation start and operation completion, send an `Idempotency-Key` header so retries remain safe:
+For mutating requests that create or finalize state, send an `Idempotency-Key` header so retries remain safe:
 
 ```bash
 curl -X POST https://api.openfiskal.com/v1/operations \
@@ -67,13 +69,15 @@ curl -X POST https://api.openfiskal.com/v1/operations \
   -d '{ "...": "..." }'
 ```
 
+Use idempotency keys for operation start, operation completion, operation cancellation, and receipt delivery.
+
 ## Recommended handling
 
-- Reject organization-scoped requests that are missing either `Authorization` or `X-OpenFiskal-Organization`.
 - Return `401` when authentication is missing or invalid.
 - Return `403` when the API key is valid but not allowed to access the requested tenant, country, or organization.
-- Return `409 Conflict` when an operation update or completion uses an `op_revision` that is not exactly the next expected value.
+- Return `409 Conflict` when an operation update, completion, or cancellation uses an `op_revision` that is not exactly the next expected value.
+- Return `429 Too Many Requests` with `Retry-After` when the caller exceeds the allowed rate.
 
 ## Next step
 
-Continue with [Getting Started](/getting-started) for the full onboarding and operation flow.
+Continue with [Getting started](/getting-started) for the full onboarding and operation flow.

@@ -1,384 +1,66 @@
 ---
-title: 'Register Lifecycle'
-description: 'How registers and fiscal units are commissioned, monitored, and decommissioned'
+title: "Register lifecycle"
+description: "How registers are created, updated, and retired in the OpenFiskal API."
 ---
 
 ## Overview
 
-A **register** is a POS device in OpenFiskal — a terminal, kiosk, or logical endpoint that processes operations. A **fiscal unit** is the link between that register and a fiscal compliance capability (TSE in Germany, RKSV certificate in Austria, RT device in Italy).
-
-Creating a register is cheap — it's just metadata. Creating a fiscal unit is also lightweight — activating it is what provisions the fiscal device and starts billing. This separation lets you:
-
-- Manage the fiscal device independently from the POS device
-- Replace a fiscal device without creating a new register
-- Track the full history of fiscal devices bound to a register
+A register is the logical checkout that produces operations inside a location. In the public API, a register is a lightweight resource that stores identity and routing metadata for your backend.
 
 ## Register states
 
-Registers have two states:
+Registers have two public states:
 
 ```
-[active] ──► [archived]
+[active] ──► [inactive]
 ```
 
-- **active**: The register exists and can accept operations (when it has an active fiscal unit).
-- **archived**: Permanently retired. Cannot be undone.
+- `active` means your backend can use the register to create operations
+- `inactive` means the register remains in the system for auditability, but your backend should stop creating new operations for it
 
-A register starts in `active` state with no fiscal unit (`active_fiscal_unit: null`). It becomes fiscally operational once a fiscal unit is provisioned.
+## Commissioning a register
 
-## Fiscal unit lifecycle
-
-A fiscal unit tracks the provisioning, operation, and retirement of a single fiscal device instance:
-
-```
-created ──► provisioning ──► active ──► decommissioned
-                                │
-                              error ──► active (recover)
-                                │
-                              decommissioned
-```
-
-- **created**: The fiscal unit record exists but the fiscal device has not been provisioned. No billing occurs. Activate via `POST /fiscal-units/:id/activate` to begin provisioning.
-- **provisioning**: The fiscal device is being initialized (TSE setup, RT activation, RKSV key registration). Automatic — transitions to `active` on success.
-- **active**: The fiscal device is initialized and ready to sign operations. This is the only state that accepts sales, refunds, closings, and other fiscal events.
-- **error**: The fiscal device encountered a failure (e.g. TSE hardware fault, RT communication error). Recoverable via `POST /fiscal-units/:id/recover`.
-- **decommissioned**: The fiscal unit has been permanently retired. Fiscal deregistration has been triggered with the relevant authority. Cannot be undone.
-
-## Commissioning
-
-<Steps>
-  <Step title="Create the register">
-    A register is a first-class resource. Set `location_id` to associate it with a location.
-
-    ```bash
-    curl -X POST https://api.openfiskal.com/v1/registers \
-      -H "Authorization: Bearer $API_KEY" \
-      -H "OpenFiskal-Organization: org_01HXYZ" \
-      -H "Content-Type: application/json" \
-      -d '{
-        "location_id": "loc_01HXYZ",
-        "label": "Kasse 2",
-        "jurisdiction": "DE"
-      }'
-    ```
-
-    ```json
-    {
-      "id": "reg_01HXYZ",
-      "object": "register",
-      "label": "Kasse 2",
-      "jurisdiction": "DE",
-      "state": "active",
-      "active_fiscal_unit": null,
-      "location_id": "loc_01HXYZ",
-      "created_at": "2026-02-26T10:00:00Z"
-    }
-    ```
-
-    The register is `active` but has no fiscal unit — it cannot process operations yet.
-  </Step>
-
-  <Step title="Create a fiscal unit">
-    Creating a fiscal unit is lightweight — it creates a record in `created` state without provisioning any fiscal device or incurring costs.
-
-    ```bash
-    curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/fiscal-units \
-      -H "Authorization: Bearer $API_KEY" \
-      -H "OpenFiskal-Organization: org_01HXYZ"
-    ```
-
-    ```json
-    {
-      "object": "fiscal_unit_response",
-      "fiscal_unit": {
-        "id": "fu_01HXYZ",
-        "object": "fiscal_unit",
-        "register_id": "reg_01HXYZ",
-        "state": "created",
-        "jurisdiction": "DE",
-        "fiscal_registration": null,
-        "replaces": null,
-        "replaced_by": null,
-        "provisioned_at": null,
-        "decommissioned_at": null,
-        "created_at": "2026-02-26T10:00:00Z"
-      },
-      "register": {
-        "id": "reg_01HXYZ",
-        "object": "register",
-        "state": "active",
-        "active_fiscal_unit": null
-      },
-      "register_api_key": null,
-      "credential_issued": false
-    }
-    ```
-
-    The fiscal unit exists but is not yet provisioned — the register still cannot process operations.
-  </Step>
-
-  <Step title="Activate the fiscal unit">
-    Activating triggers jurisdiction-specific fiscal device initialization and starts billing:
-
-    - **Germany**: Initializes the TSE, establishes the signature chain
-    - **Italy**: Activates the RT device with the Agenzia delle Entrate
-    - **Austria**: Establishes the RKSV signature chain, registers the AES key with FinanzOnline
-
-    ```bash
-    curl -X POST https://api.openfiskal.com/v1/fiscal-units/fu_01HXYZ/activate \
-      -H "Authorization: Bearer $API_KEY" \
-      -H "OpenFiskal-Organization: org_01HXYZ"
-    ```
-
-    ```json
-    {
-      "object": "fiscal_unit_response",
-      "fiscal_unit": {
-        "id": "fu_01HXYZ",
-        "object": "fiscal_unit",
-        "register_id": "reg_01HXYZ",
-        "state": "active",
-        "jurisdiction": "DE",
-        "fiscal_registration": {
-          "regime": "tse",
-          "tse_serial": "abc123def456",
-          "client_id": "Kasse 2",
-          "signature_algorithm": "ecdsa-plain-SHA384",
-          "time_format": "utcTime",
-          "registered_at": "2026-02-26T10:00:00Z"
-        },
-        "replaces": null,
-        "replaced_by": null,
-        "provisioned_at": "2026-02-26T10:00:00Z",
-        "decommissioned_at": null,
-        "created_at": "2026-02-26T10:00:00Z"
-      },
-      "register": {
-        "id": "reg_01HXYZ",
-        "object": "register",
-        "state": "active",
-        "active_fiscal_unit": { "..." : "..." }
-      },
-      "register_api_key": null,
-      "credential_issued": false
-    }
-    ```
-
-    The fiscal unit is now `active` and the register is ready to accept operations.
-
-    <Info>
-      For device-direct integrations (EV chargers, unattended kiosks), pass `issue_register_credential: true` to receive a register-scoped API key. For server-side integrations, the platform API key already covers all register operations.
-    </Info>
-  </Step>
-
-  <Step title="Start sending heartbeats">
-    Once the fiscal unit is active, the register should send periodic heartbeats (every 30–60 seconds) so OpenFiskal can monitor its health.
-
-    ```bash
-    curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/heartbeat \
-      -H "Authorization: Bearer $API_KEY" \
-      -H "OpenFiskal-Organization: org_01HXYZ" \
-      -H "Content-Type: application/json" \
-      -d '{
-        "timestamp": "2026-02-26T10:05:00Z",
-        "sequence": 1,
-        "status": "operational",
-        "software": {
-          "pos_vendor": "Acme POS",
-          "pos_version": "3.2.1"
-        }
-      }'
-    ```
-
-    The `status` field in the heartbeat is self-reported by the register. OpenFiskal derives its own operational status from heartbeat frequency:
-
-    | Status | Meaning |
-    |---|---|
-    | `operational` | Heartbeat received within expected interval |
-    | `degraded` | Register self-reported degraded status |
-    | `offline` | No heartbeat for 2x expected interval |
-    | `stale` | No heartbeat for an extended period |
-
-    Use `GET /registers/:id/status` to check a register's operational status and list its currently open operations.
-  </Step>
-</Steps>
-
-## Monitoring
-
-### Register status
-
-The status endpoint provides liveness information and the authoritative list of open operations:
+Create the register after you already know the target organization and location:
 
 ```bash
-curl https://api.openfiskal.com/v1/registers/reg_01HXYZ/status \
+curl -X POST https://api.openfiskal.com/v1/registers \
   -H "Authorization: Bearer $API_KEY" \
-  -H "OpenFiskal-Organization: org_01HXYZ"
-```
-
-```json
-{
-  "register_id": "reg_01HXYZ",
-  "status": "operational",
-  "last_heartbeat_at": "2026-02-26T14:30:00Z",
-  "open_operations": [
-    {
-      "id": "op_01ABC",
-      "type": "sale",
-      "started_at": "2026-02-26T14:25:00Z"
-    }
-  ],
-  "software": {
-    "pos_vendor": "Acme POS",
-    "pos_version": "3.2.1"
-  }
-}
-```
-
-### Fleet status
-
-To check all registers at a location in one call:
-
-```bash
-curl "https://api.openfiskal.com/v1/registers/status?location_id=loc_01HXYZ" \
-  -H "Authorization: Bearer $API_KEY" \
-  -H "OpenFiskal-Organization: org_01HXYZ"
-```
-
-This returns the status of every register at the location — useful for dashboards and alerting.
-
-## Error recovery
-
-If a fiscal device fails (TSE hardware fault, RT communication error), the fiscal unit transitions to `error`. Operations on the register will be rejected until the fiscal unit is recovered.
-
-To recover, call the recover endpoint:
-
-```bash
-curl -X POST https://api.openfiskal.com/v1/fiscal-units/fu_01HXYZ/recover \
-  -H "Authorization: Bearer $API_KEY" \
-  -H "OpenFiskal-Organization: org_01HXYZ"
-```
-
-If the underlying device issue has been resolved, the fiscal unit returns to `active`. If the device is still unreachable, the call will fail and the fiscal unit remains in `error`.
-
-<Warning>
-  Operations that were in-flight when the device failed remain in `open` state. Check `GET /registers/:id/status` for open operations and either complete or cancel them once the device recovers.
-</Warning>
-
-## Replacing a fiscal unit
-
-When a fiscal device reaches end-of-life, is replaced, or needs to be swapped — use the atomic replace endpoint. The register ID stays the same, so POS routing is unaffected.
-
-```bash
-curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/fiscal-units/replace \
-  -H "Authorization: Bearer $API_KEY" \
-  -H "OpenFiskal-Organization: org_01HXYZ" \
+  -H "X-OpenFiskal-Organization: org_01HXYZ" \
   -H "Content-Type: application/json" \
   -d '{
-    "reason": "TSE hardware end-of-life"
+    "location_id": "loc_01HXYZ",
+    "country_code": "DEU",
+    "name": "Kasse 2",
+    "external_id": "store-berlin-kasse-2"
   }'
 ```
 
-```json
-{
-  "object": "fiscal_unit_replacement",
-  "old_binding": {
-    "id": "fu_01HXYZ",
-    "state": "decommissioned",
-    "replaced_by": "fu_02HXYZ",
-    "decommissioned_at": "2026-02-26T15:00:00Z"
-  },
-  "new_binding": {
-    "id": "fu_02HXYZ",
-    "state": "active",
-    "replaces": "fu_01HXYZ",
-    "provisioned_at": "2026-02-26T15:00:01Z"
-  },
-  "register": {
-    "id": "reg_01HXYZ",
-    "state": "active",
-    "active_fiscal_unit": { "id": "fu_02HXYZ", "..." : "..." }
-  }
-}
-```
+## Updating a register
 
-All open operations must be completed or cancelled before replacing. The old fiscal unit's operations remain in the system for audit purposes.
-
-### Viewing fiscal unit history
-
-To see all fiscal units (past and present) for a register:
+Use `PATCH /registers/{registerId}` when your backend needs to rename the register, update its external mapping, or mark it inactive:
 
 ```bash
-curl https://api.openfiskal.com/v1/registers/reg_01HXYZ/fiscal-units \
+curl -X PATCH https://api.openfiskal.com/v1/registers/reg_01HXYZ \
   -H "Authorization: Bearer $API_KEY" \
-  -H "OpenFiskal-Organization: org_01HXYZ"
-```
-
-## Decommissioning
-
-### Decommissioning a fiscal unit
-
-To permanently retire a fiscal unit without replacing it:
-
-```bash
-curl -X POST https://api.openfiskal.com/v1/fiscal-units/fu_01HXYZ/decommission \
-  -H "Authorization: Bearer $API_KEY" \
-  -H "OpenFiskal-Organization: org_01HXYZ" \
+  -H "X-OpenFiskal-Organization: org_01HXYZ" \
   -H "Content-Type: application/json" \
   -d '{
-    "reason": "Location closing"
+    "name": "Kasse 2 - Front Counter",
+    "status": "inactive"
   }'
 ```
 
-This triggers jurisdiction-specific fiscal deregistration. The register remains `active` and can have a new fiscal unit provisioned later.
+## Operational guidance
 
-### Archiving a register
+- Keep `external_id` aligned with the register identifier in your own POS platform
+- Do not recycle a register for a different physical checkout if you need clean audit history
+- Prefer inactivation over deletion when you want to preserve historical references
 
-When a register is permanently retired — hardware replaced, location closed, or no longer needed:
+## Listing and lookup
 
-```bash
-curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/deactivate \
-  -H "Authorization: Bearer $API_KEY" \
-  -H "OpenFiskal-Organization: org_01HXYZ"
-```
-
-This archives the register and decommissions any active fiscal unit. The register transitions to `archived` state.
-
-<Warning>
-  Archiving is permanent and cannot be undone. Any active register API key is automatically revoked. All open operations must be completed or cancelled first — the call returns `409 Conflict` otherwise.
-</Warning>
-
-## Credential management
-
-For device-direct integrations, register API keys may need rotation:
-
-```bash
-curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/credentials/rotate \
-  -H "Authorization: Bearer $API_KEY" \
-  -H "OpenFiskal-Organization: org_01HXYZ"
-```
-
-The previous key is revoked immediately. The new key is returned in the response and must be provisioned to the device over a secure channel.
-
-<Tip>
-  Rotate credentials when a device is compromised, replaced, or as part of routine security hygiene. Always ensure the new key is provisioned before the old device goes offline.
-</Tip>
-
-## Backward compatibility
-
-The `POST /registers/:id/activate` endpoint is deprecated but continues to work. Under the hood, it creates and auto-activates a fiscal unit, skipping the `created` state. The register response includes deprecated `fiscal_state` and `fiscal_registration` fields derived from the active fiscal unit.
-
-New integrations should use the fiscal units API directly.
+Use `GET /registers` to list registers in the current organization. Use `GET /registers/{registerId}` when you need the current representation for a specific register.
 
 ## Next steps
 
-<CardGroup cols={2}>
-  <Card title="Getting Started" icon="rocket" href="/getting-started">
-    End-to-end walkthrough from setup token to first sale.
-  </Card>
-  <Card title="POS Operations" icon="cash-register" href="/pos-operation-ingestion">
-    The operation lifecycle — start, mutate, complete, cancel.
-  </Card>
-  <Card title="Authentication" icon="key" href="/auth">
-    API key types, organization scoping, and key management.
-  </Card>
-</CardGroup>
+- [Getting started](/getting-started)
+- [POS operations](/pos-operation-ingestion)

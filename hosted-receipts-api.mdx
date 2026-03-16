@@ -1,41 +1,50 @@
 ---
 title: "Hosted Receipts API"
-description: "Planned digital receipt pages and delivery workflows for legally compliant customer-facing receipt access."
+description: "Retrieve, render, and deliver hosted receipts for completed fiscalized operations."
 ---
 
-The Hosted Receipts API will let you offer full digital receipts without building your own receipt hosting, rendering, and delivery layer.
-
-Instead of rendering and serving receipts yourself, you will be able to create secure hosted receipt links that OpenFiskal manages for web, mobile, email, SMS, and QR-based receipt delivery.
-
-The goal is to help you deliver legally compliant digital receipts in a format that is easy for customers to open, store, share, and use after the transaction.
-
-## What you will be able to do
-
-- Generate hosted receipt URLs for completed POS operations.
-- Deliver digital receipts in a legally compliant format tied to the underlying fiscal record.
-- Share receipts by email, SMS, QR code, or printed short link.
-- Present receipts in a mobile-friendly web view with no app install required.
-- Reuse the same hosted receipt across support, returns, loyalty, and post-purchase flows.
-- Control branding such as logo, merchant identity, and contact details.
-
-## Example use cases
-
-- Show a QR code on the printed receipt so customers can open a digital version.
-- Replace paper receipts entirely in checkout flows that support digital receipt delivery.
-- Send receipt links by SMS after an EV charging session, kiosk purchase, or unattended sale.
-- Let support teams retrieve and resend a hosted receipt without manually generating PDFs.
-- Power self-service returns, warranty claims, or expense workflows using a stable receipt URL.
-- Offer merchants a simple way to deliver paperless receipts across all locations.
-
-## Planned features
-
-- Expiring and non-expiring receipt links depending on the delivery flow.
-- Branded hosted receipt pages per merchant or platform.
-- Receipt views that include the legally relevant fiscal data, merchant details, and transaction summary.
-- PDF download and print-friendly layouts.
-- Optional delivery tracking such as sent, opened, and failed states.
-- Search and retrieval by operation ID, receipt ID, or external reference.
+The Hosted Receipts API is the separate public surface for receipt retrieval and delivery. Use it after an operation reaches `completed` state in the fiscalization API.
 
 <Info>
-  The first release will focus on read-only hosted receipt rendering and delivery for completed operations, with an emphasis on digital receipt delivery and fiscal traceability.
+  The Hosted Receipts API uses the same server-to-server authentication model as the fiscalization API: `Authorization: Bearer ...` plus `X-OpenFiskal-Organization`.
 </Info>
+
+## What it covers
+
+- Retrieve a receipt by receipt ID
+- Look up the receipt generated for a completed operation
+- Download a rendered PDF
+- Send a receipt by email or SMS
+
+## Typical flow
+
+1. Complete an operation in the Fiscalization API.
+2. Resolve the receipt with `GET /operations/{operationId}/receipt`.
+3. Use the returned `receipt.id` for follow-up retrieval, PDF download, or delivery.
+
+## Receipt entity
+
+The Hosted Receipts API centers on the `Receipt` entity. A receipt is a denormalized document that packages merchant identity, line items, totals, payments, and fiscal evidence into a portable object.
+
+Key sections include:
+
+- `issuer` for merchant, location, and register identity
+- `line_items` for the purchased goods or services
+- `totals` for net, tax, and gross amounts
+- `payments` for the payment mix used at completion
+- `fiscal` for the jurisdiction-specific fiscal payload
+- `links` for JSON, PDF, and hosted-view URLs
+
+## Delivery workflows
+
+Use `POST /receipts/{receiptId}/send` to trigger server-side delivery. The current API supports:
+
+- `email`
+- `sms`
+
+The response returns a delivery object with queued delivery state so your backend can track the request.
+
+## Related guides
+
+- [Getting started](/getting-started)
+- [POS operations](/pos-operation-ingestion)
