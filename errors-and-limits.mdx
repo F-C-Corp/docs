@@ -1,0 +1,65 @@
+---
+title: "Errors and limits"
+description: "Platform guarantees, rate limits, idempotency rules, health checks, and the stable API error catalog."
+---
+
+## Platform guarantees
+
+OpenFiskal publishes these current platform targets for the fiscalization API:
+
+| Area | Guidance |
+| --- | --- |
+| Availability target | `99.9%` monthly for production |
+| Typical synchronous latency | `p50 < 300 ms`, `p95 < 1200 ms` for standard operation mutations |
+| Client timeout guidance | `10s` request timeout, `30s` total retry budget for synchronous calls |
+| Rate limiting | Per API key and per organization |
+| `429` behavior | Returns `Retry-After` in seconds and a stable `rate_limit_exceeded` error code |
+
+## Idempotency rules
+
+Use `Idempotency-Key` on every mutating operation, export creation, and receipt delivery request.
+
+Current platform rules:
+
+- retention window is at least 24 hours
+- uniqueness scope is endpoint plus organization plus authenticated tenant
+- reusing a key with the same payload returns the original response
+- reusing a key with a different payload returns `409 idempotency_key_conflict`
+
+## Concurrency rules
+
+Operation mutation endpoints require `If-Match` with the latest operation `ETag`. If you omit it, the API returns `428 precondition_required`. If you send a stale value, the API returns `412 precondition_failed`.
+
+## Request tracing and auditability
+
+Every response includes `X-Request-Id`. Persist it in your logs and attach it to support cases.
+
+Audit events are recorded for:
+
+- operation created
+- operation updated
+- operation completed
+- operation cancelled
+- export created
+- export delivered
+
+## Health and status
+
+Use `GET /health` for liveness and dependency status. The response is designed for automation, not for public status-page messaging.
+
+## Stable error catalog
+
+| Error code | Meaning | Retryable | Operator action | Escalate when |
+| --- | --- | --- | --- | --- |
+| `invalid_request` | The payload is malformed or missing required fields | No | Fix the request and retry with a new idempotency key if needed | Repeated failures after validation changes |
+| `precondition_required` | `If-Match` is required for the requested mutation | No | Re-read the operation and retry with the current `ETag` | The endpoint returns this despite a sent header |
+| `precondition_failed` | The supplied `If-Match` value is stale | Yes | Read the latest operation and resolve the conflicting write | Conflicts continue after a single writer is restored |
+| `idempotency_key_conflict` | The same idempotency key was reused with a different payload | No | Generate a new key after you confirm the correct payload | You cannot identify the original caller intent |
+| `operation_not_open` | The operation can no longer be changed or cancelled | No | Start a new correction flow, usually refund | The status contradicts your last confirmed read |
+| `payment_state_invalid` | The payment payload does not match the operation state or totals | No | Correct the payment data and resend | The processor payload is internally consistent but still rejected |
+| `rate_limit_exceeded` | You exceeded the current request budget | Yes | Respect `Retry-After` and reduce concurrency | Sustained throttling at normal traffic levels |
+| `upstream_timeout` | A dependent fiscal or delivery component timed out | Yes | Retry with the same idempotency key | Timeouts exceed your retry budget |
+| `transmission_pending` | Fiscal transmission is still in progress | Yes | Poll later and continue reconciliation after the status changes | It remains pending beyond your documented SLA |
+| `regime_validation_failed` | Regime-specific rules rejected the data | No | Fix onboarding or receipt data | The rule outcome is unclear or inconsistent |
+
+## Next steps
