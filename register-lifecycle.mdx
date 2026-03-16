@@ -29,7 +29,6 @@ curl -X POST https://api.openfiskal.com/v1/registers \
   -H "Content-Type: application/json" \
   -d '{
     "location_id": "loc_01HXYZ",
-    "country_code": "DEU",
     "name": "Kasse 2",
     "external_id": "store-berlin-kasse-2"
   }'
@@ -53,7 +52,6 @@ curl -X PATCH https://api.openfiskal.com/v1/registers/reg_01HXYZ \
 ## Operational guidance
 
 - Keep `external_id` aligned with the register identifier in your own POS platform
-- Keep `terminal_id` or equivalent hardware mapping stable if you use payment terminals
 - Capture the operator identity at runtime on the operation, not on the register resource
 - Do not recycle a register for a different physical checkout if you need clean audit history
 - Prefer inactivation over deletion when you want to preserve historical references

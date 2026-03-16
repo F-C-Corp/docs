@@ -32,7 +32,9 @@ Every organization-scoped request must also include:
 
 This header value is the organization ID returned by `POST /organizations`, not your API key.
 
-## Step by step
+## Create resources
+
+First create the tenant-scoped and organization-scoped resources your integration needs before you process any fiscalized transactions.
 
 <Steps>
   <Step title="Create your API key">
@@ -90,12 +92,21 @@ This header value is the organization ID returned by `POST /organizations`, not 
       -H "Content-Type: application/json" \
       -d '{
         "location_id": "loc_01HXYZ",
-        "country_code": "DEU",
         "name": "Register 1",
         "external_id": "pos-register-1"
       }'
     ```
   </Step>
+  <Step title="Verify your saved IDs">
+    Persist the returned organization, location, and register IDs. You will use them for every later operation request.
+  </Step>
+</Steps>
+
+## Perform a fiscalized sale
+
+Once your resources exist, you can create, update, and complete a sale operation.
+
+<Steps>
   <Step title="Start an operation">
     Start every operation with `POST /operations`. The request includes `source`, your upstream `external_id`, and a typed operation variant in `data`. Persist the returned `id`, `resource_version`, and `ETag`.
 
@@ -118,6 +129,36 @@ This header value is the organization ID returned by `POST /organizations`, not 
           "tip_amount": 0
         }
       }'
+    ```
+
+    Response:
+
+    ```http
+    HTTP/1.1 201 Created
+    ETag: "opv_01HXYZ"
+    X-Request-Id: req_01JSTART
+    ```
+
+    ```json
+    {
+      "id": "op_01HXYZ",
+      "resource_version": "opv_01HXYZ",
+      "organization_id": "org_01HXYZ",
+      "location_id": "loc_01HXYZ",
+      "register_id": "reg_01HXYZ",
+      "source": "POS",
+      "external_id": "order-1001",
+      "status": "open",
+      "type": "sale",
+      "currency": "EUR",
+      "totals": {
+        "total_amount": 4250,
+        "tip_amount": 0
+      },
+      "payments": [],
+      "created_at": "2026-02-26T12:00:00Z",
+      "updated_at": "2026-02-26T12:00:00Z"
+    }
     ```
   </Step>
   <Step title="Update the operation while it is open">
@@ -146,6 +187,44 @@ This header value is the organization ID returned by `POST /organizations`, not 
         }
       }'
     ```
+
+    Response:
+
+    ```http
+    HTTP/1.1 200 OK
+    ETag: "opv_01HXYA"
+    X-Request-Id: req_01JUPDATE
+    ```
+
+    ```json
+    {
+      "id": "op_01HXYZ",
+      "resource_version": "opv_01HXYA",
+      "organization_id": "org_01HXYZ",
+      "location_id": "loc_01HXYZ",
+      "register_id": "reg_01HXYZ",
+      "source": "POS",
+      "external_id": "order-1001",
+      "status": "pending_payment",
+      "type": "sale",
+      "currency": "EUR",
+      "totals": {
+        "total_amount": 4750,
+        "tip_amount": 0
+      },
+      "line_items": [
+        {
+          "name": "Lunch menu",
+          "quantity": 1,
+          "unit_price": 4750,
+          "total_amount": 4750
+        }
+      ],
+      "payments": [],
+      "created_at": "2026-02-26T12:00:00Z",
+      "updated_at": "2026-02-26T12:03:00Z"
+    }
+    ```
   </Step>
   <Step title="Complete the operation">
     Completion includes typed payment legs. Use one entry per tender leg and include processor references where available. The completed operation can return `fiscal_information` for regime-specific fiscal payloads. Store the returned `ETag` from the completion response if you will read the final operation again later.
@@ -165,7 +244,7 @@ This header value is the organization ID returned by `POST /organizations`, not 
             "amount": 4750,
             "currency": "EUR",
             "status": "captured",
-            "processor": "shopify_payments",
+            "processor": "sumup",
             "card_brand": "visa",
             "processor_reference": "ch_123",
             "processed_at": "2026-02-26T12:05:00Z"
@@ -173,16 +252,80 @@ This header value is the organization ID returned by `POST /organizations`, not 
         ]
       }'
     ```
-  </Step>
-  <Step title="Read and list operations">
-    Use `GET /operations` to list operations and `GET /operations/{id}` to read one operation, including its current `resource_version`.
 
-    ```bash
-    curl https://sandbox.api.openfiskal.com/v1/operations \
-      -H "Authorization: Bearer ofk_live_abc123..." \
-      -H "X-OpenFiskal-Organization: org_01HXYZ"
+    Response:
+
+    ```http
+    HTTP/1.1 200 OK
+    ETag: "opv_01HXYB"
+    X-Request-Id: req_01JCOMPLETE
+    ```
+
+    ```json
+    {
+      "id": "op_01HXYZ",
+      "resource_version": "opv_01HXYB",
+      "organization_id": "org_01HXYZ",
+      "location_id": "loc_01HXYZ",
+      "register_id": "reg_01HXYZ",
+      "source": "POS",
+      "external_id": "order-1001",
+      "status": "completed",
+      "type": "sale",
+      "currency": "EUR",
+      "totals": {
+        "total_amount": 4750,
+        "tip_amount": 0
+      },
+      "payments": [
+        {
+          "payment_id": "pay_1001_card",
+          "method": "card",
+          "amount": 4750,
+          "currency": "EUR",
+          "status": "captured",
+          "processor": "sumup",
+          "processor_reference": "ch_123",
+          "card_brand": "visa",
+          "processed_at": "2026-02-26T12:05:00Z"
+        }
+      ],
+      "fiscal_information": {
+        "regime": "KassenSichV",
+        "document_number": "2026-000123",
+        "document_type": "Kassenbeleg",
+        "tse_serial": "TSE0123456789ABCDEF",
+        "client_id": "Kasse1",
+        "signature_algorithm": "ecdsa-plain-SHA384",
+        "time_format": "utcTime",
+        "start_event": {
+          "signed_at": "2026-02-25T19:02:11Z",
+          "transaction_counter": 4821,
+          "signature": "base64encodedStartSignature=="
+        },
+        "end_event": {
+          "signed_at": "2026-02-25T20:14:55Z",
+          "transaction_counter": 4822,
+          "signature": "base64encodedEndSignature==",
+          "process_type": "Kassenbeleg-V1",
+          "process_data": "Beleg^42.50_0.00_0.00_0.00_0.00^42.50:Bar"
+        },
+        "verification": {
+          "qr_data": "V0;Kasse1;ecdsa-plain-SHA384;2026-02-25T19:02:11;2026-02-25T20:14:55;42.50;4822;base64encodedEndSignature=="
+        }
+      },
+      "created_at": "2026-02-26T12:00:00Z",
+      "updated_at": "2026-02-26T12:05:02Z"
+    }
     ```
   </Step>
+</Steps>
+
+## Create an export job
+
+Use export jobs after you have processed operations and want to reconcile or archive results.
+
+<Steps>
   <Step title="Create an export job">
     Exports are asynchronous. Create a time-bounded export job and poll it until it is ready.
 

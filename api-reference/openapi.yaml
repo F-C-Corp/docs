@@ -48,6 +48,8 @@ paths:
                 $ref: '#/components/schemas/OrganizationListResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
     post:
       tags: [Organizations]
       summary: Create organization
@@ -73,6 +75,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
 
@@ -96,6 +100,8 @@ paths:
                 $ref: '#/components/schemas/Organization'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
     patch:
@@ -125,6 +131,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '422':
@@ -153,6 +161,8 @@ paths:
                 $ref: '#/components/schemas/LocationListResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
     post:
       tags: [Locations]
       summary: Create location
@@ -178,6 +188,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
 
@@ -203,6 +215,8 @@ paths:
                 $ref: '#/components/schemas/Location'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
     patch:
@@ -232,6 +246,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '422':
@@ -251,6 +267,8 @@ paths:
               $ref: '#/components/headers/XRequestId'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -277,6 +295,8 @@ paths:
                 $ref: '#/components/schemas/RegisterListResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
     post:
       tags: [Registers]
       summary: Create register
@@ -302,6 +322,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
 
@@ -327,6 +349,8 @@ paths:
                 $ref: '#/components/schemas/Register'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
     patch:
@@ -356,6 +380,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '422':
@@ -375,6 +401,8 @@ paths:
               $ref: '#/components/headers/XRequestId'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -413,6 +441,8 @@ paths:
                 $ref: '#/components/schemas/OperationListResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
     post:
       tags: [Operations]
       summary: Create operation
@@ -443,6 +473,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '409':
           $ref: '#/components/responses/IdempotencyConflict'
         '422':
@@ -474,6 +506,8 @@ paths:
                 $ref: '#/components/schemas/Operation'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
     patch:
@@ -519,6 +553,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '412':
@@ -563,6 +599,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -609,6 +647,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -676,6 +716,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '409':
           $ref: '#/components/responses/IdempotencyConflict'
 
@@ -701,6 +743,8 @@ paths:
                 $ref: '#/components/schemas/ExportJob'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -812,6 +856,19 @@ components:
           example:
             code: unauthorized
             message: Authentication failed.
+            retryable: false
+    Forbidden:
+      description: Authenticated caller is not allowed to access the requested tenant, country, or organization.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: forbidden
+            message: The authenticated caller cannot access this resource.
             retryable: false
     NotFound:
       description: Resource not found
@@ -927,6 +984,10 @@ components:
           type: string
         country_code:
           type: string
+          description: ISO 3166-1 alpha-3 country code.
+          minLength: 3
+          maxLength: 3
+          example: DEU
       required: [line1, city, postal_code, country_code]
     Organization:
       type: object
@@ -937,6 +998,10 @@ components:
           type: string
         country_code:
           type: string
+          description: ISO 3166-1 alpha-3 country code for the legal entity.
+          minLength: 3
+          maxLength: 3
+          example: DEU
         tax_id:
           type: string
         status:
@@ -962,6 +1027,10 @@ components:
           type: string
         country_code:
           type: string
+          description: ISO 3166-1 alpha-3 country code for the legal entity.
+          minLength: 3
+          maxLength: 3
+          example: DEU
         tax_id:
           type: string
         address:
@@ -1057,9 +1126,6 @@ components:
           type: string
         external_id:
           type: string
-        terminal_id:
-          type: string
-          nullable: true
         status:
           type: string
           enum: [active, inactive]
@@ -1076,8 +1142,6 @@ components:
           type: string
         external_id:
           type: string
-        terminal_id:
-          type: string
       required: [location_id, name, external_id]
     RegisterUpdateRequest:
       type: object
@@ -1087,8 +1151,6 @@ components:
         name:
           type: string
         external_id:
-          type: string
-        terminal_id:
           type: string
         status:
           type: string
@@ -1113,9 +1175,6 @@ components:
     OperationStatus:
       type: string
       enum: [open, pending_payment, completed, cancelled]
-    FiscalTransmissionStatus:
-      type: string
-      enum: [not_required, pending, submitted, accepted, failed]
     PaymentMethod:
       type: string
       enum: [cash, card, voucher, gift_card, bank_transfer, digital_wallet, store_credit, other]
@@ -1384,8 +1443,6 @@ components:
           type: string
         document_type:
           type: string
-        transmission_status:
-          type: string
         transmitted_at:
           type: string
           format: date-time
@@ -1430,8 +1487,6 @@ components:
         document_number:
           type: string
         document_type:
-          type: string
-        transmission_status:
           type: string
         transmitted_at:
           type: string
@@ -1513,8 +1568,6 @@ components:
             $ref: '#/components/schemas/Payment'
         fiscal_information:
           $ref: '#/components/schemas/FiscalInformation'
-        transmission_status:
-          $ref: '#/components/schemas/FiscalTransmissionStatus'
         created_at:
           type: string
           format: date-time
@@ -1522,7 +1575,7 @@ components:
           type: string
           format: date-time
       required:
-        [id, resource_version, organization_id, location_id, register_id, source, external_id, status, type, currency, totals, payments, transmission_status, created_at, updated_at]
+        [id, resource_version, organization_id, location_id, register_id, source, external_id, status, type, currency, totals, payments, created_at, updated_at]
     OperationCreateRequest:
       allOf:
         - $ref: '#/components/schemas/PosOperationEnvelope'

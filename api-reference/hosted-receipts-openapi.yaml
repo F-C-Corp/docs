@@ -160,7 +160,7 @@ components:
     IdempotencyKey:
       name: Idempotency-Key
       in: header
-      required: false
+      required: true
       schema:
         type: string
     ReceiptId:
@@ -178,36 +178,60 @@ components:
   responses:
     BadRequest:
       description: Request body or parameters were invalid.
+      headers:
+        X-Request-Id:
+          schema:
+            type: string
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
     Unauthorized:
       description: Authentication is missing or invalid.
+      headers:
+        X-Request-Id:
+          schema:
+            type: string
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
     Forbidden:
       description: The API key does not have access to the requested resource.
+      headers:
+        X-Request-Id:
+          schema:
+            type: string
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
     NotFound:
       description: The requested resource was not found.
+      headers:
+        X-Request-Id:
+          schema:
+            type: string
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
     Conflict:
       description: The requested receipt is not available in the requested state.
+      headers:
+        X-Request-Id:
+          schema:
+            type: string
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
     UnprocessableEntity:
       description: The payload was syntactically valid but could not be processed.
+      headers:
+        X-Request-Id:
+          schema:
+            type: string
       content:
         application/json:
           schema:
@@ -215,6 +239,9 @@ components:
     RateLimited:
       description: The caller exceeded the allowed request rate.
       headers:
+        X-Request-Id:
+          schema:
+            type: string
         Retry-After:
           schema:
             type: integer
@@ -227,21 +254,18 @@ components:
       type: object
       additionalProperties: false
       properties:
-        error:
+        code:
+          type: string
+        message:
+          type: string
+        retryable:
+          type: boolean
+        request_id:
+          type: string
+        details:
           type: object
-          additionalProperties: false
-          properties:
-            code:
-              type: string
-            message:
-              type: string
-            request_id:
-              type: string
-            details:
-              type: object
-              additionalProperties: true
-          required: [code, message]
-      required: [error]
+          additionalProperties: true
+      required: [code, message, retryable]
     Receipt:
       type: object
       additionalProperties: false
@@ -312,6 +336,10 @@ components:
               type: string
             country_code:
               type: string
+              description: ISO 3166-1 alpha-3 country code.
+              minLength: 3
+              maxLength: 3
+              example: DEU
           required: [line1, city, postal_code, country_code]
       required: [legal_name, location_name, register_name, address]
     ReceiptLineItem:

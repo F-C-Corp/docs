@@ -1,35 +1,23 @@
 ---
 title: "Sandbox and go-live"
-description: "How to test the current v1 contract and prepare for production safely."
+description: "How to test and prepare for production safely."
 ---
 
 ## Sandbox checklist
 
-Before go-live, you should validate:
+Before go-live, you should manually test and validate:
 
-- operation creation, update, completion, and cancellation with `If-Match`
-- split tender and partial approval completion payloads
-- refund against prior sale
+- operation creation, update, completion, and cancellation
+- split tender payloads
+- refunds against prior sale
+- parsing and printing the fiscal information
 - offline queue replay
-- export creation and ready notifications
 
-## Production rollout guidance
+## Important Implementation Checks
 
-Recommended sequence:
-
-1. Validate the full contract in sandbox.
-2. Enable `If-Match`, typed payments, and upstream references in production.
-3. Dry-run exports and reconciliation.
-4. Start live traffic with support monitoring in place.
-
-## Go-live exit criteria
-
-Do not go live until you can prove:
-
-- every operation writer persists and reuses the latest `ETag`
-- payment reporting is deterministic for retries
-- support can trace requests by `request_id`
-- your reconciliation job can process export jobs successfully
+1. Correctly setting `Idempotency-Key` on retries.
+2. Correctly setting `X-OpenFiskal-Organization` on all organization-scoped requests.
+3. Every operation writer persists and reuses the latest `ETag`
 
 ## Next steps
 

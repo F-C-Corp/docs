@@ -55,7 +55,6 @@ Audit events are recorded for:
 | `payment_state_invalid` | The payment payload does not match the operation state or totals | No | Correct the payment data and resend | The processor payload is internally consistent but still rejected |
 | `rate_limit_exceeded` | You exceeded the current request budget | Yes | Respect `Retry-After` and reduce concurrency | Sustained throttling at normal traffic levels |
 | `upstream_timeout` | A dependent fiscal or delivery component timed out | Yes | Retry with the same idempotency key | Timeouts exceed your retry budget |
-| `transmission_pending` | Fiscal transmission is still in progress | Yes | Poll later and continue reconciliation after the status changes | It remains pending beyond your documented SLA |
 | `regime_validation_failed` | Regime-specific rules rejected the data | No | Fix onboarding or receipt data | The rule outcome is unclear or inconsistent |
 
 ## Next steps
