@@ -148,7 +148,7 @@ This header value is the organization ID returned by `POST /organizations`, not 
     ```
   </Step>
   <Step title="Complete the operation">
-    Completion includes typed payment legs. Use one entry per tender leg and include processor references where available. The completed operation can also return `fiscal_information` alongside the newer fiscal document shape. Store the returned `ETag` from the completion response if you will read the final operation again later.
+    Completion includes typed payment legs. Use one entry per tender leg and include processor references where available. The completed operation can return `fiscal_information` for regime-specific fiscal payloads. Store the returned `ETag` from the completion response if you will read the final operation again later.
 
     ```bash
     curl -X PATCH https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ/complete \
@@ -162,7 +162,6 @@ This header value is the organization ID returned by `POST /organizations`, not 
           {
             "payment_id": "pay_1001_card",
             "method": "card",
-            "kind": "sale",
             "amount": 4750,
             "currency": "EUR",
             "status": "captured",

@@ -1119,9 +1119,6 @@ components:
     PaymentMethod:
       type: string
       enum: [cash, card, voucher, gift_card, bank_transfer, digital_wallet, store_credit, other]
-    PaymentKind:
-      type: string
-      enum: [sale, tip, refund, cashback, fee_adjustment]
     PaymentStatus:
       type: string
       enum: [pending, authorized, partially_approved, captured, failed, voided, refunded]
@@ -1169,8 +1166,6 @@ components:
           type: string
         method:
           $ref: '#/components/schemas/PaymentMethod'
-        kind:
-          $ref: '#/components/schemas/PaymentKind'
         status:
           $ref: '#/components/schemas/PaymentStatus'
         amount:
@@ -1199,7 +1194,7 @@ components:
           type: string
           format: date-time
           nullable: true
-      required: [payment_id, method, kind, status, amount, currency]
+      required: [payment_id, method, status, amount, currency]
     Payment:
       allOf:
         - $ref: '#/components/schemas/PaymentInput'

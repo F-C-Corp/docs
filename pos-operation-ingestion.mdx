@@ -91,7 +91,6 @@ Completion is a fiscal event. Use an idempotency key on every completion request
     {
       "payment_id": "pay_cash_1001",
       "method": "cash",
-      "kind": "sale",
       "status": "captured",
       "amount": 1500,
       "currency": "EUR"
@@ -99,7 +98,6 @@ Completion is a fiscal event. Use an idempotency key on every completion request
     {
       "payment_id": "pay_card_1001",
       "method": "card",
-      "kind": "sale",
       "status": "captured",
       "amount": 3250,
       "currency": "EUR"
@@ -150,14 +148,6 @@ Use conditional writes with server-issued versions:
 - send that value in `If-Match` on the next mutation
 - replace your stored version after every successful mutation
 - re-read on `412 precondition_failed`
-
-## What your backend must do
-
-- report fiscal events in order
-- preserve idempotency keys for retries
-- persist the latest `ETag` for every mutable operation
-- print or deliver the returned fiscal payload exactly as provided
-- complete or cancel every operation that you start
 
 ## Next steps
 

@@ -5,16 +5,13 @@ description: "How to report payments, split tender, partial approvals, and async
 
 ## Overview
 
-The current `v1` complete-operation flow uses a typed `payments` collection instead of the older loose transaction payload. Each payment entry represents one authorization, cash leg, voucher redemption, or refund settlement leg.
+Each payment entry represents one authorization, cash leg, voucher redemption, or refund settlement leg.
 
 ## Payment enums
-
-Use only the documented enum values:
 
 | Field | Allowed values |
 | --- | --- |
 | `method` | `cash`, `card`, `voucher`, `gift_card`, `bank_transfer`, `digital_wallet`, `store_credit`, `other` |
-| `kind` | `sale`, `tip`, `refund`, `cashback`, `fee_adjustment` |
 | `status` | `pending`, `authorized`, `partially_approved`, `captured`, `failed`, `voided`, `refunded` |
 
 ## Split tender
@@ -27,7 +24,6 @@ Use one payment object per tender leg. The sum of all `captured` and `authorized
     {
       "payment_id": "pay_cash_1001",
       "method": "cash",
-      "kind": "sale",
       "status": "captured",
       "amount": 1500,
       "currency": "EUR"
@@ -35,7 +31,6 @@ Use one payment object per tender leg. The sum of all `captured` and `authorized
     {
       "payment_id": "pay_card_1001",
       "method": "card",
-      "kind": "sale",
       "status": "captured",
       "amount": 3250,
       "currency": "EUR",
@@ -57,7 +52,7 @@ Do not overwrite the original approval amount during retries.
 
 ## Tips and gratuity
 
-Use a dedicated payment leg with `kind: tip` when the tip is captured independently from the base sale. If the processor returns a single capture amount, keep one payment leg and include the operation-level `tip_amount`.
+Use `tip_amount` on the operation when the tip is part of the fiscalized sale. If your payment processor returns separate payment references for base amount and tip, keep separate payment entries and distinguish them through your own external payment metadata.
 
 ## Asynchronous settlement
 
