@@ -397,7 +397,7 @@ paths:
           in: query
           schema:
             $ref: '#/components/schemas/OperationType'
-        - name: order_id
+        - name: external_id
           in: query
           schema:
             type: string
@@ -1112,7 +1112,7 @@ components:
       enum: [sale, refund, exchange, custom]
     OperationStatus:
       type: string
-      enum: [open, pending_payment, payment_pending, completed, cancelled]
+      enum: [open, pending_payment, completed, cancelled]
     FiscalTransmissionStatus:
       type: string
       enum: [not_required, pending, submitted, accepted, failed]
@@ -1475,15 +1475,12 @@ components:
           type: string
         source:
           $ref: '#/components/schemas/OperationSource'
-        seller_id:
+        external_id:
           type: string
-        operator_id:
-          type: string
-        order_id:
-          type: string
+          description: Merchant or POS identifier for the upstream order, ticket, or checkout in the caller's system.
         data:
           $ref: '#/components/schemas/OperationData'
-      required: [location_id, register_id, source, order_id, data]
+      required: [location_id, register_id, source, external_id, data]
     Operation:
       type: object
       properties:
@@ -1500,14 +1497,9 @@ components:
           type: string
         source:
           $ref: '#/components/schemas/OperationSource'
-        seller_id:
+        external_id:
           type: string
-          nullable: true
-        operator_id:
-          type: string
-          nullable: true
-        order_id:
-          type: string
+          description: Merchant or POS identifier for the upstream order, ticket, or checkout in the caller's system.
         status:
           $ref: '#/components/schemas/OperationStatus'
         type:
@@ -1535,7 +1527,7 @@ components:
           type: string
           format: date-time
       required:
-        [id, resource_version, organization_id, location_id, register_id, source, order_id, status, type, currency, totals, payments, transmission_status, created_at, updated_at]
+        [id, resource_version, organization_id, location_id, register_id, source, external_id, status, type, currency, totals, payments, transmission_status, created_at, updated_at]
     OperationCreateRequest:
       allOf:
         - $ref: '#/components/schemas/PosOperationEnvelope'

@@ -16,15 +16,12 @@ stateDiagram-v2
     [*] --> open
     open --> pending_payment
     pending_payment --> completed
-    pending_payment --> payment_pending
-    payment_pending --> completed
     open --> cancelled
     pending_payment --> cancelled
 ```
 
 - `open` means the basket or order is still being assembled
 - `pending_payment` means the financial intent is known and the operation is waiting for settlement input
-- `payment_pending` means the operation has been completed with an asynchronous payment state that still needs follow-up
 - `completed` means the fiscal event is final
 - `cancelled` means the operation was intentionally voided before completion
 
@@ -43,7 +40,7 @@ The public API currently supports these operation types:
 
 ## Start an operation
 
-Create operations with `POST /operations`. The request includes a `source` field with `POS` or `ONLINE`, and the `data` payload is a typed operation variant such as `SaleOperation` or `RefundOperation`. The response returns the operation resource, a `resource_version`, and an `ETag` header.
+Create operations with `POST /operations`. The request includes a `source` field with `POS` or `ONLINE`, an `external_id` from your own system, and a typed operation variant in `data`, such as `SaleOperation` or `RefundOperation`. The response returns the operation resource, a `resource_version`, and an `ETag` header.
 
 ```bash
 curl -X POST https://api.openfiskal.com/v1/operations \
@@ -67,7 +64,7 @@ This makes retries and concurrent writers safe:
 
 ## Complete an operation
 
-Use `PATCH /operations/{operationId}/complete` when you want OpenFiskal to produce the final fiscal document and receipt state. Completion now accepts a typed `payments` array and can return `fiscal_information` for regime-specific fiscal payloads.
+Use `PATCH /operations/{operationId}/complete` when you want OpenFiskal to produce the final fiscal document and receipt state. Completion now accepts a typed `payments` array and can return `fiscal_information` for regime-specific fiscal payloads. Asynchronous payment follow-up is represented through payment-level status values, not a separate operation status.
 
 Completion is a fiscal event. Use an idempotency key on every completion request.
 
