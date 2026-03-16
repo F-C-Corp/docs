@@ -29,6 +29,8 @@ Every organization-scoped request must also include:
 -H "X-OpenFiskal-Organization: org_01HXYZ"
 ```
 
+This header value is the organization ID returned by `POST /organizations`, not your API key.
+
 You only omit `X-OpenFiskal-Organization` when you create, update, or delete the organization itself.
 
 ## Step by step
@@ -46,13 +48,13 @@ You only omit `X-OpenFiskal-Organization` when you create, update, or delete the
       -H "Content-Type: application/json" \
       -d '{
         "legal_name": "Mustermann GmbH",
-        "country": "DE",
+        "country_code": "DEU",
         "tax_id": "DE123456789",
         "address": {
           "line1": "Friedrichstraße 42",
           "city": "Berlin",
           "postal_code": "10117",
-          "country": "DE"
+          "country_code": "DEU"
         }
       }'
     ```
@@ -61,7 +63,7 @@ You only omit `X-OpenFiskal-Organization` when you create, update, or delete the
     {
       "id": "org_01HXYZ",
       "legal_name": "Mustermann GmbH",
-      "country": "DE",
+      "country_code": "DEU",
       "tax_id": "DE123456789",
       "created_at": "2026-02-26T10:01:00Z",
       "updated_at": "2026-02-26T10:01:00Z"
@@ -84,7 +86,7 @@ You only omit `X-OpenFiskal-Organization` when you create, update, or delete the
           "line1": "Friedrichstraße 42",
           "city": "Berlin",
           "postal_code": "10117",
-          "country": "DE"
+          "country_code": "DEU"
         },
         "timezone": "Europe/Berlin"
       }'
@@ -111,6 +113,7 @@ You only omit `X-OpenFiskal-Organization` when you create, update, or delete the
       -H "Content-Type: application/json" \
       -d '{
         "location_id": "loc_01HXYZ",
+        "country_code": "DEU",
         "name": "Register 1",
         "external_id": "pos-register-1"
       }'
@@ -121,6 +124,7 @@ You only omit `X-OpenFiskal-Organization` when you create, update, or delete the
       "id": "reg_01HXYZ",
       "organization_id": "org_01HXYZ",
       "location_id": "loc_01HXYZ",
+      "country_code": "DEU",
       "name": "Register 1",
       "external_id": "pos-register-1",
       "status": "active",
@@ -148,7 +152,7 @@ You only omit `X-OpenFiskal-Organization` when you create, update, or delete the
     ```
   </Step>
   <Step title="Start an operation">
-    Start every operation with `POST /operations`. The request includes the source and a typed `data` object.
+    Start every operation with `POST /operations`. The request includes the source and a typed `data` object. The response returns `op_revision`, which starts at `1`.
 
     ```bash
     curl -X POST https://sandbox.api.openfiskal.com/v1/operations \
@@ -172,12 +176,13 @@ You only omit `X-OpenFiskal-Organization` when you create, update, or delete the
     ```json
     {
       "operation_id": "op_01HXYZ",
+      "op_revision": 1,
       "status": "open"
     }
     ```
   </Step>
   <Step title="Update the operation while it is open">
-    You can patch the operation as long as it is not completed yet.
+    You can patch the operation as long as it is not completed yet. Send the last `op_revision` you received so the API can reject stale concurrent writes.
 
     ```bash
     curl -X PATCH https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ \
@@ -185,6 +190,7 @@ You only omit `X-OpenFiskal-Organization` when you create, update, or delete the
       -H "X-OpenFiskal-Organization: org_01HXYZ" \
       -H "Content-Type: application/json" \
       -d '{
+        "op_revision": 1,
         "data": {
           "type": "sale",
           "external_reference": "order-1001",
@@ -201,9 +207,11 @@ You only omit `X-OpenFiskal-Organization` when you create, update, or delete the
         }
       }'
     ```
+
+    After a successful update, read the operation again or use the returned representation and keep the new `op_revision` for the next mutation.
   </Step>
   <Step title="Complete the operation">
-    Completion is modeled as an operation sub-resource and includes the reconciled payment transactions.
+    Completion is modeled as an operation sub-resource and includes the reconciled payment transactions. Like updates, completion must include the latest `op_revision`.
 
     ```bash
     curl -X PATCH https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ/completion \
@@ -212,6 +220,7 @@ You only omit `X-OpenFiskal-Organization` when you create, update, or delete the
       -H "Idempotency-Key: op-order-1001-complete" \
       -H "Content-Type: application/json" \
       -d '{
+        "op_revision": 2,
         "transactions": [
           {
             "transaction_id": "txn_1001_1",
@@ -232,19 +241,39 @@ You only omit `X-OpenFiskal-Organization` when you create, update, or delete the
     ```json
     {
       "operation_id": "op_01HXYZ",
+      "op_revision": 3,
       "status": "completed",
       "fiscal_information": {
-        "fiscalization_id": "fisc_01HXYZ",
+        "regime": "KassenSichV",
         "document_number": "2026-000123",
-        "qr_code_data": "OFK:2026-000123:...",
-        "receipt_url": "https://sandbox.api.openfiskal.com/v1/receipts/rcp_01HXYZ",
-        "fiscalized_at": "2026-02-26T12:05:01Z"
+        "document_type": "Kassenbeleg",
+        "tse_serial": "TSE0123456789ABCDEF",
+        "client_id": "Kasse1",
+        "signature_algorithm": "ecdsa-plain-SHA384",
+        "time_format": "utcTime",
+        "start_event": {
+          "signed_at": "2026-02-25T19:02:11Z",
+          "transaction_counter": 4821,
+          "signature": "base64encodedStartSignature=="
+        },
+        "end_event": {
+          "signed_at": "2026-02-25T20:14:55Z",
+          "transaction_counter": 4822,
+          "signature": "base64encodedEndSignature==",
+          "process_type": "Kassenbeleg-V1",
+          "process_data": "Beleg^42.50_0.00_0.00_0.00_0.00^42.50:Bar"
+        },
+        "verification": {
+          "qr_data": "V0;Kasse1;ecdsa-plain-SHA384;2026-02-25T19:02:11;2026-02-25T20:14:55;42.50;4822;base64encodedEndSignature=="
+        }
       }
     }
     ```
+
+    After completion, `fiscal_information` contains both the start and end signatures, as required by KassenSichV. Both must be printed on the receipt. The `qr_data` value follows the DSFinV-K QR format and is printed verbatim on the receipt.
   </Step>
   <Step title="Read and list operations">
-    Use `GET /operations` to list operations and `GET /operations/:id` to read one operation.
+    Use `GET /operations` to list operations and `GET /operations/:id` to read one operation, including its current `op_revision`.
 
     ```bash
     curl https://sandbox.api.openfiskal.com/v1/operations \
@@ -331,3 +360,7 @@ The documentation is now centered on this API surface:
 - Fiscalization targets a concrete register resource.
 - Completion is modeled as an operation sub-resource instead of a verb endpoint.
 - Export status and export download are separate, which is easier for asynchronous clients.
+- `country_code` is explicit and documented as ISO 3166-1 alpha-3.
+- Registers also carry `country_code`, which supports mixed-country fleets in one tenant.
+- `op_revision` gives you optimistic concurrency control similar to fiskaly's `tx_revision`.
+- `fiscal_information` uses a country-discriminated envelope with `country_code`, `regime`, and country-specific `data`.

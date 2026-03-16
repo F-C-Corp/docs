@@ -29,6 +29,8 @@ For every organization-scoped request, also send:
 -H "X-OpenFiskal-Organization: org_01HXYZ"
 ```
 
+This header must contain the OpenFiskal organization ID, not the API key.
+
 Together, a typical organization-scoped request looks like this:
 
 ```bash
@@ -71,6 +73,7 @@ curl -X POST https://api.openfiskal.com/v1/operations \
 - Reject organization-scoped requests that are missing either `Authorization` or `X-OpenFiskal-Organization`.
 - Return `401` when authentication is missing or invalid.
 - Return `403` when the API key is valid but not allowed to access the requested tenant, country, or organization.
+- Return `409 Conflict` when an operation update or completion uses a stale `op_revision`.
 
 ## Next step
 
