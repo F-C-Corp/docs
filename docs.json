@@ -84,5 +84,8 @@
   "logo": {
     "light": "/images/OpenFiskal_Logo_Main_Hori_Blue.svg",
     "dark": "/images/OpenFiskal_Logo_Main_Hori_Blue.svg"
+  },
+  "metadata": {
+    "timestamp": true
   }
 }
