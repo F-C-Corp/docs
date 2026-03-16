@@ -97,7 +97,7 @@ This header value is the organization ID returned by `POST /organizations`, not 
     ```
   </Step>
   <Step title="Start an operation">
-    Start every operation with `POST /operations`. The request includes explicit upstream references and a typed `data` object. Persist the returned `id`, `resource_version`, and `ETag`.
+    Start every operation with `POST /operations`. The request includes `source`, explicit upstream references, and a typed operation variant in `data`. Persist the returned `id`, `resource_version`, and `ETag`.
 
     ```bash
     curl -X POST https://sandbox.api.openfiskal.com/v1/operations \
@@ -108,6 +108,7 @@ This header value is the organization ID returned by `POST /organizations`, not 
       -d '{
         "location_id": "loc_01HXYZ",
         "register_id": "reg_01HXYZ",
+        "source": "POS",
         "seller_id": "seller_berlin_1",
         "operator_id": "cashier_17",
         "order_id": "order-1001",
@@ -149,7 +150,7 @@ This header value is the organization ID returned by `POST /organizations`, not 
     ```
   </Step>
   <Step title="Complete the operation">
-    Completion includes typed payment legs. Use one entry per tender leg and include processor references where available. Store the returned `ETag` from the completion response if you will read the final operation again later.
+    Completion includes typed payment legs. Use one entry per tender leg and include processor references where available. The completed operation can also return `fiscal_information` alongside the newer fiscal document shape. Store the returned `ETag` from the completion response if you will read the final operation again later.
 
     ```bash
     curl -X PATCH https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ/complete \

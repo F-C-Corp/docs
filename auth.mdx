@@ -73,19 +73,6 @@ Use idempotency keys for operation start, operation completion, operation cancel
 
 The platform retains keys for at least 24 hours. Reusing the same key with a different payload returns `409 idempotency_key_conflict`.
 
-## Conditional writes
-
-Open operation mutations use server-issued resource versions.
-
-1. Read or create the operation.
-2. Persist the returned `ETag` and `resource_version`.
-3. Send that value in `If-Match` on `PATCH /operations/{id}`, `PATCH /operations/{id}/complete`, and `PATCH /operations/{id}/cancel`.
-4. Replace your stored value with the new `ETag` and `resource_version` from every successful mutation response.
-
-The server issues a new operation resource version on every successful mutation. The response body returns that value as `resource_version`, and the response header returns the same version as `ETag`.
-
-If you omit `If-Match`, the API returns `428 precondition_required`. If you send a stale value, the API returns `412 precondition_failed`.
-
 ## Recommended handling
 
 - Return `401` when authentication is missing or invalid.

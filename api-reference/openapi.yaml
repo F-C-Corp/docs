@@ -479,7 +479,19 @@ paths:
     patch:
       tags: [Operations]
       summary: Update operation
-      description: Updates a mutable operation by using a server-issued `ETag` in `If-Match`.
+      description: |
+        Updates a mutable operation by using a server-issued `ETag` in `If-Match`.
+
+        Conditional write flow:
+
+        1. Read or create the operation.
+        2. Persist the returned `resource_version` and `ETag`.
+        3. Send that `ETag` value in `If-Match` on the next update request.
+        4. Replace your stored value with the new `resource_version` and `ETag` from every successful mutation response.
+
+        The server issues a new operation resource version on every successful mutation. The response body returns that value as `resource_version`, and the response header returns the same value as `ETag`.
+
+        If you omit `If-Match`, the API returns `428 precondition_required`. If you send a stale value, the API returns `412 precondition_failed`.
       security:
         - BearerAuth: []
       parameters:
@@ -1092,6 +1104,9 @@ components:
           type: string
           nullable: true
       required: [data]
+    OperationSource:
+      type: string
+      enum: [POS, ONLINE]
     OperationType:
       type: string
       enum: [sale, refund, exchange, custom]
@@ -1193,24 +1208,9 @@ components:
             created_at:
               type: string
               format: date-time
-    FiscalDocument:
+    OperationBase:
       type: object
       properties:
-        receipt_id:
-          type: string
-        document_number:
-          type: string
-        fields:
-          type: object
-          additionalProperties: true
-        transmission_status:
-          $ref: '#/components/schemas/FiscalTransmissionStatus'
-      required: [receipt_id, transmission_status]
-    OperationData:
-      type: object
-      properties:
-        type:
-          $ref: '#/components/schemas/OperationType'
         status:
           $ref: '#/components/schemas/OperationStatus'
         currency:
@@ -1230,15 +1230,242 @@ components:
         note:
           type: string
           nullable: true
-      required: [type, currency, amount]
+      required: [currency, amount]
     SaleOperation:
       allOf:
-        - $ref: '#/components/schemas/OperationData'
+        - $ref: '#/components/schemas/OperationBase'
         - type: object
+          title: SaleOperation
           properties:
             type:
               type: string
               const: sale
+            line_items:
+              type: array
+              items:
+                $ref: '#/components/schemas/LineItemInput'
+          required: [type]
+    RefundOperation:
+      allOf:
+        - $ref: '#/components/schemas/OperationBase'
+        - type: object
+          title: RefundOperation
+          properties:
+            type:
+              type: string
+              const: refund
+            related_operation_id:
+              type: string
+              nullable: true
+            line_items:
+              type: array
+              items:
+                $ref: '#/components/schemas/LineItemInput'
+          required: [type]
+    ExchangeOperation:
+      allOf:
+        - $ref: '#/components/schemas/OperationBase'
+        - type: object
+          title: ExchangeOperation
+          properties:
+            type:
+              type: string
+              const: exchange
+            related_operation_id:
+              type: string
+              nullable: true
+            returned_line_items:
+              type: array
+              items:
+                $ref: '#/components/schemas/LineItemInput'
+            new_line_items:
+              type: array
+              items:
+                $ref: '#/components/schemas/LineItemInput'
+          required: [type]
+    CustomOperation:
+      allOf:
+        - $ref: '#/components/schemas/OperationBase'
+        - type: object
+          title: CustomOperation
+          properties:
+            type:
+              type: string
+              const: custom
+            name:
+              type: string
+          required: [type, name]
+    OperationData:
+      oneOf:
+        - $ref: '#/components/schemas/SaleOperation'
+        - $ref: '#/components/schemas/RefundOperation'
+        - $ref: '#/components/schemas/ExchangeOperation'
+        - $ref: '#/components/schemas/CustomOperation'
+      discriminator:
+        propertyName: type
+        mapping:
+          sale: '#/components/schemas/SaleOperation'
+          refund: '#/components/schemas/RefundOperation'
+          exchange: '#/components/schemas/ExchangeOperation'
+          custom: '#/components/schemas/CustomOperation'
+    FiscalInformation:
+      oneOf:
+        - $ref: '#/components/schemas/FiscalInformationKassenSichV'
+        - $ref: '#/components/schemas/FiscalInformationRKSV'
+        - $ref: '#/components/schemas/FiscalInformationRT'
+      discriminator:
+        propertyName: regime
+        mapping:
+          KassenSichV: '#/components/schemas/FiscalInformationKassenSichV'
+          RKSV: '#/components/schemas/FiscalInformationRKSV'
+          RT: '#/components/schemas/FiscalInformationRT'
+    FiscalInformationKassenSichV:
+      type: object
+      title: FiscalInformationKassenSichV
+      properties:
+        regime:
+          type: string
+          const: KassenSichV
+        document_number:
+          type: string
+        document_type:
+          type: string
+        tse_serial:
+          type: string
+        client_id:
+          type: string
+        signature_algorithm:
+          type: string
+        time_format:
+          type: string
+        start_event:
+          $ref: '#/components/schemas/FiscalInformationKassenSichVStartEvent'
+        end_event:
+          $ref: '#/components/schemas/FiscalInformationKassenSichVEndEvent'
+        verification:
+          $ref: '#/components/schemas/FiscalInformationKassenSichVVerification'
+      required:
+        [regime, document_number, document_type, tse_serial, client_id, signature_algorithm, time_format, start_event, end_event, verification]
+    FiscalInformationKassenSichVStartEvent:
+      type: object
+      properties:
+        signed_at:
+          type: string
+          format: date-time
+        transaction_counter:
+          type: integer
+        signature:
+          type: string
+      required: [signed_at, transaction_counter, signature]
+    FiscalInformationKassenSichVEndEvent:
+      type: object
+      properties:
+        signed_at:
+          type: string
+          format: date-time
+        transaction_counter:
+          type: integer
+        signature:
+          type: string
+        process_type:
+          type: string
+        process_data:
+          type: string
+      required: [signed_at, transaction_counter, signature, process_type, process_data]
+    FiscalInformationKassenSichVVerification:
+      type: object
+      properties:
+        qr_data:
+          type: string
+      required: [qr_data]
+    FiscalInformationRKSV:
+      type: object
+      title: FiscalInformationRKSV
+      properties:
+        regime:
+          type: string
+          const: RKSV
+        document_number:
+          type: string
+        document_type:
+          type: string
+        transmission_status:
+          type: string
+        transmitted_at:
+          type: string
+          format: date-time
+          nullable: true
+        cashbox_id:
+          type: string
+        certificate_serial:
+          type: string
+        signature:
+          $ref: '#/components/schemas/FiscalInformationRKSVSignature'
+        verification:
+          $ref: '#/components/schemas/FiscalInformationRKSVVerification'
+      required: [regime, document_number, document_type, cashbox_id, signature, verification]
+    FiscalInformationRKSVSignature:
+      type: object
+      properties:
+        signed_at:
+          type: string
+          format: date-time
+        transaction_counter:
+          type: integer
+        turnover_counter:
+          type: string
+        signature:
+          type: string
+        certificate_serial:
+          type: string
+      required: [signed_at, transaction_counter, turnover_counter, signature, certificate_serial]
+    FiscalInformationRKSVVerification:
+      type: object
+      properties:
+        qr_data:
+          type: string
+      required: [qr_data]
+    FiscalInformationRT:
+      type: object
+      title: FiscalInformationRT
+      properties:
+        regime:
+          type: string
+          const: RT
+        document_number:
+          type: string
+        document_type:
+          type: string
+        transmission_status:
+          type: string
+        transmitted_at:
+          type: string
+          format: date-time
+          nullable: true
+        rt_serial:
+          type: string
+        rt_firmware:
+          type: string
+        progressive_number:
+          type: integer
+        daily_closing_number:
+          type: integer
+        lottery_code:
+          type: string
+          nullable: true
+        signature:
+          $ref: '#/components/schemas/FiscalInformationRTSignature'
+      required:
+        [regime, document_number, document_type, rt_serial, rt_firmware, progressive_number, daily_closing_number, signature]
+    FiscalInformationRTSignature:
+      type: object
+      properties:
+        signed_at:
+          type: string
+          format: date-time
+        signature:
+          type: string
+      required: [signed_at, signature]
     PosOperationEnvelope:
       type: object
       properties:
@@ -1246,6 +1473,8 @@ components:
           type: string
         register_id:
           type: string
+        source:
+          $ref: '#/components/schemas/OperationSource'
         seller_id:
           type: string
         operator_id:
@@ -1254,7 +1483,7 @@ components:
           type: string
         data:
           $ref: '#/components/schemas/OperationData'
-      required: [location_id, register_id, order_id, data]
+      required: [location_id, register_id, source, order_id, data]
     Operation:
       type: object
       properties:
@@ -1269,6 +1498,8 @@ components:
           type: string
         register_id:
           type: string
+        source:
+          $ref: '#/components/schemas/OperationSource'
         seller_id:
           type: string
           nullable: true
@@ -1293,8 +1524,8 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Payment'
-        fiscal_document:
-          $ref: '#/components/schemas/FiscalDocument'
+        fiscal_information:
+          $ref: '#/components/schemas/FiscalInformation'
         transmission_status:
           $ref: '#/components/schemas/FiscalTransmissionStatus'
         created_at:
@@ -1304,7 +1535,7 @@ components:
           type: string
           format: date-time
       required:
-        [id, resource_version, organization_id, location_id, register_id, order_id, status, type, currency, totals, payments, transmission_status, created_at, updated_at]
+        [id, resource_version, organization_id, location_id, register_id, source, order_id, status, type, currency, totals, payments, transmission_status, created_at, updated_at]
     OperationCreateRequest:
       allOf:
         - $ref: '#/components/schemas/PosOperationEnvelope'

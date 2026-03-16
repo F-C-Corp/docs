@@ -43,7 +43,7 @@ The public API currently supports these operation types:
 
 ## Start an operation
 
-Create operations with `POST /operations`. The response returns the operation resource, a `resource_version`, and an `ETag` header.
+Create operations with `POST /operations`. The request includes a `source` field with `POS` or `ONLINE`, and the `data` payload is a typed operation variant such as `SaleOperation` or `RefundOperation`. The response returns the operation resource, a `resource_version`, and an `ETag` header.
 
 ```bash
 curl -X POST https://api.openfiskal.com/v1/operations \
@@ -67,7 +67,7 @@ This makes retries and concurrent writers safe:
 
 ## Complete an operation
 
-Use `PATCH /operations/{operationId}/complete` when you want OpenFiskal to produce the final fiscal document and receipt state. Completion now accepts a typed `payments` array.
+Use `PATCH /operations/{operationId}/complete` when you want OpenFiskal to produce the final fiscal document and receipt state. Completion now accepts a typed `payments` array and can return `fiscal_information` for regime-specific fiscal payloads.
 
 Completion is a fiscal event. Use an idempotency key on every completion request.
 
@@ -77,6 +77,7 @@ Completion is a fiscal event. Use an idempotency key on every completion request
 
 ```json
 {
+  "source": "POS",
   "data": {
     "type": "sale",
     "currency": "EUR",
@@ -114,6 +115,7 @@ Completion is a fiscal event. Use an idempotency key on every completion request
 
 ```json
 {
+  "source": "POS",
   "data": {
     "type": "refund",
     "related_operation_id": "op_01HSALE",
