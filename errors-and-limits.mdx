@@ -1,6 +1,6 @@
 ---
 title: "Errors and limits"
-description: "Platform guarantees, rate limits, idempotency rules, health checks, and the stable API error catalog."
+description: "Platform guarantees, rate limits, idempotency rules, and the stable API error catalog."
 ---
 
 ## Platform guarantees
@@ -12,7 +12,7 @@ OpenFiskal publishes these current platform targets for the fiscalization API:
 | Availability target | `99.9%` monthly for production |
 | Typical synchronous latency | `p50 < 300 ms`, `p95 < 1200 ms` for standard operation mutations |
 | Client timeout guidance | `10s` request timeout, `30s` total retry budget for synchronous calls |
-| Rate limiting | Per API key and per organization |
+| Rate limiting | `500 requests/second` per API key |
 | `429` behavior | Returns `Retry-After` in seconds and a stable `rate_limit_exceeded` error code |
 
 ## Idempotency rules
@@ -42,10 +42,6 @@ Audit events are recorded for:
 - operation cancelled
 - export created
 - export delivered
-
-## Health and status
-
-Use `GET /health` for liveness and dependency status. The response is designed for automation, not for public status-page messaging.
 
 ## Stable error catalog
 

@@ -69,17 +69,20 @@ curl -X POST https://api.openfiskal.com/v1/operations \
   -d '{ "...": "..." }'
 ```
 
-Use idempotency keys for operation start, operation completion, operation cancellation, export creation, bulk job creation, and receipt delivery.
+Use idempotency keys for operation start, operation completion, operation cancellation, export creation, and receipt delivery.
 
 The platform retains keys for at least 24 hours. Reusing the same key with a different payload returns `409 idempotency_key_conflict`.
 
 ## Conditional writes
 
-Open operation mutations now use server-issued resource versions instead of caller-guessed sequence numbers.
+Open operation mutations use server-issued resource versions.
 
 1. Read or create the operation.
-2. Persist the returned `ETag`.
+2. Persist the returned `ETag` and `resource_version`.
 3. Send that value in `If-Match` on `PATCH /operations/{id}`, `PATCH /operations/{id}/complete`, and `PATCH /operations/{id}/cancel`.
+4. Replace your stored value with the new `ETag` and `resource_version` from every successful mutation response.
+
+The server issues a new operation resource version on every successful mutation. The response body returns that value as `resource_version`, and the response header returns the same version as `ETag`.
 
 If you omit `If-Match`, the API returns `428 precondition_required`. If you send a stale value, the API returns `412 precondition_failed`.
 
@@ -88,7 +91,7 @@ If you omit `If-Match`, the API returns `428 precondition_required`. If you send
 - Return `401` when authentication is missing or invalid.
 - Return `403` when the API key is valid but not allowed to access the requested tenant, country, or organization.
 - Return `412 Precondition Failed` when an operation update, completion, or cancellation uses a stale `If-Match` value.
-- Return `429 Too Many Requests` with `Retry-After` when the caller exceeds the allowed rate.
+- Return `429 Too Many Requests` with `Retry-After` when the caller exceeds `500 requests/second` per API key.
 
 ## Next step
 

@@ -1,33 +1,24 @@
 ---
 title: "Exports and reconciliation"
-description: "How to use export jobs, incremental exports, and reconciliation workflows."
+description: "How to use export jobs and reconciliation workflows."
 ---
 
 ## Overview
 
 Exports remain asynchronous in the current `v1` contract. You create an export job and poll it until the artifact is ready.
 
-## Export modes
-
-OpenFiskal supports these export modes:
-
-- `full` for a complete time-bounded extract
-- `incremental` for changes since a watermark
-- `bulk_onboarding_result` for bulk onboarding and import jobs
-
 Every export response includes the schema version, retention deadline, and a download link after readiness.
 
-## Incremental exports
+## Export request
 
-Use incremental mode for ERP sync, lake ingestion, and replay verification.
+Use time-bounded export jobs for ERP sync, lake ingestion, and reconciliation verification.
 
 ```json
 {
   "type": "operations",
   "format": "jsonl",
-  "mode": "incremental",
   "from": "2026-03-01T00:00:00Z",
-  "watermark": "expwm_01JXYZ"
+  "to": "2026-03-31T23:59:59Z"
 }
 ```
 
@@ -46,10 +37,6 @@ Use exports for bulk comparison. Poll export and operation resources when you ne
 ## Retention
 
 Export artifacts remain downloadable until the `retention_expires_at` timestamp. You should copy each artifact to your own durable storage before that deadline.
-
-## Bulk onboarding and import jobs
-
-Use bulk jobs when you need to onboard large merchant, location, or register sets without per-record synchronous calls. Bulk job results are exposed through the same export workflow so you can review accepted rows and rejected rows in one place.
 
 ## Next steps
 

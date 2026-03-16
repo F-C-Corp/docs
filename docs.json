@@ -23,18 +23,12 @@
             ]
           },
           {
-            "group": "Onboarding and identity",
-            "pages": [
-              "register-lifecycle"
-            ]
-          },
-          {
             "group": "Transaction processing",
             "pages": [
+              "register-lifecycle",
               "pos-operation-ingestion",
               "payment-lifecycle",
-              "offline-guidance",
-              "receipts"
+              "offline-guidance"
             ]
           },
           {

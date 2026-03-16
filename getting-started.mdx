@@ -1,6 +1,6 @@
 ---
 title: "Getting started"
-description: "Create your API key, onboard a merchant, and complete your first enterprise-ready operation."
+description: "Create your API key, onboard a merchant, and complete your first operation."
 ---
 
 This guide walks you through the current `v1` integration contract. You create an API key, onboard a merchant, register a location and terminal, start an operation, update it with `If-Match`, and complete it with the typed payment contract.
@@ -14,8 +14,7 @@ This guide walks you through the current `v1` integration contract. You create a
 - An OpenFiskal tenant
 - A tenant-scoped, country-scoped API key created in your tenant dashboard
 - `curl` or an HTTP client
-- A backend service that holds the API key securely
-- Durable storage for idempotency keys and operation `ETag` values
+- A backend service / database to store your API key, entity IDs and ETags.
 
 ## Authentication model
 
@@ -98,7 +97,7 @@ This header value is the organization ID returned by `POST /organizations`, not 
     ```
   </Step>
   <Step title="Start an operation">
-    Start every operation with `POST /operations`. The request includes explicit upstream references and a typed `data` object. Persist both the returned `id` and the response `ETag`.
+    Start every operation with `POST /operations`. The request includes explicit upstream references and a typed `data` object. Persist the returned `id`, `resource_version`, and `ETag`.
 
     ```bash
     curl -X POST https://sandbox.api.openfiskal.com/v1/operations \
@@ -123,7 +122,7 @@ This header value is the organization ID returned by `POST /organizations`, not 
     ```
   </Step>
   <Step title="Update the operation while it is open">
-    You can patch the operation as long as it is still mutable. Send the latest operation `ETag` in `If-Match`. If another writer updated the operation first, re-read the resource and retry with the new `ETag`.
+    You can patch the operation as long as it is still mutable. Send the latest operation `ETag` in `If-Match`. Every successful mutation returns a new `resource_version` and `ETag`, so replace your stored value after each write. If another writer updated the operation first, re-read the resource and retry with the new `ETag`.
 
     ```bash
     curl -X PATCH https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ \
@@ -150,7 +149,7 @@ This header value is the organization ID returned by `POST /organizations`, not 
     ```
   </Step>
   <Step title="Complete the operation">
-    Completion includes typed payment legs. Use one entry per tender leg and include processor references where available.
+    Completion includes typed payment legs. Use one entry per tender leg and include processor references where available. Store the returned `ETag` from the completion response if you will read the final operation again later.
 
     ```bash
     curl -X PATCH https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ/complete \
@@ -187,7 +186,7 @@ This header value is the organization ID returned by `POST /organizations`, not 
     ```
   </Step>
   <Step title="Create an export job">
-    Exports are asynchronous. Use incremental exports for production reconciliation and poll the job until it is ready.
+    Exports are asynchronous. Create a time-bounded export job and poll it until it is ready.
 
     ```bash
     curl -X POST https://sandbox.api.openfiskal.com/v1/exports \
@@ -197,7 +196,6 @@ This header value is the organization ID returned by `POST /organizations`, not 
       -d '{
         "type": "operations",
         "format": "jsonl",
-        "mode": "incremental",
         "from": "2026-02-01T00:00:00Z",
         "to": "2026-02-29T23:59:59Z"
       }'

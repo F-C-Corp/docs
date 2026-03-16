@@ -61,6 +61,7 @@ Use `PATCH /operations/{operationId}` while the operation is still mutable. Send
 This makes retries and concurrent writers safe:
 
 - the server owns the version
+- every successful mutation returns a new `resource_version` and `ETag`
 - the client retries with the same idempotency key where supported
 - stale writers receive `412 precondition_failed`
 
@@ -146,14 +147,10 @@ Use conditional writes with server-issued versions:
 
 - create or read the operation
 - persist the returned `ETag`
+- treat `resource_version` in the body and `ETag` in the header as the same server-issued version
 - send that value in `If-Match` on the next mutation
+- replace your stored version after every successful mutation
 - re-read on `412 precondition_failed`
-
-Do not guess sequence numbers.
-
-## Receipts
-
-Receipt retrieval and delivery live in the separate [Hosted Receipts API](/hosted-receipts-api). After an operation reaches `completed`, resolve its receipt there.
 
 ## What your backend must do
 
