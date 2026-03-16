@@ -1174,7 +1174,7 @@ components:
       enum: [sale, refund, exchange, custom]
     OperationStatus:
       type: string
-      enum: [open, pending_payment, completed, cancelled]
+      enum: [open, completed, cancelled]
     PaymentMethod:
       type: string
       enum: [cash, card, voucher, gift_card, bank_transfer, digital_wallet, store_credit, other]
@@ -1265,8 +1265,6 @@ components:
     OperationBase:
       type: object
       properties:
-        status:
-          $ref: '#/components/schemas/OperationStatus'
         currency:
           type: string
         amount:
@@ -1581,6 +1579,10 @@ components:
         - $ref: '#/components/schemas/PosOperationEnvelope'
     OperationPatchRequest:
       type: object
+      description: |
+        Mutable operation fields. The server manages `status`.
+        Clients update fiscal inputs on the operation and use dedicated
+        endpoints to finalize or cancel it.
       properties:
         data:
           $ref: '#/components/schemas/OperationData'

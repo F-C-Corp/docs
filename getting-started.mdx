@@ -123,7 +123,6 @@ Once your resources exist, you can create, update, and complete a sale operation
         "external_id": "order-1001",
         "data": {
           "type": "sale",
-          "status": "open",
           "currency": "EUR",
           "amount": 4250,
           "tip_amount": 0
@@ -173,7 +172,6 @@ Once your resources exist, you can create, update, and complete a sale operation
       -d '{
         "data": {
           "type": "sale",
-          "status": "pending_payment",
           "currency": "EUR",
           "amount": 4750,
           "line_items": [
@@ -205,7 +203,7 @@ Once your resources exist, you can create, update, and complete a sale operation
       "register_id": "reg_01HXYZ",
       "source": "POS",
       "external_id": "order-1001",
-      "status": "pending_payment",
+      "status": "open",
       "type": "sale",
       "currency": "EUR",
       "totals": {

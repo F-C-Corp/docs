@@ -14,16 +14,15 @@ Each operation follows the same public lifecycle:
 ```mermaid
 stateDiagram-v2
     [*] --> open
-    open --> pending_payment
-    pending_payment --> completed
+    open --> completed
     open --> cancelled
-    pending_payment --> cancelled
 ```
 
 - `open` means the basket or order is still being assembled
-- `pending_payment` means the financial intent is known and the operation is waiting for settlement input
 - `completed` means the fiscal event is final
 - `cancelled` means the operation was intentionally voided before completion
+
+OpenFiskal owns this lifecycle. Clients do not send operation `status` in request payloads. They update mutable operation fields through `PATCH /operations/{operationId}`, complete the operation through `PATCH /operations/{operationId}/complete`, and cancel it through `PATCH /operations/{operationId}/cancel`.
 
 Use a dedicated cancel action on the existing operation resource. Do not model cancellation as a separate operation type.
 
@@ -53,7 +52,7 @@ curl -X POST https://api.openfiskal.com/v1/operations \
 
 ## Update an open operation
 
-Use `PATCH /operations/{operationId}` while the operation is still mutable. Send the latest `ETag` value in `If-Match`.
+Use `PATCH /operations/{operationId}` while the operation is still mutable. Send the latest `ETag` value in `If-Match`. This endpoint updates fiscal inputs such as amounts, line items, or related references. It does not accept a client-supplied operation `status`.
 
 This makes retries and concurrent writers safe:
 
@@ -122,7 +121,7 @@ Completion is a fiscal event. Use an idempotency key on every completion request
 
 ## Cancel an open operation
 
-Use `PATCH /operations/{operationId}/cancel` only while the operation is still open or pending payment.
+Use `PATCH /operations/{operationId}/cancel` only while the operation is still open.
 
 ```bash
 curl -X PATCH https://api.openfiskal.com/v1/operations/op_01HXYZ/cancel \
