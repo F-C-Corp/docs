@@ -7,7 +7,7 @@
     "light": "#07C983",
     "dark": "#15803D"
   },
-  "favicon": "/favicon.svg",
+  "favicon": "/images/web-app-manifest-512x512.png",
   "navigation": {
     "tabs": [
       {
@@ -83,6 +83,6 @@
   "description": "OpenFiskal API docs.",
   "logo": {
     "light": "/images/OpenFiskal_Logo_Main_Hori_Blue.svg",
-    "dark": "/images/OpenFiskal_Logo_main_white.svg"
+    "dark": "/images/OpenFiskal_Logo_Main_Hori_Blue.svg"
   }
 }
