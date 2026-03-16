@@ -182,7 +182,7 @@ You only omit `X-OpenFiskal-Organization` when you create, update, or delete the
     ```
   </Step>
   <Step title="Update the operation while it is open">
-    You can patch the operation as long as it is not completed yet. Send the last `op_revision` you received so the API can reject stale concurrent writes.
+    You can patch the operation as long as it is not completed yet. `op_revision` is caller-driven. Start returns `1`, so the first mutation must send `2`.
 
     ```bash
     curl -X PATCH https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ \
@@ -190,7 +190,7 @@ You only omit `X-OpenFiskal-Organization` when you create, update, or delete the
       -H "X-OpenFiskal-Organization: org_01HXYZ" \
       -H "Content-Type: application/json" \
       -d '{
-        "op_revision": 1,
+        "op_revision": 2,
         "data": {
           "type": "sale",
           "external_reference": "order-1001",
@@ -208,10 +208,10 @@ You only omit `X-OpenFiskal-Organization` when you create, update, or delete the
       }'
     ```
 
-    After a successful update, read the operation again or use the returned representation and keep the new `op_revision` for the next mutation.
+    After a successful update, the operation revision is now `2`. Read the operation again or use the returned representation and increment from there for the next mutation.
   </Step>
   <Step title="Complete the operation">
-    Completion is modeled as an operation sub-resource and includes the reconciled payment transactions. Like updates, completion must include the latest `op_revision`.
+    Completion is modeled as an operation sub-resource and includes the reconciled payment transactions. Because the previous successful mutation used revision `2`, completion now sends `3`.
 
     ```bash
     curl -X PATCH https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ/completion \
@@ -220,7 +220,7 @@ You only omit `X-OpenFiskal-Organization` when you create, update, or delete the
       -H "Idempotency-Key: op-order-1001-complete" \
       -H "Content-Type: application/json" \
       -d '{
-        "op_revision": 2,
+        "op_revision": 3,
         "transactions": [
           {
             "transaction_id": "txn_1001_1",

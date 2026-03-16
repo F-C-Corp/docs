@@ -650,7 +650,7 @@ paths:
             schema:
               $ref: '#/components/schemas/OperationUpdateRequest'
             example:
-              op_revision: 1
+              op_revision: 2
               data:
                 type: sale
                 external_reference: order-1001
@@ -1355,7 +1355,9 @@ components:
         op_revision:
           type: integer
           minimum: 1
-          description: Last operation revision seen by the client.
+          description: |
+            Next operation revision for this mutation. Must be exactly one higher
+            than the current stored `op_revision`.
         data:
           $ref: '#/components/schemas/OperationData'
       required: [op_revision, data]
@@ -1367,7 +1369,9 @@ components:
         op_revision:
           type: integer
           minimum: 1
-          description: Last operation revision seen by the client.
+          description: |
+            Next operation revision for this mutation. Must be exactly one higher
+            than the current stored `op_revision`.
         transactions:
           type: array
           items:
@@ -1383,7 +1387,7 @@ components:
         op_revision:
           type: integer
           minimum: 1
-          description: New operation revision after completion.
+          description: Current operation revision after completion.
         status:
           type: string
           enum: [completed]
