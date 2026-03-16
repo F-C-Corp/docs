@@ -1,42 +1,82 @@
 openapi: 3.1.0
 info:
   title: OpenFiskal fiscalization API
-  version: 1.0.0
+  version: 1.1.0
   license:
     name: Proprietary
   description: |
     OpenFiskal exposes a server-to-server fiscalization API for merchant onboarding,
-    register setup, operation handling, and exports.
+    register setup, operation handling, exports, and bulk jobs.
 
-    Authentication uses a tenant-scoped, country-scoped API key created in the
-    tenant dashboard and sent in the standard `Authorization: Bearer` header.
-
-    Organization-scoped endpoints also require `X-OpenFiskal-Organization`.
-
+    The `v1` contract uses server-issued resource versions and conditional
+    writes through `If-Match` for safe concurrent mutation handling.
 servers:
   - url: https://api.openfiskal.com/v1
     description: Production
   - url: https://sandbox.api.openfiskal.com/v1
     description: Sandbox
-
 tags:
+  - name: Platform
+    description: Platform health, limits, and capabilities.
   - name: Organizations
-    description: Create, read, update, and delete merchant organizations.
+    description: Create and manage merchant organizations.
   - name: Locations
-    description: Create, list, read, update, and delete organization locations.
+    description: Create and manage merchant locations.
   - name: Registers
-    description: Create, list, read, update, and delete organization registers.
+    description: Create and manage registers or terminals.
   - name: Operations
     description: Start, update, complete, cancel, list, and read operations.
   - name: Exports
-    description: Enqueue, inspect, and download export jobs.
-
+    description: Create and inspect asynchronous export jobs.
+  - name: Bulk jobs
+    description: Bulk onboarding and import jobs.
 paths:
+  /health:
+    get:
+      tags: [Platform]
+      summary: Get platform health
+      description: Returns liveness, dependency status, and a request trace ID.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Platform health returned
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /platform/limits:
+    get:
+      tags: [Platform]
+      summary: Get current limits
+      description: Returns published rate, timeout, and idempotency guidance for the current tenant and organization scope.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationHeaderOptional'
+      responses:
+        '200':
+          description: Platform limits returned
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Limits'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
   /organizations:
     get:
       tags: [Organizations]
       summary: List organizations
-      description: List organizations available to the current tenant-scoped API key.
       security:
         - BearerAuth: []
       parameters:
@@ -45,20 +85,18 @@ paths:
       responses:
         '200':
           description: Organizations returned
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/OrganizationListResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '429':
-          $ref: '#/components/responses/RateLimited'
     post:
       tags: [Organizations]
       summary: Create organization
-      description: Create a merchant organization.
       security:
         - BearerAuth: []
       requestBody:
@@ -67,23 +105,12 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/OrganizationCreateRequest'
-            example:
-              legal_name: Mustermann GmbH
-              country_code: DEU
-              tax_id: DE123456789
-              address:
-                line1: Friedrichstraße 42
-                city: Berlin
-                postal_code: '10117'
-                country_code: DEU
       responses:
         '201':
           description: Organization created
           headers:
-            Location:
-              schema:
-                type: string
-              description: URL of the created organization.
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -92,18 +119,13 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
-        '429':
-          $ref: '#/components/responses/RateLimited'
 
   /organizations/{organizationId}:
     get:
       tags: [Organizations]
       summary: Get organization
-      description: Read a single organization.
       security:
         - BearerAuth: []
       parameters:
@@ -111,22 +133,20 @@ paths:
       responses:
         '200':
           description: Organization returned
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Organization'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '429':
-          $ref: '#/components/responses/RateLimited'
     patch:
       tags: [Organizations]
       summary: Update organization
-      description: Update a merchant organization.
       security:
         - BearerAuth: []
       parameters:
@@ -140,6 +160,9 @@ paths:
       responses:
         '200':
           description: Organization updated
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -148,33 +171,10 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
-        '429':
-          $ref: '#/components/responses/RateLimited'
-    delete:
-      tags: [Organizations]
-      summary: Delete organization
-      description: Delete a merchant organization.
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: '#/components/parameters/OrganizationId'
-      responses:
-        '204':
-          description: Organization deleted
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '429':
-          $ref: '#/components/responses/RateLimited'
 
   /locations:
     parameters:
@@ -182,7 +182,6 @@ paths:
     get:
       tags: [Locations]
       summary: List locations
-      description: List locations for the scoped organization.
       security:
         - BearerAuth: []
       parameters:
@@ -191,20 +190,18 @@ paths:
       responses:
         '200':
           description: Locations returned
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/LocationListResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '429':
-          $ref: '#/components/responses/RateLimited'
     post:
       tags: [Locations]
       summary: Create location
-      description: Create a location inside the scoped organization.
       security:
         - BearerAuth: []
       requestBody:
@@ -217,10 +214,8 @@ paths:
         '201':
           description: Location created
           headers:
-            Location:
-              schema:
-                type: string
-              description: URL of the created location.
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -229,91 +224,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
-        '429':
-          $ref: '#/components/responses/RateLimited'
-
-  /locations/{locationId}:
-    parameters:
-      - $ref: '#/components/parameters/OrganizationHeader'
-    get:
-      tags: [Locations]
-      summary: Get location
-      description: Read a single location in the scoped organization.
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: '#/components/parameters/LocationId'
-      responses:
-        '200':
-          description: Location returned
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Location'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '429':
-          $ref: '#/components/responses/RateLimited'
-    patch:
-      tags: [Locations]
-      summary: Update location
-      description: Update a location in the scoped organization.
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: '#/components/parameters/LocationId'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/LocationUpdateRequest'
-      responses:
-        '200':
-          description: Location updated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Location'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
-        '429':
-          $ref: '#/components/responses/RateLimited'
-    delete:
-      tags: [Locations]
-      summary: Delete location
-      description: Delete a location in the scoped organization.
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: '#/components/parameters/LocationId'
-      responses:
-        '204':
-          description: Location deleted
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '429':
-          $ref: '#/components/responses/RateLimited'
 
   /registers:
     parameters:
@@ -321,30 +233,26 @@ paths:
     get:
       tags: [Registers]
       summary: List registers
-      description: List registers for the scoped organization.
       security:
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/LocationFilter'
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Cursor'
       responses:
         '200':
           description: Registers returned
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/RegisterListResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '429':
-          $ref: '#/components/responses/RateLimited'
     post:
       tags: [Registers]
       summary: Create register
-      description: Create a register inside the scoped organization.
       security:
         - BearerAuth: []
       requestBody:
@@ -357,10 +265,8 @@ paths:
         '201':
           description: Register created
           headers:
-            Location:
-              schema:
-                type: string
-              description: URL of the created register.
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -369,91 +275,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
-        '429':
-          $ref: '#/components/responses/RateLimited'
-
-  /registers/{registerId}:
-    parameters:
-      - $ref: '#/components/parameters/OrganizationHeader'
-    get:
-      tags: [Registers]
-      summary: Get register
-      description: Read a single register in the scoped organization.
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: '#/components/parameters/RegisterId'
-      responses:
-        '200':
-          description: Register returned
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Register'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '429':
-          $ref: '#/components/responses/RateLimited'
-    patch:
-      tags: [Registers]
-      summary: Update register
-      description: Update a register in the scoped organization.
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: '#/components/parameters/RegisterId'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/RegisterUpdateRequest'
-      responses:
-        '200':
-          description: Register updated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Register'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
-        '429':
-          $ref: '#/components/responses/RateLimited'
-    delete:
-      tags: [Registers]
-      summary: Delete register
-      description: Delete a register in the scoped organization.
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: '#/components/parameters/RegisterId'
-      responses:
-        '204':
-          description: Register deleted
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '429':
-          $ref: '#/components/responses/RateLimited'
 
   /operations:
     parameters:
@@ -461,33 +284,39 @@ paths:
     get:
       tags: [Operations]
       summary: List operations
-      description: List operations for the scoped organization.
       security:
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/RegisterFilter'
-        - $ref: '#/components/parameters/LocationFilter'
-        - $ref: '#/components/parameters/OperationStatusFilter'
-        - $ref: '#/components/parameters/OperationTypeFilter'
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Cursor'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/OperationStatus'
+        - name: type
+          in: query
+          schema:
+            $ref: '#/components/schemas/OperationType'
+        - name: order_id
+          in: query
+          schema:
+            type: string
       responses:
         '200':
           description: Operations returned
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/OperationListResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '429':
-          $ref: '#/components/responses/RateLimited'
     post:
       tags: [Operations]
-      summary: Start operation
-      description: Start a new operation.
+      summary: Create operation
+      description: Starts a new operation. Persist the returned `ETag` for later mutation requests.
       security:
         - BearerAuth: []
       parameters:
@@ -497,27 +326,25 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/OperationStartRequest'
+              $ref: '#/components/schemas/OperationCreateRequest'
       responses:
         '201':
-          description: Operation started
+          description: Operation created
           headers:
-            Location:
-              schema:
-                type: string
-              description: URL of the created operation.
+            ETag:
+              $ref: '#/components/headers/ETag'
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OperationStartResponse'
+                $ref: '#/components/schemas/Operation'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
         '409':
-          $ref: '#/components/responses/Conflict'
+          $ref: '#/components/responses/IdempotencyConflict'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
         '429':
@@ -529,7 +356,6 @@ paths:
     get:
       tags: [Operations]
       summary: Get operation
-      description: Read a single operation in the scoped organization.
       security:
         - BearerAuth: []
       parameters:
@@ -537,35 +363,42 @@ paths:
       responses:
         '200':
           description: Operation returned
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Operation'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '429':
-          $ref: '#/components/responses/RateLimited'
     patch:
       tags: [Operations]
       summary: Update operation
-      description: Update an operation while it is still open.
+      description: Updates a mutable operation by using a server-issued `ETag` in `If-Match`.
       security:
         - BearerAuth: []
       parameters:
         - $ref: '#/components/parameters/OperationId'
+        - $ref: '#/components/parameters/IfMatch'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/OperationUpdateRequest'
+              $ref: '#/components/schemas/OperationPatchRequest'
       responses:
         '200':
           description: Operation updated
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -574,16 +407,14 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
-        '429':
-          $ref: '#/components/responses/RateLimited'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
 
   /operations/{operationId}/complete:
     parameters:
@@ -591,65 +422,27 @@ paths:
     patch:
       tags: [Operations]
       summary: Complete operation
-      description: |
-        Finalize an open operation. This is a fiscal event that produces the
-        final fiscal document.
+      description: Finalizes an operation and attaches the typed payment contract used for fiscalization and reconciliation.
       security:
         - BearerAuth: []
       parameters:
         - $ref: '#/components/parameters/OperationId'
+        - $ref: '#/components/parameters/IfMatch'
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CompleteOperationRequest'
+              $ref: '#/components/schemas/OperationCompleteRequest'
       responses:
         '200':
           description: Operation completed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CompleteOperationResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
-        '429':
-          $ref: '#/components/responses/RateLimited'
-
-  /operations/{operationId}/cancel:
-    parameters:
-      - $ref: '#/components/parameters/OrganizationHeader'
-    patch:
-      tags: [Operations]
-      summary: Cancel operation
-      description: |
-        Cancel an open operation. Completed operations cannot be cancelled with
-        this endpoint.
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: '#/components/parameters/OperationId'
-        - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CancelOperationRequest'
-      responses:
-        '200':
-          description: Operation cancelled
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -658,35 +451,111 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
-          $ref: '#/components/responses/Conflict'
+          $ref: '#/components/responses/IdempotencyConflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
-        '429':
-          $ref: '#/components/responses/RateLimited'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
 
-  /exports:
+  /operations/{operationId}/cancel:
     parameters:
       - $ref: '#/components/parameters/OrganizationHeader'
-    post:
-      tags: [Exports]
-      summary: Create export job
-      description: Enqueue an export job for the scoped organization.
+    patch:
+      tags: [Operations]
+      summary: Cancel operation
+      description: Cancels an operation before completion. Use a refund operation after completion.
       security:
         - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OperationId'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ExportRequest'
+              $ref: '#/components/schemas/OperationCancelRequest'
       responses:
-        '201':
+        '200':
+          description: Operation cancelled
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+
+  /exports:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationHeader'
+    get:
+      tags: [Exports]
+      summary: List export jobs
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Export jobs returned
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ExportJob'
+                  next_cursor:
+                    type: string
+                    nullable: true
+    post:
+      tags: [Exports]
+      summary: Create export job
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExportCreateRequest'
+      responses:
+        '202':
           description: Export job created
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -695,12 +564,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
-        '429':
-          $ref: '#/components/responses/RateLimited'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
 
   /exports/{exportId}:
     parameters:
@@ -708,7 +573,6 @@ paths:
     get:
       tags: [Exports]
       summary: Get export job
-      description: Read export job status before downloading.
       security:
         - BearerAuth: []
       parameters:
@@ -716,86 +580,161 @@ paths:
       responses:
         '200':
           description: Export job returned
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ExportJob'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '429':
-          $ref: '#/components/responses/RateLimited'
 
-  /exports/{exportId}/download:
+  /bulk-jobs:
     parameters:
       - $ref: '#/components/parameters/OrganizationHeader'
     get:
-      tags: [Exports]
-      summary: Download export artifact
-      description: Download a completed export artifact.
+      tags: [Bulk jobs]
+      summary: List bulk jobs
       security:
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/ExportId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
       responses:
         '200':
-          description: Export downloaded
+          description: Bulk jobs returned
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
           content:
-            application/octet-stream:
+            application/json:
               schema:
-                type: string
-                format: binary
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BulkJob'
+                  next_cursor:
+                    type: string
+                    nullable: true
+    post:
+      tags: [Bulk jobs]
+      summary: Create bulk job
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkJobCreateRequest'
+      responses:
+        '202':
+          description: Bulk job created
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkJob'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
+
+  /bulk-jobs/{jobId}:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationHeader'
+    get:
+      tags: [Bulk jobs]
+      summary: Get bulk job
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/BulkJobId'
+      responses:
+        '200':
+          description: Bulk job returned
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkJob'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '429':
-          $ref: '#/components/responses/RateLimited'
-
 components:
   securitySchemes:
     BearerAuth:
       type: http
       scheme: bearer
       bearerFormat: API key
-      description: Tenant-scoped, country-scoped API key created in the tenant dashboard.
-
+  headers:
+    ETag:
+      description: Server-issued operation resource version used with `If-Match`.
+      schema:
+        type: string
+        example: '"opv_01JXYZ"'
+    XRequestId:
+      description: Stable request trace identifier.
+      schema:
+        type: string
+        example: req_01JABCXYZ
   parameters:
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
     OrganizationHeader:
       name: X-OpenFiskal-Organization
       in: header
       required: true
-      description: OpenFiskal organization ID for organization-scoped requests.
+      schema:
+        type: string
+      description: Organization identifier returned by the organizations resource.
+    OrganizationHeaderOptional:
+      name: X-OpenFiskal-Organization
+      in: header
+      required: false
       schema:
         type: string
     IdempotencyKey:
       name: Idempotency-Key
       in: header
-      required: false
-      description: Caller-supplied key that makes retries safe for mutation endpoints.
+      required: true
       schema:
         type: string
+      description: Unique key per endpoint, organization, and tenant. Retained for at least 24 hours.
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      schema:
+        type: string
+      description: Latest operation `ETag` returned by OpenFiskal.
     OrganizationId:
       name: organizationId
-      in: path
-      required: true
-      schema:
-        type: string
-    LocationId:
-      name: locationId
-      in: path
-      required: true
-      schema:
-        type: string
-    RegisterId:
-      name: registerId
       in: path
       required: true
       schema:
@@ -812,88 +751,70 @@ components:
       required: true
       schema:
         type: string
-    Limit:
-      name: limit
-      in: query
-      required: false
-      schema:
-        type: integer
-        minimum: 1
-        maximum: 100
-        default: 20
-    Cursor:
-      name: cursor
-      in: query
-      required: false
+    BulkJobId:
+      name: jobId
+      in: path
+      required: true
       schema:
         type: string
-    LocationFilter:
-      name: location_id
-      in: query
-      required: false
-      schema:
-        type: string
-    RegisterFilter:
-      name: register_id
-      in: query
-      required: false
-      schema:
-        type: string
-    OperationStatusFilter:
-      name: status
-      in: query
-      required: false
-      schema:
-        type: string
-        enum: [open, completed, cancelled]
-    OperationTypeFilter:
-      name: type
-      in: query
-      required: false
-      schema:
-        type: string
-        enum: [sale, refund, exchange, custom]
-
   responses:
     BadRequest:
-      description: Request body or parameters were invalid.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-    Unauthorized:
-      description: Authentication is missing or invalid.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-    Forbidden:
-      description: The API key does not have access to the requested resource.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-    NotFound:
-      description: The requested resource was not found.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-    Conflict:
-      description: The requested state transition or revision is invalid.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-    UnprocessableEntity:
-      description: The payload was syntactically valid but could not be processed.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-    RateLimited:
-      description: The caller exceeded the allowed request rate.
+      description: Invalid request
       headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: invalid_request
+            message: The request body is malformed.
+            retryable: false
+    Unauthorized:
+      description: Authentication failed
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: unauthorized
+            message: Authentication failed.
+            retryable: false
+    NotFound:
+      description: Resource not found
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: not_found
+            message: The requested resource does not exist.
+            retryable: false
+    UnprocessableEntity:
+      description: Domain validation failed
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: regime_validation_failed
+            message: The payload violates regime-specific validation rules.
+            retryable: false
+    RateLimited:
+      description: Rate limit exceeded
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
         Retry-After:
           schema:
             type: integer
@@ -902,56 +823,84 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
-
+          example:
+            code: rate_limit_exceeded
+            message: Too many requests.
+            retryable: true
+    IdempotencyConflict:
+      description: Idempotency key reused with a different payload
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: idempotency_key_conflict
+            message: The idempotency key was already used with a different payload.
+            retryable: false
+    PreconditionRequired:
+      description: Missing `If-Match` header
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: precondition_required
+            message: This operation requires an If-Match header.
+            retryable: false
+    PreconditionFailed:
+      description: Stale `If-Match` header
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: precondition_failed
+            message: The supplied If-Match value is stale.
+            retryable: true
+            details:
+              current_resource_version: opv_01JXYZNEW
   schemas:
     Error:
       type: object
-      additionalProperties: false
       properties:
-        error:
+        code:
+          type: string
+        message:
+          type: string
+        retryable:
+          type: boolean
+        request_id:
+          type: string
+        details:
           type: object
-          additionalProperties: false
-          properties:
-            code:
-              type: string
-            message:
-              type: string
-            request_id:
-              type: string
-            details:
-              type: object
-              additionalProperties: true
-          required: [code, message]
-      required: [error]
-      example:
-        error:
-          code: operation_revision_conflict
-          message: The supplied op_revision is not the next expected value.
-          request_id: req_01HXYZ
-          details:
-            expected_op_revision: 3
-
+          additionalProperties: true
+      required: [code, message, retryable]
     Address:
       type: object
-      additionalProperties: false
       properties:
         line1:
           type: string
         line2:
           type: string
+          nullable: true
         city:
           type: string
         postal_code:
           type: string
         country_code:
           type: string
-          pattern: '^[A-Z]{3}$'
-          example: DEU
       required: [line1, city, postal_code, country_code]
-
     Organization:
       type: object
-      additionalProperties: false
       properties:
         id:
           type: string
@@ -959,62 +908,61 @@ components:
           type: string
         country_code:
           type: string
-          pattern: '^[A-Z]{3}$'
-          example: DEU
         tax_id:
           type: string
+        status:
+          type: string
+          enum: [active, inactive]
         address:
           $ref: '#/components/schemas/Address'
+        capabilities:
+          type: array
+          items:
+            type: string
         created_at:
           type: string
           format: date-time
         updated_at:
           type: string
           format: date-time
-      required: [id, legal_name, country_code, created_at, updated_at]
-
+      required: [id, legal_name, country_code, tax_id, status, address, created_at, updated_at]
     OrganizationCreateRequest:
       type: object
-      additionalProperties: false
       properties:
         legal_name:
           type: string
         country_code:
           type: string
-          pattern: '^[A-Z]{3}$'
-          example: DEU
         tax_id:
           type: string
         address:
           $ref: '#/components/schemas/Address'
-      required: [legal_name, country_code]
-
+      required: [legal_name, country_code, tax_id, address]
     OrganizationUpdateRequest:
       type: object
-      additionalProperties: false
       properties:
         legal_name:
           type: string
         tax_id:
           type: string
+        status:
+          type: string
+          enum: [active, inactive]
         address:
           $ref: '#/components/schemas/Address'
-
     OrganizationListResponse:
       type: object
-      additionalProperties: false
       properties:
         data:
           type: array
           items:
             $ref: '#/components/schemas/Organization'
         next_cursor:
-          type: [string, 'null']
+          type: string
+          nullable: true
       required: [data]
-
     Location:
       type: object
-      additionalProperties: false
       properties:
         id:
           type: string
@@ -1022,56 +970,42 @@ components:
           type: string
         name:
           type: string
-        address:
-          $ref: '#/components/schemas/Address'
+        external_id:
+          type: string
+          nullable: true
         timezone:
           type: string
+        address:
+          $ref: '#/components/schemas/Address'
         created_at:
           type: string
           format: date-time
-        updated_at:
-          type: string
-          format: date-time
-      required: [id, organization_id, name, created_at, updated_at]
-
+      required: [id, organization_id, name, timezone, address, created_at]
     LocationCreateRequest:
       type: object
-      additionalProperties: false
       properties:
         name:
           type: string
-        address:
-          $ref: '#/components/schemas/Address'
-        timezone:
+        external_id:
           type: string
-      required: [name]
-
-    LocationUpdateRequest:
-      type: object
-      additionalProperties: false
-      properties:
-        name:
+        timezone:
           type: string
         address:
           $ref: '#/components/schemas/Address'
-        timezone:
-          type: string
-
+      required: [name, timezone, address]
     LocationListResponse:
       type: object
-      additionalProperties: false
       properties:
         data:
           type: array
           items:
             $ref: '#/components/schemas/Location'
         next_cursor:
-          type: [string, 'null']
+          type: string
+          nullable: true
       required: [data]
-
     Register:
       type: object
-      additionalProperties: false
       properties:
         id:
           type: string
@@ -1079,556 +1013,452 @@ components:
           type: string
         location_id:
           type: string
-        country_code:
-          type: string
-          pattern: '^[A-Z]{3}$'
-          example: DEU
         name:
           type: string
         external_id:
           type: string
+        terminal_id:
+          type: string
+          nullable: true
         status:
           type: string
           enum: [active, inactive]
         created_at:
           type: string
           format: date-time
-        updated_at:
-          type: string
-          format: date-time
-      required: [id, organization_id, location_id, country_code, name, status, created_at, updated_at]
-
+      required: [id, organization_id, location_id, name, external_id, status, created_at]
     RegisterCreateRequest:
       type: object
-      additionalProperties: false
       properties:
         location_id:
           type: string
-        country_code:
-          type: string
-          pattern: '^[A-Z]{3}$'
-          example: DEU
         name:
           type: string
         external_id:
           type: string
-      required: [location_id, country_code, name]
-
-    RegisterUpdateRequest:
-      type: object
-      additionalProperties: false
-      properties:
-        country_code:
+        terminal_id:
           type: string
-          pattern: '^[A-Z]{3}$'
-          example: DEU
-        name:
-          type: string
-        external_id:
-          type: string
-        status:
-          type: string
-          enum: [active, inactive]
-
+      required: [location_id, name, external_id]
     RegisterListResponse:
       type: object
-      additionalProperties: false
       properties:
         data:
           type: array
           items:
             $ref: '#/components/schemas/Register'
         next_cursor:
-          type: [string, 'null']
+          type: string
+          nullable: true
       required: [data]
-
-    OperationBase:
+    OperationType:
+      type: string
+      enum: [sale, refund, exchange, custom]
+    OperationStatus:
+      type: string
+      enum: [open, pending_payment, payment_pending, completed, cancelled]
+    FiscalTransmissionStatus:
+      type: string
+      enum: [not_required, pending, submitted, accepted, failed]
+    PaymentMethod:
+      type: string
+      enum: [cash, card, voucher, gift_card, bank_transfer, digital_wallet, store_credit, other]
+    PaymentKind:
+      type: string
+      enum: [sale, tip, refund, cashback, fee_adjustment]
+    PaymentStatus:
+      type: string
+      enum: [pending, authorized, partially_approved, captured, failed, voided, refunded]
+    LineItemInput:
       type: object
-      additionalProperties: false
       properties:
-        type:
-          type: string
-        external_reference:
-          type: string
-        currency:
-          type: string
-        amount:
-          type: integer
-          description: Integer minor units. For example, cents.
-        metadata:
-          type: object
-          additionalProperties: true
-      required: [type]
-
-    SaleOperation:
-      allOf:
-        - $ref: '#/components/schemas/OperationBase'
-        - type: object
-          additionalProperties: false
-          properties:
-            type:
-              type: string
-              const: sale
-            line_items:
-              type: array
-              items:
-                $ref: '#/components/schemas/LineItem'
-          required: [type]
-
-    RefundOperation:
-      allOf:
-        - $ref: '#/components/schemas/OperationBase'
-        - type: object
-          additionalProperties: false
-          properties:
-            type:
-              type: string
-              const: refund
-            reference_operation_id:
-              type: string
-            line_items:
-              type: array
-              items:
-                $ref: '#/components/schemas/LineItem'
-          required: [type]
-
-    ExchangeOperation:
-      allOf:
-        - $ref: '#/components/schemas/OperationBase'
-        - type: object
-          additionalProperties: false
-          properties:
-            type:
-              type: string
-              const: exchange
-            reference_operation_id:
-              type: string
-            returned_line_items:
-              type: array
-              items:
-                $ref: '#/components/schemas/LineItem'
-            new_line_items:
-              type: array
-              items:
-                $ref: '#/components/schemas/LineItem'
-          required: [type]
-
-    CustomOperation:
-      allOf:
-        - $ref: '#/components/schemas/OperationBase'
-        - type: object
-          additionalProperties: false
-          properties:
-            type:
-              type: string
-              const: custom
-            name:
-              type: string
-          required: [type, name]
-
-    OperationData:
-      oneOf:
-        - $ref: '#/components/schemas/SaleOperation'
-        - $ref: '#/components/schemas/RefundOperation'
-        - $ref: '#/components/schemas/ExchangeOperation'
-        - $ref: '#/components/schemas/CustomOperation'
-      discriminator:
-        propertyName: type
-        mapping:
-          sale: '#/components/schemas/SaleOperation'
-          refund: '#/components/schemas/RefundOperation'
-          exchange: '#/components/schemas/ExchangeOperation'
-          custom: '#/components/schemas/CustomOperation'
-
-    LineItem:
-      type: object
-      additionalProperties: false
-      properties:
-        id:
-          type: string
         name:
           type: string
+        sku:
+          type: string
+          nullable: true
         quantity:
           type: number
         unit_price:
           type: integer
         total_amount:
           type: integer
-      required: [name]
-
-    Transaction:
+        tax_code:
+          type: string
+          nullable: true
+      required: [name, quantity, unit_price, total_amount]
+    LineItem:
+      allOf:
+        - $ref: '#/components/schemas/LineItemInput'
+        - type: object
+          properties:
+            id:
+              type: string
+    Totals:
       type: object
-      additionalProperties: false
       properties:
-        transaction_id:
+        subtotal_amount:
+          type: integer
+        tip_amount:
+          type: integer
+        tax_amount:
+          type: integer
+        total_amount:
+          type: integer
+      required: [total_amount]
+    PaymentInput:
+      type: object
+      properties:
+        payment_id:
           type: string
-        payment_type:
-          type: string
+        method:
+          $ref: '#/components/schemas/PaymentMethod'
         kind:
-          type: string
+          $ref: '#/components/schemas/PaymentKind'
+        status:
+          $ref: '#/components/schemas/PaymentStatus'
         amount:
           type: integer
         currency:
           type: string
-        status:
+        requested_amount:
+          type: integer
+          nullable: true
+        approved_amount:
+          type: integer
+          nullable: true
+        processor:
           type: string
-        gateway:
+          nullable: true
+        processor_reference:
           type: string
+          nullable: true
+        related_payment_id:
+          type: string
+          nullable: true
         card_brand:
           type: string
-        external_reference:
-          type: string
+          nullable: true
         processed_at:
           type: string
           format: date-time
-        metadata:
+          nullable: true
+      required: [payment_id, method, kind, status, amount, currency]
+    Payment:
+      allOf:
+        - $ref: '#/components/schemas/PaymentInput'
+        - type: object
+          properties:
+            created_at:
+              type: string
+              format: date-time
+    FiscalDocument:
+      type: object
+      properties:
+        receipt_id:
+          type: string
+        document_number:
+          type: string
+        fields:
           type: object
           additionalProperties: true
-      required: [payment_type, kind, amount, currency, status]
-
-    FiscalInformation:
-      oneOf:
-        - $ref: '#/components/schemas/FiscalInformationDEU'
-        - $ref: '#/components/schemas/FiscalInformationAUT'
-        - $ref: '#/components/schemas/FiscalInformationITA'
-      discriminator:
-        propertyName: regime
-        mapping:
-          KassenSichV: '#/components/schemas/FiscalInformationDEU'
-          RKSV: '#/components/schemas/FiscalInformationAUT'
-          RT: '#/components/schemas/FiscalInformationITA'
-
-    FiscalInformationDEU:
-      type: object
-      additionalProperties: false
-      properties:
-        regime:
-          type: string
-          const: KassenSichV
-        document_number:
-          type: string
-        document_type:
-          type: string
-        tse_serial:
-          type: string
-        client_id:
-          type: string
-        signature_algorithm:
-          type: string
-        time_format:
-          type: string
-        start_event:
-          $ref: '#/components/schemas/FiscalInformationDEUStartEvent'
-        end_event:
-          $ref: '#/components/schemas/FiscalInformationDEUEndEvent'
-        verification:
-          $ref: '#/components/schemas/FiscalInformationDEUVerification'
-      required:
-        [regime, document_number, document_type, tse_serial, client_id, signature_algorithm, time_format, start_event, end_event, verification]
-
-    FiscalInformationDEUStartEvent:
-      type: object
-      additionalProperties: false
-      properties:
-        signed_at:
-          type: string
-          format: date-time
-        transaction_counter:
-          type: integer
-        signature:
-          type: string
-      required: [signed_at, transaction_counter, signature]
-
-    FiscalInformationDEUEndEvent:
-      type: object
-      additionalProperties: false
-      properties:
-        signed_at:
-          type: string
-          format: date-time
-        transaction_counter:
-          type: integer
-        signature:
-          type: string
-        process_type:
-          type: string
-        process_data:
-          type: string
-      required: [signed_at, transaction_counter, signature, process_type, process_data]
-
-    FiscalInformationDEUVerification:
-      type: object
-      additionalProperties: false
-      properties:
-        qr_data:
-          type: string
-      required: [qr_data]
-
-    FiscalInformationAUT:
-      type: object
-      additionalProperties: false
-      properties:
-        regime:
-          type: string
-          const: RKSV
-        document_number:
-          type: string
-        document_type:
-          type: string
         transmission_status:
-          type: string
-        transmitted_at:
-          type: [string, 'null']
-          format: date-time
-        cashbox_id:
-          type: string
-        certificate_serial:
-          type: string
-        signature:
-          $ref: '#/components/schemas/FiscalInformationAUTSignature'
-        verification:
-          $ref: '#/components/schemas/FiscalInformationAUTVerification'
-      required: [regime, document_number, document_type, cashbox_id, signature, verification]
-
-    FiscalInformationAUTSignature:
+          $ref: '#/components/schemas/FiscalTransmissionStatus'
+      required: [receipt_id, transmission_status]
+    OperationData:
       type: object
-      additionalProperties: false
       properties:
-        signed_at:
+        type:
+          $ref: '#/components/schemas/OperationType'
+        status:
+          $ref: '#/components/schemas/OperationStatus'
+        currency:
           type: string
-          format: date-time
-        transaction_counter:
+        amount:
           type: integer
-        turnover_counter:
-          type: string
-        signature:
-          type: string
-        certificate_serial:
-          type: string
-      required: [signed_at, transaction_counter, turnover_counter, signature, certificate_serial]
-
-    FiscalInformationAUTVerification:
-      type: object
-      additionalProperties: false
-      properties:
-        qr_data:
-          type: string
-      required: [qr_data]
-
-    FiscalInformationITA:
-      type: object
-      additionalProperties: false
-      properties:
-        regime:
-          type: string
-          const: RT
-        document_number:
-          type: string
-        document_type:
-          type: string
-        transmission_status:
-          type: string
-        transmitted_at:
-          type: [string, 'null']
-          format: date-time
-        rt_serial:
-          type: string
-        rt_firmware:
-          type: string
-        progressive_number:
+        tip_amount:
           type: integer
-        daily_closing_number:
-          type: integer
-        lottery_code:
-          type: [string, 'null']
-        signature:
-          $ref: '#/components/schemas/FiscalInformationITASignature'
-      required:
-        [regime, document_number, document_type, rt_serial, rt_firmware, progressive_number, daily_closing_number, signature]
-
-    FiscalInformationITASignature:
+          default: 0
+        line_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/LineItemInput'
+        related_operation_id:
+          type: string
+          nullable: true
+        note:
+          type: string
+          nullable: true
+      required: [type, currency, amount]
+    SaleOperation:
+      allOf:
+        - $ref: '#/components/schemas/OperationData'
+        - type: object
+          properties:
+            type:
+              type: string
+              const: sale
+    PosOperationEnvelope:
       type: object
-      additionalProperties: false
       properties:
-        signed_at:
+        location_id:
           type: string
-          format: date-time
-        signature:
+        register_id:
           type: string
-      required: [signed_at, signature]
-
+        seller_id:
+          type: string
+        operator_id:
+          type: string
+        order_id:
+          type: string
+        data:
+          $ref: '#/components/schemas/OperationData'
+      required: [location_id, register_id, order_id, data]
     Operation:
       type: object
-      additionalProperties: false
       properties:
         id:
           type: string
-        op_revision:
-          type: integer
-          minimum: 1
+        resource_version:
+          type: string
+          description: Echoed in the `ETag` header.
         organization_id:
           type: string
         location_id:
           type: string
         register_id:
           type: string
-        source:
+        seller_id:
           type: string
-          enum: [POS, ONLINE]
+          nullable: true
+        operator_id:
+          type: string
+          nullable: true
+        order_id:
+          type: string
         status:
+          $ref: '#/components/schemas/OperationStatus'
+        type:
+          $ref: '#/components/schemas/OperationType'
+        currency:
           type: string
-          enum: [open, completed, cancelled]
-        data:
-          $ref: '#/components/schemas/OperationData'
-        fiscal_information:
-          $ref: '#/components/schemas/FiscalInformation'
-        cancel_reason:
-          type: [string, 'null']
+        totals:
+          $ref: '#/components/schemas/Totals'
+        line_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/LineItem'
+        payments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Payment'
+        fiscal_document:
+          $ref: '#/components/schemas/FiscalDocument'
+        transmission_status:
+          $ref: '#/components/schemas/FiscalTransmissionStatus'
         created_at:
           type: string
           format: date-time
         updated_at:
           type: string
           format: date-time
-        completed_at:
-          type: [string, 'null']
-          format: date-time
-        cancelled_at:
-          type: [string, 'null']
-          format: date-time
       required:
-        [id, op_revision, organization_id, location_id, register_id, source, status, data, created_at, updated_at]
-
-    OperationStartRequest:
+        [id, resource_version, organization_id, location_id, register_id, order_id, status, type, currency, totals, payments, transmission_status, created_at, updated_at]
+    OperationCreateRequest:
+      allOf:
+        - $ref: '#/components/schemas/PosOperationEnvelope'
+    OperationPatchRequest:
       type: object
-      additionalProperties: false
       properties:
-        location_id:
-          type: string
-        register_id:
-          type: string
-        source:
-          type: string
-          enum: [POS, ONLINE]
         data:
           $ref: '#/components/schemas/OperationData'
-      required: [location_id, register_id, source, data]
-
-    OperationStartResponse:
+      required: [data]
+    OperationCompleteRequest:
       type: object
-      additionalProperties: false
       properties:
-        operation_id:
-          type: string
-        op_revision:
-          type: integer
-          minimum: 1
-        status:
-          type: string
-          enum: [open]
-      required: [operation_id, op_revision, status]
-
-    OperationUpdateRequest:
-      type: object
-      additionalProperties: false
-      properties:
-        op_revision:
-          type: integer
-          minimum: 1
-        data:
-          $ref: '#/components/schemas/OperationData'
-      required: [op_revision, data]
-
-    CompleteOperationRequest:
-      type: object
-      additionalProperties: false
-      properties:
-        op_revision:
-          type: integer
-          minimum: 1
-        transactions:
+        payments:
           type: array
           items:
-            $ref: '#/components/schemas/Transaction'
-      required: [op_revision, transactions]
-
-    CompleteOperationResponse:
-      type: object
-      additionalProperties: false
-      properties:
-        operation_id:
+            $ref: '#/components/schemas/PaymentInput'
+        completed_at:
           type: string
-        op_revision:
-          type: integer
-          minimum: 1
-        status:
-          type: string
-          enum: [completed]
-        fiscal_information:
-          $ref: '#/components/schemas/FiscalInformation'
-      required: [operation_id, op_revision, status, fiscal_information]
-
-    CancelOperationRequest:
+          format: date-time
+          nullable: true
+      required: [payments]
+    OperationCancelRequest:
       type: object
-      additionalProperties: false
       properties:
-        op_revision:
-          type: integer
-          minimum: 1
         reason:
           type: string
-      required: [op_revision]
-
+          enum: [customer_abandoned_checkout, void_before_completion, operator_cancelled, payment_failed]
+      required: [reason]
     OperationListResponse:
       type: object
-      additionalProperties: false
       properties:
         data:
           type: array
           items:
             $ref: '#/components/schemas/Operation'
         next_cursor:
-          type: [string, 'null']
+          type: string
+          nullable: true
       required: [data]
-
-    ExportRequest:
+    Receipt:
       type: object
-      additionalProperties: false
       properties:
+        id:
+          type: string
+        operation_id:
+          type: string
+        status:
+          type: string
+          enum: [available, delivered, delivery_failed]
+        delivery_channels:
+          type: array
+          items:
+            type: string
+        hosted_url:
+          type: string
+        pdf_url:
+          type: string
+      required: [id, operation_id, status]
+    ExportJob:
+      type: object
+      properties:
+        id:
+          type: string
         type:
           type: string
+          enum: [operations, receipts, audit_events, bulk_onboarding_result]
         format:
           type: string
-          enum: [csv, json, zip]
+          enum: [csv, jsonl, parquet]
+        mode:
+          type: string
+          enum: [full, incremental]
+        status:
+          type: string
+          enum: [queued, processing, ready, failed, expired]
+        schema_version:
+          type: string
         from:
           type: string
           format: date-time
         to:
           type: string
           format: date-time
-      required: [type, format, from, to]
-
-    ExportJob:
-      type: object
-      additionalProperties: false
-      properties:
-        id:
+        watermark:
           type: string
-        status:
+          nullable: true
+        retention_expires_at:
           type: string
-          enum: [queued, processing, completed, failed]
-        format:
+          format: date-time
+        download_url:
           type: string
-          enum: [csv, json, zip]
-        type:
-          type: string
+          nullable: true
         created_at:
           type: string
           format: date-time
-        completed_at:
-          type: [string, 'null']
+      required: [id, type, format, mode, status, schema_version, retention_expires_at, created_at]
+    ExportCreateRequest:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [operations, receipts, audit_events, bulk_onboarding_result]
+        format:
+          type: string
+          enum: [csv, jsonl, parquet]
+        mode:
+          type: string
+          enum: [full, incremental]
+        from:
+          type: string
           format: date-time
-        download_url:
-          type: [string, 'null']
-          format: uri
-      required: [id, status, format, type, created_at]
+        to:
+          type: string
+          format: date-time
+        watermark:
+          type: string
+          nullable: true
+      required: [type, format, mode, from, to]
+    BulkJob:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [merchant_onboarding, register_import, historical_import]
+        status:
+          type: string
+          enum: [queued, processing, completed, failed]
+        input_format:
+          type: string
+          enum: [csv, jsonl]
+        result_export_id:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required: [id, type, status, input_format, created_at]
+    BulkJobCreateRequest:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [merchant_onboarding, register_import, historical_import]
+        input_format:
+          type: string
+          enum: [csv, jsonl]
+        file_url:
+          type: string
+      required: [type, input_format, file_url]
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+        checked_at:
+          type: string
+          format: date-time
+        dependencies:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              status:
+                type: string
+                enum: [ok, degraded]
+      required: [status, checked_at]
+    Limits:
+      type: object
+      properties:
+        availability_target:
+          type: string
+        synchronous_latency_target:
+          type: object
+          properties:
+            p50_ms:
+              type: integer
+            p95_ms:
+              type: integer
+        recommended_timeout_ms:
+          type: integer
+        retry_budget_ms:
+          type: integer
+        idempotency_retention_hours:
+          type: integer
+        rate_limits:
+          type: array
+          items:
+            type: object
+            properties:
+              scope:
+                type: string
+              requests_per_minute:
+                type: integer
+      required: [availability_target, recommended_timeout_ms, retry_budget_ms, idempotency_retention_hours]

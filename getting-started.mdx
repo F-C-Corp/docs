@@ -1,9 +1,9 @@
 ---
 title: "Getting started"
-description: "Create your API key, onboard a merchant, and complete your first operation"
+description: "Create your API key, onboard a merchant, and complete your first enterprise-ready operation."
 ---
 
-This guide walks you through the smallest useful OpenFiskal integration. You create an API key in the tenant dashboard, onboard a merchant, create its location and register, and then process operations from your backend.
+This guide walks you through the current `v1` integration contract. You create an API key, onboard a merchant, register a location and terminal, start an operation, update it with `If-Match`, and complete it with the typed payment contract.
 
 <Info>
   All examples use `https://sandbox.api.openfiskal.com/v1`. Replace with `https://api.openfiskal.com/v1` when you go live.
@@ -15,6 +15,7 @@ This guide walks you through the smallest useful OpenFiskal integration. You cre
 - A tenant-scoped, country-scoped API key created in your tenant dashboard
 - `curl` or an HTTP client
 - A backend service that holds the API key securely
+- Durable storage for idempotency keys and operation `ETag` values
 
 ## Authentication model
 
@@ -97,7 +98,7 @@ This header value is the organization ID returned by `POST /organizations`, not 
     ```
   </Step>
   <Step title="Start an operation">
-    Start every operation with `POST /operations`. The request includes the source and a typed `data` object. The response returns `op_revision`, which starts at `1`.
+    Start every operation with `POST /operations`. The request includes explicit upstream references and a typed `data` object. Persist both the returned `id` and the response `ETag`.
 
     ```bash
     curl -X POST https://sandbox.api.openfiskal.com/v1/operations \
@@ -108,29 +109,32 @@ This header value is the organization ID returned by `POST /organizations`, not 
       -d '{
         "location_id": "loc_01HXYZ",
         "register_id": "reg_01HXYZ",
-        "source": "POS",
+        "seller_id": "seller_berlin_1",
+        "operator_id": "cashier_17",
+        "order_id": "order-1001",
         "data": {
           "type": "sale",
-          "external_reference": "order-1001",
+          "status": "open",
           "currency": "EUR",
-          "amount": 4250
+          "amount": 4250,
+          "tip_amount": 0
         }
       }'
     ```
   </Step>
   <Step title="Update the operation while it is open">
-    You can patch the operation as long as it is still `open`. `op_revision` is caller-driven. Start returns `1`, so the first mutation must send `2`.
+    You can patch the operation as long as it is still mutable. Send the latest operation `ETag` in `If-Match`. If another writer updated the operation first, re-read the resource and retry with the new `ETag`.
 
     ```bash
     curl -X PATCH https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ \
       -H "Authorization: Bearer ofk_live_abc123..." \
       -H "X-OpenFiskal-Organization: org_01HXYZ" \
+      -H 'If-Match: "opv_01HXYZ"' \
       -H "Content-Type: application/json" \
       -d '{
-        "op_revision": 2,
         "data": {
           "type": "sale",
-          "external_reference": "order-1001",
+          "status": "pending_payment",
           "currency": "EUR",
           "amount": 4750,
           "line_items": [
@@ -146,52 +150,35 @@ This header value is the organization ID returned by `POST /organizations`, not 
     ```
   </Step>
   <Step title="Complete the operation">
-    Completion is modeled as an operation sub-resource and includes the reconciled payment transactions. Because the previous successful mutation used revision `2`, completion now sends `3`.
+    Completion includes typed payment legs. Use one entry per tender leg and include processor references where available.
 
     ```bash
     curl -X PATCH https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ/complete \
       -H "Authorization: Bearer ofk_live_abc123..." \
       -H "X-OpenFiskal-Organization: org_01HXYZ" \
       -H "Idempotency-Key: op-order-1001-complete" \
+      -H 'If-Match: "opv_01HXYA"' \
       -H "Content-Type: application/json" \
       -d '{
-        "op_revision": 3,
-        "transactions": [
+        "payments": [
           {
-            "transaction_id": "txn_1001_1",
-            "payment_type": "card",
+            "payment_id": "pay_1001_card",
+            "method": "card",
             "kind": "sale",
             "amount": 4750,
             "currency": "EUR",
-            "status": "success",
-            "gateway": "shopify_payments",
+            "status": "captured",
+            "processor": "shopify_payments",
             "card_brand": "visa",
-            "external_reference": "ch_123",
+            "processor_reference": "ch_123",
             "processed_at": "2026-02-26T12:05:00Z"
           }
         ]
       }'
     ```
   </Step>
-  <Step title="Cancel an open operation when needed">
-    If the customer abandons the checkout before completion, cancel the existing open operation. Because the previous successful mutation used revision `2`, cancellation would now send `3`.
-
-    ```bash
-    curl -X PATCH https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ/cancel \
-      -H "Authorization: Bearer ofk_live_abc123..." \
-      -H "X-OpenFiskal-Organization: org_01HXYZ" \
-      -H "Idempotency-Key: op-order-1001-cancel" \
-      -H "Content-Type: application/json" \
-      -d '{
-        "op_revision": 3,
-        "reason": "customer_abandoned_checkout"
-      }'
-    ```
-
-    Use cancellation only for operations that are still `open`. Completed operations remain completed.
-  </Step>
   <Step title="Read and list operations">
-    Use `GET /operations` to list operations and `GET /operations/{id}` to read one operation, including its current `op_revision`.
+    Use `GET /operations` to list operations and `GET /operations/{id}` to read one operation, including its current `resource_version`.
 
     ```bash
     curl https://sandbox.api.openfiskal.com/v1/operations \
@@ -200,7 +187,7 @@ This header value is the organization ID returned by `POST /organizations`, not 
     ```
   </Step>
   <Step title="Create an export job">
-    Exports are asynchronous. First create the job.
+    Exports are asynchronous. Use incremental exports for production reconciliation and poll the job until it is ready.
 
     ```bash
     curl -X POST https://sandbox.api.openfiskal.com/v1/exports \
@@ -209,7 +196,8 @@ This header value is the organization ID returned by `POST /organizations`, not 
       -H "Content-Type: application/json" \
       -d '{
         "type": "operations",
-        "format": "csv",
+        "format": "jsonl",
+        "mode": "incremental",
         "from": "2026-02-01T00:00:00Z",
         "to": "2026-02-29T23:59:59Z"
       }'
@@ -219,5 +207,7 @@ This header value is the organization ID returned by `POST /organizations`, not 
 
 ## Next steps
 
-- Read [POS operations](/pos-operation-ingestion) for the operation lifecycle in more detail
+- [Supported scope](/supported-scope)
+- [Transaction lifecycle](/pos-operation-ingestion)
+- Read [Transaction lifecycle](/pos-operation-ingestion) for the operation lifecycle in more detail
 - Read [Hosted Receipts API](/hosted-receipts-api) for receipt retrieval, rendering, and delivery

@@ -1,11 +1,20 @@
 ---
-title: "Offline guidance"
-description: "How to queue fiscalization calls in your backend and replay them safely."
+title: "Offline and recovery"
+description: "How to operate within the documented offline boundaries, issue provisional receipts, and recover safely."
 ---
 
 ## Overview
 
-If OpenFiskal is temporarily unreachable, your backend should queue the fiscalization calls it would normally send, then replay them when connectivity returns. 
+If OpenFiskal is temporarily unreachable, your backend should queue the fiscalization calls it would normally send, then replay them when connectivity returns.
+
+Offline handling is a compliance-controlled workflow. You should treat it as an exception path with audit logging, operator guidance, and manual remediation.
+
+## Legal and operational boundaries
+
+- Only use offline processing where the configured country capability allows it
+- Keep a durable audit trail of the local action, operator, and device
+- Treat locally rendered receipts as provisional until OpenFiskal confirms completion
+- Never rewrite timestamps, totals, or tender composition during replay
 
 ## What to queue
 
@@ -20,29 +29,43 @@ Each queued entry should include:
 
 - the original request body
 - the original `Idempotency-Key`
-- the expected `op_revision`
+- the last known `If-Match` value when the request is a mutation
 - the business timestamp from your POS domain model
+- the local operator and terminal context
 
 ## Replay rules
 
 1. Replay queued requests in the original business order.
 2. Reuse the original idempotency key on retry.
 3. Do not recalculate payload values during replay.
-4. Stop on the first network or conflict error and resolve that item before continuing.
+4. Re-read the operation if replay receives `412 precondition_failed`.
+5. Stop on the first unresolved network or semantic error and resolve that item before continuing.
 
 ## Provisional receipts
 
 If you complete checkout in your POS before OpenFiskal is reachable again, treat any locally produced receipt as provisional. After the queued completion succeeds, resolve the authoritative receipt through the [Hosted Receipts API](/hosted-receipts-api).
+
+The final receipt must include the verbatim fiscal fields returned by OpenFiskal, even if the provisional printout used a different local layout.
+
+## Failure recovery
+
+Escalate to manual remediation when:
+
+- the replay queue cannot restore ordering
+- a payload now fails regime validation
+- the operation was already completed through another channel
+- a provisional receipt was issued but no final completion can be obtained inside the required timeline
 
 ## Implementation checklist
 
 - persist queued mutations durably
 - retain idempotency keys across retries
 - preserve operation ordering
+- preserve the latest operation `ETag`
 - surface replay failures for manual resolution
 - fetch the hosted receipt only after the completion call succeeds
 
 ## Next steps
 
-- [POS operations](/pos-operation-ingestion)
+- [Transaction lifecycle](/pos-operation-ingestion)
 - [Hosted Receipts API](/hosted-receipts-api)

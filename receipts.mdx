@@ -1,8 +1,39 @@
 ---
 title: "Receipts"
-description: "Receipt retrieval and delivery now live in the Hosted Receipts API."
+description: "Receipt rendering, retrieval, delivery, and field preservation rules."
 ---
 
 Use the separate [Hosted Receipts API](/hosted-receipts-api) for receipt retrieval, PDF rendering, and delivery.
 
-The core fiscalization API no longer documents receipt endpoints directly.
+## Rendering rules
+
+You must preserve fiscal fields exactly as returned by OpenFiskal. You can change layout, branding, and channel-specific wrapping only where the regime allows it.
+
+### You must not change
+
+- fiscal identifiers
+- timestamp values
+- totals and tax figures
+- required merchant, location, and register labels
+- regime-specific verification fields
+
+### You may change when allowed
+
+- typography
+- paper width and line wrapping
+- non-fiscal branding blocks
+- localization of your own explanatory labels
+
+## Hosted versus POS rendering
+
+Use hosted rendering when you want OpenFiskal-managed PDF output and delivery workflows. Use POS rendering when you need immediate in-store print control, but only after you confirm that your renderer preserves the required fiscal content.
+
+## Canonical flows
+
+- Standard sale: complete the operation, then fetch or deliver the receipt
+- Offline replay: issue a provisional receipt locally, replay the completion, then replace or attach the final hosted receipt
+- Refund: create a refund operation linked to the prior sale and deliver the new receipt
+
+## Next steps
+
+- [Hosted Receipts API](/hosted-receipts-api)

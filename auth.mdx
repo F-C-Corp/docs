@@ -1,6 +1,6 @@
 ---
 title: "Authentication"
-description: "How authentication and organization scoping work in the OpenFiskal API"
+description: "How authentication, organization scoping, idempotency, and conditional writes work in the OpenFiskal API."
 ---
 
 ## API scope
@@ -69,13 +69,25 @@ curl -X POST https://api.openfiskal.com/v1/operations \
   -d '{ "...": "..." }'
 ```
 
-Use idempotency keys for operation start, operation completion, operation cancellation, and receipt delivery.
+Use idempotency keys for operation start, operation completion, operation cancellation, export creation, bulk job creation, and receipt delivery.
+
+The platform retains keys for at least 24 hours. Reusing the same key with a different payload returns `409 idempotency_key_conflict`.
+
+## Conditional writes
+
+Open operation mutations now use server-issued resource versions instead of caller-guessed sequence numbers.
+
+1. Read or create the operation.
+2. Persist the returned `ETag`.
+3. Send that value in `If-Match` on `PATCH /operations/{id}`, `PATCH /operations/{id}/complete`, and `PATCH /operations/{id}/cancel`.
+
+If you omit `If-Match`, the API returns `428 precondition_required`. If you send a stale value, the API returns `412 precondition_failed`.
 
 ## Recommended handling
 
 - Return `401` when authentication is missing or invalid.
 - Return `403` when the API key is valid but not allowed to access the requested tenant, country, or organization.
-- Return `409 Conflict` when an operation update, completion, or cancellation uses an `op_revision` that is not exactly the next expected value.
+- Return `412 Precondition Failed` when an operation update, completion, or cancellation uses a stale `If-Match` value.
 - Return `429 Too Many Requests` with `Retry-After` when the caller exceeds the allowed rate.
 
 ## Next step

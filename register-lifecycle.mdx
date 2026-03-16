@@ -1,11 +1,11 @@
 ---
 title: "Register lifecycle"
-description: "How registers are created, updated, and retired in the OpenFiskal API."
+description: "How to create, map, update, and retire registers in the OpenFiskal API."
 ---
 
 ## Overview
 
-A register is the logical checkout that produces operations inside a location. In the public API, a register is a lightweight resource that stores identity and routing metadata for your backend.
+A register is the logical checkout or terminal that produces operations inside a location. In the current public API, a register stores identity, routing, and compliance metadata that you must keep stable over time.
 
 ## Register states
 
@@ -53,6 +53,8 @@ curl -X PATCH https://api.openfiskal.com/v1/registers/reg_01HXYZ \
 ## Operational guidance
 
 - Keep `external_id` aligned with the register identifier in your own POS platform
+- Keep `terminal_id` or equivalent hardware mapping stable if you use payment terminals
+- Capture the operator identity at runtime on the operation, not on the register resource
 - Do not recycle a register for a different physical checkout if you need clean audit history
 - Prefer inactivation over deletion when you want to preserve historical references
 
@@ -63,4 +65,4 @@ Use `GET /registers` to list registers in the current organization. Use `GET /re
 ## Next steps
 
 - [Getting started](/getting-started)
-- [POS operations](/pos-operation-ingestion)
+- [Transaction lifecycle](/pos-operation-ingestion)

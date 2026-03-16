@@ -1,11 +1,11 @@
 ---
-title: "POS operations"
-description: "How your backend reports fiscalized operations to OpenFiskal."
+title: "Transaction lifecycle"
+description: "How your backend creates, updates, completes, cancels, and refunds fiscalized operations."
 ---
 
 ## Overview
 
-Every fiscal event that occurs at a register is reported to OpenFiskal as an operation. Your backend sends the event, OpenFiskal applies the fiscal rules for the target regime, and the response carries the fiscal payload you need for receipts and auditability.
+Every fiscal event that occurs at a register is reported to OpenFiskal as an operation. Your backend sends the event, OpenFiskal applies the fiscal rules for the target regime, and the response carries the fiscal payload you need for receipts, exports, and auditability.
 
 ## Lifecycle
 
@@ -14,13 +14,19 @@ Each operation follows the same public lifecycle:
 ```mermaid
 stateDiagram-v2
     [*] --> open
-    open --> completed
+    open --> pending_payment
+    pending_payment --> completed
+    pending_payment --> payment_pending
+    payment_pending --> completed
     open --> cancelled
+    pending_payment --> cancelled
 ```
 
-- `open` means the operation is still mutable
-- `completed` means the operation is final and has produced its completion-time fiscal output
-- `cancelled` means the operation was intentionally abandoned before completion
+- `open` means the basket or order is still being assembled
+- `pending_payment` means the financial intent is known and the operation is waiting for settlement input
+- `payment_pending` means the operation has been completed with an asynchronous payment state that still needs follow-up
+- `completed` means the fiscal event is final
+- `cancelled` means the operation was intentionally voided before completion
 
 Use a dedicated cancel action on the existing operation resource. Do not model cancellation as a separate operation type.
 
@@ -37,7 +43,7 @@ The public API currently supports these operation types:
 
 ## Start an operation
 
-Create operations with `POST /operations`. The response returns `operation_id` and the first `op_revision`.
+Create operations with `POST /operations`. The response returns the operation resource, a `resource_version`, and an `ETag` header.
 
 ```bash
 curl -X POST https://api.openfiskal.com/v1/operations \
@@ -50,27 +56,85 @@ curl -X POST https://api.openfiskal.com/v1/operations \
 
 ## Update an open operation
 
-Use `PATCH /operations/{operationId}` while the operation is still `open`. After every successful mutation, the client needs to increment `op_revision`.
+Use `PATCH /operations/{operationId}` while the operation is still mutable. Send the latest `ETag` value in `If-Match`.
+
+This makes retries and concurrent writers safe:
+
+- the server owns the version
+- the client retries with the same idempotency key where supported
+- stale writers receive `412 precondition_failed`
 
 ## Complete an operation
 
-Use `PATCH /operations/{operationId}/complete` when payment is final and you want OpenFiskal to produce the final fiscal document.
+Use `PATCH /operations/{operationId}/complete` when you want OpenFiskal to produce the final fiscal document and receipt state. Completion now accepts a typed `payments` array.
 
 Completion is a fiscal event. Use an idempotency key on every completion request.
 
+## Canonical examples
+
+### Standard sale
+
+```json
+{
+  "data": {
+    "type": "sale",
+    "currency": "EUR",
+    "amount": 4750
+  }
+}
+```
+
+### Split tender
+
+```json
+{
+  "payments": [
+    {
+      "payment_id": "pay_cash_1001",
+      "method": "cash",
+      "kind": "sale",
+      "status": "captured",
+      "amount": 1500,
+      "currency": "EUR"
+    },
+    {
+      "payment_id": "pay_card_1001",
+      "method": "card",
+      "kind": "sale",
+      "status": "captured",
+      "amount": 3250,
+      "currency": "EUR"
+    }
+  ]
+}
+```
+
+### Refund against prior receipt
+
+```json
+{
+  "data": {
+    "type": "refund",
+    "related_operation_id": "op_01HSALE",
+    "currency": "EUR",
+    "amount": 1200
+  }
+}
+```
+
 ## Cancel an open operation
 
-Use `PATCH /operations/{operationId}/cancel` only while the operation is still `open`.
+Use `PATCH /operations/{operationId}/cancel` only while the operation is still open or pending payment.
 
 ```bash
 curl -X PATCH https://api.openfiskal.com/v1/operations/op_01HXYZ/cancel \
   -H "Authorization: Bearer $API_KEY" \
   -H "X-OpenFiskal-Organization: org_01HXYZ" \
   -H "Idempotency-Key: op-order-1001-cancel" \
+  -H 'If-Match: "opv_01HXYZ"' \
   -H "Content-Type: application/json" \
   -d '{
-    "op_revision": 2,
-    "reason": "customer_abandoned_checkout"
+    "reason": "void_before_completion"
   }'
 ```
 
@@ -78,13 +142,14 @@ Completed operations remain completed. This cancel action is not a replacement f
 
 ## Concurrency model
 
-`op_revision` is optimistic concurrency control owned by the caller:
+Use conditional writes with server-issued versions:
 
-- creation returns revision `1`
-- the next successful mutation must send `2`
-- every later mutation must send exactly the next revision
+- create or read the operation
+- persist the returned `ETag`
+- send that value in `If-Match` on the next mutation
+- re-read on `412 precondition_failed`
 
-If the supplied revision is not the next expected value, the API returns `409 Conflict`.
+Do not guess sequence numbers.
 
 ## Receipts
 
@@ -94,10 +159,12 @@ Receipt retrieval and delivery live in the separate [Hosted Receipts API](/hoste
 
 - report fiscal events in order
 - preserve idempotency keys for retries
+- persist the latest `ETag` for every mutable operation
 - print or deliver the returned fiscal payload exactly as provided
 - complete or cancel every operation that you start
 
 ## Next steps
 
+- [Payment lifecycle](/payment-lifecycle)
 - [Offline guidance](/offline-guidance)
 - [Hosted Receipts API](/hosted-receipts-api)

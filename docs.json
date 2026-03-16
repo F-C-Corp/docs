@@ -13,22 +13,42 @@
       {
         "tab": "Fiscalization API",
         "pages": [
-          "getting-started",
-          "auth",
-          "integration-topologies",
-          "register-lifecycle",
-          "pos-operation-ingestion",
-          "offline-guidance",
           {
-            "group": "API",
+            "group": "Overview",
+            "pages": [
+              "supported-scope",
+              "getting-started",
+              "integration-topology",
+              "auth"
+            ]
+          },
+          {
+            "group": "Onboarding and identity",
+            "pages": [
+              "register-lifecycle"
+            ]
+          },
+          {
+            "group": "Transaction processing",
+            "pages": [
+              "pos-operation-ingestion",
+              "payment-lifecycle",
+              "offline-guidance",
+              "receipts"
+            ]
+          },
+          {
+            "group": "Operations and delivery",
+            "pages": [
+              "exports-and-reconciliation",
+              "errors-and-limits",
+              "sandbox-and-go-live"
+            ]
+          },
+          {
+            "group": "Fiscalization API",
             "openapi": "api-reference/openapi.yaml"
           }
-        ]
-      },
-      {
-        "tab": "Analytics API",
-        "pages": [
-          "analytics-api-tba"
         ]
       },
       {
@@ -36,7 +56,7 @@
         "pages": [
           "hosted-receipts-api",
           {
-            "group": "API",
+            "group": "Hosted Receipts API",
             "openapi": "api-reference/hosted-receipts-openapi.yaml"
           }
         ]
@@ -63,7 +83,7 @@
   "redirects": [
     {
       "source": "/",
-      "destination": "/getting-started"
+      "destination": "/supported-scope"
     }
   ],
   "description": "OpenFiskal API docs.",
