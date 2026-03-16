@@ -83,7 +83,7 @@
   "description": "OpenFiskal API docs.",
   "logo": {
     "light": "/images/OpenFiskal_Logo_Main_Hori_Blue.svg",
-    "dark": "/images/OpenFiskal_Logo_Main_Hori_Blue.svg"
+    "dark": "/images/OpenFiskal_Logo_main_white.svg"
   },
   "metadata": {
     "timestamp": true
