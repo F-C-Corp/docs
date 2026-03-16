@@ -1617,25 +1617,6 @@ components:
           type: string
           nullable: true
       required: [data]
-    Receipt:
-      type: object
-      properties:
-        id:
-          type: string
-        operation_id:
-          type: string
-        status:
-          type: string
-          enum: [available, delivered, delivery_failed]
-        delivery_channels:
-          type: array
-          items:
-            type: string
-        hosted_url:
-          type: string
-        pdf_url:
-          type: string
-      required: [id, operation_id, status]
     ExportJob:
       type: object
       properties:
