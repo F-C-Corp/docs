@@ -66,13 +66,7 @@
     ]
   },
   "contextual": {
-    "options": [
-      "copy",
-      "view",
-      "claude",
-      "cursor",
-      "vscode"
-    ]
+    "options": ["copy", "view", "claude", "cursor", "vscode"]
   },
   "redirects": [
     {
@@ -84,6 +78,12 @@
   "logo": {
     "light": "/images/OpenFiskal_Logo_Main_Hori_Blue.svg",
     "dark": "/images/OpenFiskal_Logo_main_white.svg"
+  },
+  "integrations": {
+    "posthog": {
+      "apiKey": "phc_wZtAZkE6osudq1JRbckb44zF4QeFbzXJAsoaHC89Co6",
+      "sessionRecording": true
+    }
   },
   "metadata": {
     "timestamp": false
