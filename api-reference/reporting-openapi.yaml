@@ -104,7 +104,14 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ExportJob"
+                allOf:
+                  - $ref: "#/components/schemas/ExportJob"
+                  - type: object
+                    properties:
+                      download_url:
+                        type: string
+                        nullable: true
+                        description: Signed URL to download the export artifact. Present when status is `ready`.
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
