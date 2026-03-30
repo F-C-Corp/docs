@@ -24,8 +24,6 @@ tags:
     description: Create and manage registers or terminals.
   - name: Operations
     description: Start, update, complete, cancel, list, and read operations.
-  - name: Exports
-    description: Create and inspect asynchronous export jobs.
 paths:
   /organizations:
     get:
@@ -34,22 +32,22 @@ paths:
       security:
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/Limit'
-        - $ref: '#/components/parameters/Cursor'
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
       responses:
-        '200':
+        "200":
           description: Organizations returned
           headers:
             X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
+              $ref: "#/components/headers/XRequestId"
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OrganizationListResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+                $ref: "#/components/schemas/OrganizationListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
     post:
       tags: [Organizations]
       summary: Create organization
@@ -60,25 +58,25 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/OrganizationCreateRequest'
+              $ref: "#/components/schemas/OrganizationCreateRequest"
       responses:
-        '201':
+        "201":
           description: Organization created
           headers:
             X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
+              $ref: "#/components/headers/XRequestId"
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Organization'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
+                $ref: "#/components/schemas/Organization"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
 
   /organizations/{organizationId}:
     get:
@@ -87,82 +85,82 @@ paths:
       security:
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: "#/components/parameters/OrganizationId"
       responses:
-        '200':
+        "200":
           description: Organization returned
           headers:
             X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
+              $ref: "#/components/headers/XRequestId"
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Organization'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
+                $ref: "#/components/schemas/Organization"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
     patch:
       tags: [Organizations]
       summary: Update organization
       security:
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: "#/components/parameters/OrganizationId"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/OrganizationUpdateRequest'
+              $ref: "#/components/schemas/OrganizationUpdateRequest"
       responses:
-        '200':
+        "200":
           description: Organization updated
           headers:
             X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
+              $ref: "#/components/headers/XRequestId"
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Organization'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
+                $ref: "#/components/schemas/Organization"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
 
   /locations:
     parameters:
-      - $ref: '#/components/parameters/OrganizationHeader'
+      - $ref: "#/components/parameters/OrganizationHeader"
     get:
       tags: [Locations]
       summary: List locations
       security:
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/Limit'
-        - $ref: '#/components/parameters/Cursor'
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
       responses:
-        '200':
+        "200":
           description: Locations returned
           headers:
             X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
+              $ref: "#/components/headers/XRequestId"
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationListResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+                $ref: "#/components/schemas/LocationListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
     post:
       tags: [Locations]
       summary: Create location
@@ -173,130 +171,130 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/LocationCreateRequest'
+              $ref: "#/components/schemas/LocationCreateRequest"
       responses:
-        '201':
+        "201":
           description: Location created
           headers:
             X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
+              $ref: "#/components/headers/XRequestId"
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Location'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
+                $ref: "#/components/schemas/Location"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
 
   /locations/{locationId}:
     parameters:
-      - $ref: '#/components/parameters/OrganizationHeader'
+      - $ref: "#/components/parameters/OrganizationHeader"
     get:
       tags: [Locations]
       summary: Get location
       security:
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/LocationId'
+        - $ref: "#/components/parameters/LocationId"
       responses:
-        '200':
+        "200":
           description: Location returned
           headers:
             X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
+              $ref: "#/components/headers/XRequestId"
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Location'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
+                $ref: "#/components/schemas/Location"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
     patch:
       tags: [Locations]
       summary: Update location
       security:
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/LocationId'
+        - $ref: "#/components/parameters/LocationId"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/LocationUpdateRequest'
+              $ref: "#/components/schemas/LocationUpdateRequest"
       responses:
-        '200':
+        "200":
           description: Location updated
           headers:
             X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
+              $ref: "#/components/headers/XRequestId"
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Location'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
+                $ref: "#/components/schemas/Location"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
     delete:
       tags: [Locations]
       summary: Delete location
       security:
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/LocationId'
+        - $ref: "#/components/parameters/LocationId"
       responses:
-        '204':
+        "204":
           description: Location deleted
           headers:
             X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
+              $ref: "#/components/headers/XRequestId"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   /registers:
     parameters:
-      - $ref: '#/components/parameters/OrganizationHeader'
+      - $ref: "#/components/parameters/OrganizationHeader"
     get:
       tags: [Registers]
       summary: List registers
       security:
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/Limit'
-        - $ref: '#/components/parameters/Cursor'
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
       responses:
-        '200':
+        "200":
           description: Registers returned
           headers:
             X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
+              $ref: "#/components/headers/XRequestId"
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RegisterListResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+                $ref: "#/components/schemas/RegisterListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
     post:
       tags: [Registers]
       summary: Create register
@@ -307,209 +305,209 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RegisterCreateRequest'
+              $ref: "#/components/schemas/RegisterCreateRequest"
       responses:
-        '201':
+        "201":
           description: Register created
           headers:
             X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
+              $ref: "#/components/headers/XRequestId"
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Register'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
+                $ref: "#/components/schemas/Register"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
 
   /registers/{registerId}:
     parameters:
-      - $ref: '#/components/parameters/OrganizationHeader'
+      - $ref: "#/components/parameters/OrganizationHeader"
     get:
       tags: [Registers]
       summary: Get register
       security:
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/RegisterId'
+        - $ref: "#/components/parameters/RegisterId"
       responses:
-        '200':
+        "200":
           description: Register returned
           headers:
             X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
+              $ref: "#/components/headers/XRequestId"
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Register'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
+                $ref: "#/components/schemas/Register"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
     patch:
       tags: [Registers]
       summary: Update register
       security:
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/RegisterId'
+        - $ref: "#/components/parameters/RegisterId"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RegisterUpdateRequest'
+              $ref: "#/components/schemas/RegisterUpdateRequest"
       responses:
-        '200':
+        "200":
           description: Register updated
           headers:
             X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
+              $ref: "#/components/headers/XRequestId"
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Register'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
+                $ref: "#/components/schemas/Register"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
     delete:
       tags: [Registers]
       summary: Delete register
       security:
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/RegisterId'
+        - $ref: "#/components/parameters/RegisterId"
       responses:
-        '204':
+        "204":
           description: Register deleted
           headers:
             X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
+              $ref: "#/components/headers/XRequestId"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   /operations:
     parameters:
-      - $ref: '#/components/parameters/OrganizationHeader'
+      - $ref: "#/components/parameters/OrganizationHeader"
     get:
       tags: [Operations]
       summary: List operations
       security:
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/Limit'
-        - $ref: '#/components/parameters/Cursor'
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
         - name: status
           in: query
           schema:
-            $ref: '#/components/schemas/OperationStatus'
+            $ref: "#/components/schemas/OperationStatus"
         - name: type
           in: query
           schema:
-            $ref: '#/components/schemas/OperationType'
+            $ref: "#/components/schemas/OperationType"
         - name: external_id
           in: query
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Operations returned
           headers:
             X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
+              $ref: "#/components/headers/XRequestId"
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OperationListResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+                $ref: "#/components/schemas/OperationListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
     post:
       tags: [Operations]
       summary: Create operation
-      description: Starts a new operation. 
+      description: Starts a new operation.
       security:
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/OperationCreateRequest'
+              $ref: "#/components/schemas/OperationCreateRequest"
       responses:
-        '201':
+        "201":
           description: Operation created
           headers:
             ETag:
-              $ref: '#/components/headers/ETag'
+              $ref: "#/components/headers/ETag"
             X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
+              $ref: "#/components/headers/XRequestId"
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Operation'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '409':
-          $ref: '#/components/responses/IdempotencyConflict'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
-        '429':
-          $ref: '#/components/responses/RateLimited'
+                $ref: "#/components/schemas/Operation"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/IdempotencyConflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/RateLimited"
 
   /operations/{operationId}:
     parameters:
-      - $ref: '#/components/parameters/OrganizationHeader'
+      - $ref: "#/components/parameters/OrganizationHeader"
     get:
       tags: [Operations]
       summary: Get operation
       security:
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/OperationId'
+        - $ref: "#/components/parameters/OperationId"
       responses:
-        '200':
+        "200":
           description: Operation returned
           headers:
             ETag:
-              $ref: '#/components/headers/ETag'
+              $ref: "#/components/headers/ETag"
             X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
+              $ref: "#/components/headers/XRequestId"
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Operation'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
+                $ref: "#/components/schemas/Operation"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
     patch:
       tags: [Operations]
       summary: Update operation
@@ -529,44 +527,44 @@ paths:
       security:
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/OperationId'
-        - $ref: '#/components/parameters/IfMatch'
+        - $ref: "#/components/parameters/OperationId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/OperationPatchRequest'
+              $ref: "#/components/schemas/OperationPatchRequest"
       responses:
-        '200':
+        "200":
           description: Operation updated
           headers:
             ETag:
-              $ref: '#/components/headers/ETag'
+              $ref: "#/components/headers/ETag"
             X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
+              $ref: "#/components/headers/XRequestId"
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Operation'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '412':
-          $ref: '#/components/responses/PreconditionFailed'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
-        '428':
-          $ref: '#/components/responses/PreconditionRequired'
+                $ref: "#/components/schemas/Operation"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
 
   /operations/{operationId}/complete:
     parameters:
-      - $ref: '#/components/parameters/OrganizationHeader'
+      - $ref: "#/components/parameters/OrganizationHeader"
     patch:
       tags: [Operations]
       summary: Complete operation
@@ -574,47 +572,47 @@ paths:
       security:
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/OperationId'
-        - $ref: '#/components/parameters/IfMatch'
-        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: "#/components/parameters/OperationId"
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/OperationCompleteRequest'
+              $ref: "#/components/schemas/OperationCompleteRequest"
       responses:
-        '200':
+        "200":
           description: Operation completed
           headers:
             ETag:
-              $ref: '#/components/headers/ETag'
+              $ref: "#/components/headers/ETag"
             X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
+              $ref: "#/components/headers/XRequestId"
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Operation'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/IdempotencyConflict'
-        '412':
-          $ref: '#/components/responses/PreconditionFailed'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
-        '428':
-          $ref: '#/components/responses/PreconditionRequired'
+                $ref: "#/components/schemas/Operation"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/IdempotencyConflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
 
   /operations/{operationId}/cancel:
     parameters:
-      - $ref: '#/components/parameters/OrganizationHeader'
+      - $ref: "#/components/parameters/OrganizationHeader"
     patch:
       tags: [Operations]
       summary: Cancel operation
@@ -622,137 +620,43 @@ paths:
       security:
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/OperationId'
-        - $ref: '#/components/parameters/IfMatch'
-        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: "#/components/parameters/OperationId"
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/OperationCancelRequest'
+              $ref: "#/components/schemas/OperationCancelRequest"
       responses:
-        '200':
+        "200":
           description: Operation cancelled
           headers:
             ETag:
-              $ref: '#/components/headers/ETag'
+              $ref: "#/components/headers/ETag"
             X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
+              $ref: "#/components/headers/XRequestId"
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Operation'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/IdempotencyConflict'
-        '412':
-          $ref: '#/components/responses/PreconditionFailed'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
-        '428':
-          $ref: '#/components/responses/PreconditionRequired'
-
-  /exports:
-    parameters:
-      - $ref: '#/components/parameters/OrganizationHeader'
-    get:
-      tags: [Exports]
-      summary: List export jobs
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: '#/components/parameters/Limit'
-        - $ref: '#/components/parameters/Cursor'
-      responses:
-        '200':
-          description: Export jobs returned
-          headers:
-            X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/ExportJob'
-                  next_cursor:
-                    type: string
-                    nullable: true
-    post:
-      tags: [Exports]
-      summary: Create export job
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ExportCreateRequest'
-      responses:
-        '202':
-          description: Export job created
-          headers:
-            X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - $ref: '#/components/schemas/ExportJob'
-                  - type: object
-                    properties:
-                      status:
-                        type: string
-                        enum: [queued]
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '409':
-          $ref: '#/components/responses/IdempotencyConflict'
-
-  /exports/{exportId}:
-    parameters:
-      - $ref: '#/components/parameters/OrganizationHeader'
-    get:
-      tags: [Exports]
-      summary: Get export job
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: '#/components/parameters/ExportId'
-      responses:
-        '200':
-          description: Export job returned
-          headers:
-            X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ExportJob'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
+                $ref: "#/components/schemas/Operation"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/IdempotencyConflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
 
 components:
   securitySchemes:
@@ -830,22 +734,16 @@ components:
       required: true
       schema:
         type: string
-    ExportId:
-      name: exportId
-      in: path
-      required: true
-      schema:
-        type: string
   responses:
     BadRequest:
       description: Invalid request
       headers:
         X-Request-Id:
-          $ref: '#/components/headers/XRequestId'
+          $ref: "#/components/headers/XRequestId"
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            $ref: "#/components/schemas/Error"
           example:
             code: invalid_request
             message: The request body is malformed.
@@ -854,11 +752,11 @@ components:
       description: Authentication failed
       headers:
         X-Request-Id:
-          $ref: '#/components/headers/XRequestId'
+          $ref: "#/components/headers/XRequestId"
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            $ref: "#/components/schemas/Error"
           example:
             code: unauthorized
             message: Authentication failed.
@@ -867,11 +765,11 @@ components:
       description: Authenticated caller is not allowed to access the requested tenant, country, or organization.
       headers:
         X-Request-Id:
-          $ref: '#/components/headers/XRequestId'
+          $ref: "#/components/headers/XRequestId"
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            $ref: "#/components/schemas/Error"
           example:
             code: forbidden
             message: The authenticated caller cannot access this resource.
@@ -880,11 +778,11 @@ components:
       description: Resource not found
       headers:
         X-Request-Id:
-          $ref: '#/components/headers/XRequestId'
+          $ref: "#/components/headers/XRequestId"
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            $ref: "#/components/schemas/Error"
           example:
             code: not_found
             message: The requested resource does not exist.
@@ -893,11 +791,11 @@ components:
       description: Domain validation failed
       headers:
         X-Request-Id:
-          $ref: '#/components/headers/XRequestId'
+          $ref: "#/components/headers/XRequestId"
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            $ref: "#/components/schemas/Error"
           example:
             code: regime_validation_failed
             message: The payload violates regime-specific validation rules.
@@ -906,7 +804,7 @@ components:
       description: Rate limit exceeded
       headers:
         X-Request-Id:
-          $ref: '#/components/headers/XRequestId'
+          $ref: "#/components/headers/XRequestId"
         Retry-After:
           schema:
             type: integer
@@ -914,7 +812,7 @@ components:
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            $ref: "#/components/schemas/Error"
           example:
             code: rate_limit_exceeded
             message: Too many requests.
@@ -923,11 +821,11 @@ components:
       description: Idempotency key reused with a different payload
       headers:
         X-Request-Id:
-          $ref: '#/components/headers/XRequestId'
+          $ref: "#/components/headers/XRequestId"
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            $ref: "#/components/schemas/Error"
           example:
             code: idempotency_key_conflict
             message: The idempotency key was already used with a different payload.
@@ -936,11 +834,11 @@ components:
       description: Missing `If-Match` header
       headers:
         X-Request-Id:
-          $ref: '#/components/headers/XRequestId'
+          $ref: "#/components/headers/XRequestId"
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            $ref: "#/components/schemas/Error"
           example:
             code: precondition_required
             message: This operation requires an If-Match header.
@@ -949,11 +847,11 @@ components:
       description: Stale `If-Match` header
       headers:
         X-Request-Id:
-          $ref: '#/components/headers/XRequestId'
+          $ref: "#/components/headers/XRequestId"
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            $ref: "#/components/schemas/Error"
           example:
             code: precondition_failed
             message: The supplied If-Match value is stale.
@@ -1014,7 +912,7 @@ components:
           type: string
           enum: [active, inactive]
         address:
-          $ref: '#/components/schemas/Address'
+          $ref: "#/components/schemas/Address"
         capabilities:
           type: array
           items:
@@ -1025,7 +923,17 @@ components:
         updated_at:
           type: string
           format: date-time
-      required: [id, legal_name, country_code, tax_id, status, address, created_at, updated_at]
+      required:
+        [
+          id,
+          legal_name,
+          country_code,
+          tax_id,
+          status,
+          address,
+          created_at,
+          updated_at,
+        ]
     OrganizationCreateRequest:
       type: object
       properties:
@@ -1040,7 +948,7 @@ components:
         tax_id:
           type: string
         address:
-          $ref: '#/components/schemas/Address'
+          $ref: "#/components/schemas/Address"
       required: [legal_name, country_code, tax_id, address]
     OrganizationUpdateRequest:
       type: object
@@ -1053,14 +961,14 @@ components:
           type: string
           enum: [active, inactive]
         address:
-          $ref: '#/components/schemas/Address'
+          $ref: "#/components/schemas/Address"
     OrganizationListResponse:
       type: object
       properties:
         data:
           type: array
           items:
-            $ref: '#/components/schemas/Organization'
+            $ref: "#/components/schemas/Organization"
         next_cursor:
           type: string
           nullable: true
@@ -1080,7 +988,7 @@ components:
         timezone:
           type: string
         address:
-          $ref: '#/components/schemas/Address'
+          $ref: "#/components/schemas/Address"
         created_at:
           type: string
           format: date-time
@@ -1095,7 +1003,7 @@ components:
         timezone:
           type: string
         address:
-          $ref: '#/components/schemas/Address'
+          $ref: "#/components/schemas/Address"
       required: [name, timezone, address]
     LocationUpdateRequest:
       type: object
@@ -1107,14 +1015,14 @@ components:
         timezone:
           type: string
         address:
-          $ref: '#/components/schemas/Address'
+          $ref: "#/components/schemas/Address"
     LocationListResponse:
       type: object
       properties:
         data:
           type: array
           items:
-            $ref: '#/components/schemas/Location'
+            $ref: "#/components/schemas/Location"
         next_cursor:
           type: string
           nullable: true
@@ -1138,7 +1046,16 @@ components:
         created_at:
           type: string
           format: date-time
-      required: [id, organization_id, location_id, name, external_id, status, created_at]
+      required:
+        [
+          id,
+          organization_id,
+          location_id,
+          name,
+          external_id,
+          status,
+          created_at,
+        ]
     RegisterCreateRequest:
       type: object
       properties:
@@ -1167,7 +1084,7 @@ components:
         data:
           type: array
           items:
-            $ref: '#/components/schemas/Register'
+            $ref: "#/components/schemas/Register"
         next_cursor:
           type: string
           nullable: true
@@ -1183,10 +1100,29 @@ components:
       enum: [open, completed, cancelled]
     PaymentMethod:
       type: string
-      enum: [cash, card, voucher, gift_card, bank_transfer, digital_wallet, store_credit, other]
+      enum:
+        [
+          cash,
+          card,
+          voucher,
+          gift_card,
+          bank_transfer,
+          digital_wallet,
+          store_credit,
+          other,
+        ]
     PaymentStatus:
       type: string
-      enum: [pending, authorized, partially_approved, captured, failed, voided, refunded]
+      enum:
+        [
+          pending,
+          authorized,
+          partially_approved,
+          captured,
+          failed,
+          voided,
+          refunded,
+        ]
     LineItemInput:
       type: object
       properties:
@@ -1207,7 +1143,7 @@ components:
       required: [name, quantity, unit_price, total_amount]
     LineItem:
       allOf:
-        - $ref: '#/components/schemas/LineItemInput'
+        - $ref: "#/components/schemas/LineItemInput"
         - type: object
           properties:
             id:
@@ -1230,9 +1166,9 @@ components:
         payment_id:
           type: string
         method:
-          $ref: '#/components/schemas/PaymentMethod'
+          $ref: "#/components/schemas/PaymentMethod"
         status:
-          $ref: '#/components/schemas/PaymentStatus'
+          $ref: "#/components/schemas/PaymentStatus"
         amount:
           type: integer
         currency:
@@ -1262,7 +1198,7 @@ components:
       required: [payment_id, method, status, amount, currency]
     Payment:
       allOf:
-        - $ref: '#/components/schemas/PaymentInput'
+        - $ref: "#/components/schemas/PaymentInput"
         - type: object
           properties:
             created_at:
@@ -1281,7 +1217,7 @@ components:
         line_items:
           type: array
           items:
-            $ref: '#/components/schemas/LineItemInput'
+            $ref: "#/components/schemas/LineItemInput"
         related_operation_id:
           type: string
           nullable: true
@@ -1291,7 +1227,7 @@ components:
       required: [currency, amount]
     SaleOperation:
       allOf:
-        - $ref: '#/components/schemas/OperationBase'
+        - $ref: "#/components/schemas/OperationBase"
         - type: object
           title: SaleOperation
           properties:
@@ -1301,11 +1237,11 @@ components:
             line_items:
               type: array
               items:
-                $ref: '#/components/schemas/LineItemInput'
+                $ref: "#/components/schemas/LineItemInput"
           required: [type]
     RefundOperation:
       allOf:
-        - $ref: '#/components/schemas/OperationBase'
+        - $ref: "#/components/schemas/OperationBase"
         - type: object
           title: RefundOperation
           properties:
@@ -1318,11 +1254,11 @@ components:
             line_items:
               type: array
               items:
-                $ref: '#/components/schemas/LineItemInput'
+                $ref: "#/components/schemas/LineItemInput"
           required: [type]
     ExchangeOperation:
       allOf:
-        - $ref: '#/components/schemas/OperationBase'
+        - $ref: "#/components/schemas/OperationBase"
         - type: object
           title: ExchangeOperation
           properties:
@@ -1335,15 +1271,15 @@ components:
             returned_line_items:
               type: array
               items:
-                $ref: '#/components/schemas/LineItemInput'
+                $ref: "#/components/schemas/LineItemInput"
             new_line_items:
               type: array
               items:
-                $ref: '#/components/schemas/LineItemInput'
+                $ref: "#/components/schemas/LineItemInput"
           required: [type]
     CustomOperation:
       allOf:
-        - $ref: '#/components/schemas/OperationBase'
+        - $ref: "#/components/schemas/OperationBase"
         - type: object
           title: CustomOperation
           properties:
@@ -1355,28 +1291,28 @@ components:
           required: [type, name]
     OperationData:
       oneOf:
-        - $ref: '#/components/schemas/SaleOperation'
-        - $ref: '#/components/schemas/RefundOperation'
-        - $ref: '#/components/schemas/ExchangeOperation'
-        - $ref: '#/components/schemas/CustomOperation'
+        - $ref: "#/components/schemas/SaleOperation"
+        - $ref: "#/components/schemas/RefundOperation"
+        - $ref: "#/components/schemas/ExchangeOperation"
+        - $ref: "#/components/schemas/CustomOperation"
       discriminator:
         propertyName: type
         mapping:
-          sale: '#/components/schemas/SaleOperation'
-          refund: '#/components/schemas/RefundOperation'
-          exchange: '#/components/schemas/ExchangeOperation'
-          custom: '#/components/schemas/CustomOperation'
+          sale: "#/components/schemas/SaleOperation"
+          refund: "#/components/schemas/RefundOperation"
+          exchange: "#/components/schemas/ExchangeOperation"
+          custom: "#/components/schemas/CustomOperation"
     FiscalInformation:
       oneOf:
-        - $ref: '#/components/schemas/FiscalInformationKassenSichV'
-        - $ref: '#/components/schemas/FiscalInformationRKSV'
-        - $ref: '#/components/schemas/FiscalInformationRT'
+        - $ref: "#/components/schemas/FiscalInformationKassenSichV"
+        - $ref: "#/components/schemas/FiscalInformationRKSV"
+        - $ref: "#/components/schemas/FiscalInformationRT"
       discriminator:
         propertyName: regime
         mapping:
-          KassenSichV: '#/components/schemas/FiscalInformationKassenSichV'
-          RKSV: '#/components/schemas/FiscalInformationRKSV'
-          RT: '#/components/schemas/FiscalInformationRT'
+          KassenSichV: "#/components/schemas/FiscalInformationKassenSichV"
+          RKSV: "#/components/schemas/FiscalInformationRKSV"
+          RT: "#/components/schemas/FiscalInformationRT"
     FiscalInformationKassenSichV:
       type: object
       title: FiscalInformationKassenSichV
@@ -1397,13 +1333,24 @@ components:
         time_format:
           type: string
         start_event:
-          $ref: '#/components/schemas/FiscalInformationKassenSichVStartEvent'
+          $ref: "#/components/schemas/FiscalInformationKassenSichVStartEvent"
         end_event:
-          $ref: '#/components/schemas/FiscalInformationKassenSichVEndEvent'
+          $ref: "#/components/schemas/FiscalInformationKassenSichVEndEvent"
         verification:
-          $ref: '#/components/schemas/FiscalInformationKassenSichVVerification'
+          $ref: "#/components/schemas/FiscalInformationKassenSichVVerification"
       required:
-        [regime, document_number, document_type, tse_serial, client_id, signature_algorithm, time_format, start_event, end_event, verification]
+        [
+          regime,
+          document_number,
+          document_type,
+          tse_serial,
+          client_id,
+          signature_algorithm,
+          time_format,
+          start_event,
+          end_event,
+          verification,
+        ]
     FiscalInformationKassenSichVStartEvent:
       type: object
       properties:
@@ -1429,7 +1376,8 @@ components:
           type: string
         process_data:
           type: string
-      required: [signed_at, transaction_counter, signature, process_type, process_data]
+      required:
+        [signed_at, transaction_counter, signature, process_type, process_data]
     FiscalInformationKassenSichVVerification:
       type: object
       properties:
@@ -1456,10 +1404,18 @@ components:
         certificate_serial:
           type: string
         signature:
-          $ref: '#/components/schemas/FiscalInformationRKSVSignature'
+          $ref: "#/components/schemas/FiscalInformationRKSVSignature"
         verification:
-          $ref: '#/components/schemas/FiscalInformationRKSVVerification'
-      required: [regime, document_number, document_type, cashbox_id, signature, verification]
+          $ref: "#/components/schemas/FiscalInformationRKSVVerification"
+      required:
+        [
+          regime,
+          document_number,
+          document_type,
+          cashbox_id,
+          signature,
+          verification,
+        ]
     FiscalInformationRKSVSignature:
       type: object
       properties:
@@ -1474,7 +1430,14 @@ components:
           type: string
         certificate_serial:
           type: string
-      required: [signed_at, transaction_counter, turnover_counter, signature, certificate_serial]
+      required:
+        [
+          signed_at,
+          transaction_counter,
+          turnover_counter,
+          signature,
+          certificate_serial,
+        ]
     FiscalInformationRKSVVerification:
       type: object
       properties:
@@ -1508,9 +1471,18 @@ components:
           type: string
           nullable: true
         signature:
-          $ref: '#/components/schemas/FiscalInformationRTSignature'
+          $ref: "#/components/schemas/FiscalInformationRTSignature"
       required:
-        [regime, document_number, document_type, rt_serial, rt_firmware, progressive_number, daily_closing_number, signature]
+        [
+          regime,
+          document_number,
+          document_type,
+          rt_serial,
+          rt_firmware,
+          progressive_number,
+          daily_closing_number,
+          signature,
+        ]
     FiscalInformationRTSignature:
       type: object
       properties:
@@ -1528,12 +1500,12 @@ components:
         register_id:
           type: string
         source:
-          $ref: '#/components/schemas/OperationSource'
+          $ref: "#/components/schemas/OperationSource"
         external_id:
           type: string
           description: Merchant or POS identifier for the upstream order, ticket, or checkout in the caller's system.
         data:
-          $ref: '#/components/schemas/OperationData'
+          $ref: "#/components/schemas/OperationData"
       required: [location_id, register_id, source, external_id, data]
     Operation:
       type: object
@@ -1550,28 +1522,28 @@ components:
         register_id:
           type: string
         source:
-          $ref: '#/components/schemas/OperationSource'
+          $ref: "#/components/schemas/OperationSource"
         external_id:
           type: string
           description: Merchant or POS identifier for the upstream order, ticket, or checkout in the caller's system.
         status:
-          $ref: '#/components/schemas/OperationStatus'
+          $ref: "#/components/schemas/OperationStatus"
         type:
-          $ref: '#/components/schemas/OperationType'
+          $ref: "#/components/schemas/OperationType"
         currency:
           type: string
         totals:
-          $ref: '#/components/schemas/Totals'
+          $ref: "#/components/schemas/Totals"
         line_items:
           type: array
           items:
-            $ref: '#/components/schemas/LineItem'
+            $ref: "#/components/schemas/LineItem"
         payments:
           type: array
           items:
-            $ref: '#/components/schemas/Payment'
+            $ref: "#/components/schemas/Payment"
         fiscal_information:
-          $ref: '#/components/schemas/FiscalInformation'
+          $ref: "#/components/schemas/FiscalInformation"
         created_at:
           type: string
           format: date-time
@@ -1579,10 +1551,25 @@ components:
           type: string
           format: date-time
       required:
-        [id, resource_version, organization_id, location_id, register_id, source, external_id, status, type, currency, totals, payments, created_at, updated_at]
+        [
+          id,
+          resource_version,
+          organization_id,
+          location_id,
+          register_id,
+          source,
+          external_id,
+          status,
+          type,
+          currency,
+          totals,
+          payments,
+          created_at,
+          updated_at,
+        ]
     OperationCreateRequest:
       allOf:
-        - $ref: '#/components/schemas/PosOperationEnvelope'
+        - $ref: "#/components/schemas/PosOperationEnvelope"
     OperationPatchRequest:
       type: object
       description: |
@@ -1591,7 +1578,7 @@ components:
         endpoints to finalize or cancel it.
       properties:
         data:
-          $ref: '#/components/schemas/OperationData'
+          $ref: "#/components/schemas/OperationData"
       required: [data]
     OperationCompleteRequest:
       type: object
@@ -1599,7 +1586,7 @@ components:
         payments:
           type: array
           items:
-            $ref: '#/components/schemas/PaymentInput'
+            $ref: "#/components/schemas/PaymentInput"
         completed_at:
           type: string
           format: date-time
@@ -1610,7 +1597,13 @@ components:
       properties:
         reason:
           type: string
-          enum: [customer_abandoned_checkout, void_before_completion, operator_cancelled, payment_failed]
+          enum:
+            [
+              customer_abandoned_checkout,
+              void_before_completion,
+              operator_cancelled,
+              payment_failed,
+            ]
       required: [reason]
     OperationListResponse:
       type: object
@@ -1618,59 +1611,8 @@ components:
         data:
           type: array
           items:
-            $ref: '#/components/schemas/Operation'
+            $ref: "#/components/schemas/Operation"
         next_cursor:
           type: string
           nullable: true
       required: [data]
-    ExportJob:
-      type: object
-      properties:
-        id:
-          type: string
-        type:
-          type: string
-          enum: [dsfinvk, tse_tar, dep7]
-          description: |
-            Country-specific fiscal export type.
-            `dsfinvk` and `tse_tar` for Germany (KassenSichV), `dep7` for Austria (RKSV).
-        status:
-          type: string
-          enum: [queued, processing, ready, failed, expired]
-        schema_version:
-          type: string
-        register_id:
-          type: string
-          description: Register the export is scoped to.
-        from:
-          type: string
-          format: date-time
-        to:
-          type: string
-          format: date-time
-        retention_expires_at:
-          type: string
-          format: date-time
-        created_at:
-          type: string
-          format: date-time
-      required: [id, type, status, schema_version, register_id, retention_expires_at, created_at]
-    ExportCreateRequest:
-      type: object
-      properties:
-        type:
-          type: string
-          enum: [dsfinvk, tse_tar, dep7]
-          description: |
-            Country-specific fiscal export type.
-            `dsfinvk` or `tse_tar` for Germany (KassenSichV), `dep7` for Austria (RKSV).
-        register_id:
-          type: string
-          description: Register to export fiscal data for.
-        from:
-          type: string
-          format: date-time
-        to:
-          type: string
-          format: date-time
-      required: [type, register_id, from, to]

@@ -34,7 +34,6 @@
           {
             "group": "Operations and delivery",
             "pages": [
-              "exports-and-reconciliation",
               "errors-and-limits",
               "sandbox-and-go-live"
             ]
@@ -42,6 +41,16 @@
           {
             "group": "Fiscalization API",
             "openapi": "api-reference/openapi.yaml"
+          }
+        ]
+      },
+      {
+        "tab": "Reporting API",
+        "pages": [
+          "exports-and-reconciliation",
+          {
+            "group": "Reporting API",
+            "openapi": "api-reference/reporting-openapi.yaml"
           }
         ]
       },

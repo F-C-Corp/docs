@@ -1,0 +1,288 @@
+openapi: 3.1.0
+info:
+  title: OpenFiskal reporting API
+  version: 1.0.0
+  license:
+    name: Proprietary
+  description: |
+    Country-specific fiscal export endpoints for compliance reporting.
+
+    Exports are asynchronous: create a job, poll until ready, then download
+    the artifact before the retention deadline.
+servers:
+  - url: https://api.openfiskal.com/v1
+    description: Production
+  - url: https://sandbox.api.openfiskal.com/v1
+    description: Sandbox
+tags:
+  - name: Exports
+    description: Create and inspect asynchronous fiscal export jobs.
+paths:
+  /exports:
+    parameters:
+      - $ref: "#/components/parameters/OrganizationHeader"
+    get:
+      tags: [Exports]
+      summary: List export jobs
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Export jobs returned
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ExportJob"
+                  next_cursor:
+                    type: string
+                    nullable: true
+    post:
+      tags: [Exports]
+      summary: Create export job
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportCreateRequest"
+      responses:
+        "202":
+          description: Export job created
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ExportJob"
+                  - type: object
+                    properties:
+                      status:
+                        type: string
+                        enum: [queued]
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/IdempotencyConflict"
+
+  /exports/{exportId}:
+    parameters:
+      - $ref: "#/components/parameters/OrganizationHeader"
+    get:
+      tags: [Exports]
+      summary: Get export job
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ExportId"
+      responses:
+        "200":
+          description: Export job returned
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportJob"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: API key
+  headers:
+    XRequestId:
+      description: Stable request trace identifier.
+      schema:
+        type: string
+        example: req_01JABCXYZ
+  parameters:
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+    OrganizationHeader:
+      name: X-OpenFiskal-Organization
+      in: header
+      required: true
+      schema:
+        type: string
+      description: Organization identifier returned by the organizations resource.
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+      description: Unique key per endpoint, organization, and tenant. Retained for at least 24 hours.
+    ExportId:
+      name: exportId
+      in: path
+      required: true
+      schema:
+        type: string
+  responses:
+    BadRequest:
+      description: Invalid request
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/XRequestId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            code: invalid_request
+            message: The request body is malformed.
+            retryable: false
+    Unauthorized:
+      description: Authentication failed
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/XRequestId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            code: unauthorized
+            message: Authentication failed.
+            retryable: false
+    Forbidden:
+      description: Authenticated caller is not allowed to access the requested tenant, country, or organization.
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/XRequestId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            code: forbidden
+            message: The authenticated caller cannot access this resource.
+            retryable: false
+    NotFound:
+      description: Resource not found
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/XRequestId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            code: not_found
+            message: The requested resource does not exist.
+            retryable: false
+    IdempotencyConflict:
+      description: Idempotency key reused with a different payload
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/XRequestId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            code: idempotency_key_conflict
+            message: The idempotency key was already used with a different payload.
+            retryable: false
+  schemas:
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        retryable:
+          type: boolean
+      required: [code, message, retryable]
+    ExportJob:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [dsfinvk, tse_tar, dep7]
+          description: |
+            Country-specific fiscal export type.
+            `dsfinvk` and `tse_tar` for Germany (KassenSichV), `dep7` for Austria (RKSV).
+        status:
+          type: string
+          enum: [queued, processing, ready, failed, expired]
+        schema_version:
+          type: string
+        register_id:
+          type: string
+          description: Register the export is scoped to.
+        from:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
+        retention_expires_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+      required: [id, type, status, schema_version, register_id, retention_expires_at, created_at]
+    ExportCreateRequest:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [dsfinvk, tse_tar, dep7]
+          description: |
+            Country-specific fiscal export type.
+            `dsfinvk` or `tse_tar` for Germany (KassenSichV), `dep7` for Austria (RKSV).
+        register_id:
+          type: string
+          description: Register to export fiscal data for.
+        from:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
+      required: [type, register_id, from, to]
