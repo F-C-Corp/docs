@@ -47,6 +47,7 @@ paths:
                   next_cursor:
                     type: string
                     nullable: true
+                    description: Pagination token for the next page. Pass as the `cursor` query parameter. Null when there are no more results.
     post:
       tags: [Exports]
       summary: Create export job
@@ -143,6 +144,7 @@ components:
     Cursor:
       name: cursor
       in: query
+      description: Opaque pagination token. Pass the `next_cursor` value from a previous response to fetch the next page. Omit on the first request.
       schema:
         type: string
     OrganizationHeader:
