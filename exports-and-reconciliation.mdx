@@ -13,26 +13,15 @@ Every export response includes the schema version, retention deadline, and a dow
 
 | Type | Description |
 | --- | --- |
-| `operations` | All POS operations in the time range |
-| `receipts` | Receipt data |
-| `audit_events` | Audit trail events |
 | `dsfinvk` | Germany (KassenSichV) — DSFinV-K archive containing 20 CSV files, `index.xml`, and GDPdU DTD |
 | `tse_tar` | Germany (KassenSichV) — Raw TSE transaction data |
 | `dep7` | Austria (RKSV) — DEP7 data export |
 
-The first three are generic data exports for ERP sync, lake ingestion, and reconciliation. The last three are country-specific fiscal exports scoped to a single register.
+Exports produce country-specific compliance artifacts required by local tax authorities. Each export is scoped to a single register.
 
-```json
-{
-  "type": "operations",
-  "from": "2026-03-01T00:00:00Z",
-  "to": "2026-03-31T23:59:59Z"
-}
-```
+## Requesting an export
 
-## Fiscal exports
-
-Fiscal exports produce compliance artifacts required by local tax authorities. They require a `register_id`.
+Every export requires a `type`, `register_id`, and a time range.
 
 <Tabs>
   <Tab title="Germany — DSFinV-K">
@@ -92,14 +81,16 @@ Fiscal exports produce compliance artifacts required by local tax authorities. T
 
 All export types follow the same async lifecycle:
 
-1. `POST /exports` returns a job with status `queued`
-2. Poll `GET /exports/{exportId}` until status is `ready`
+1. `POST /exports` returns the job with status `queued`
+2. Poll `GET /exports/{exportId}` until status reaches `ready`
+
+Create response:
 
 ```json
 {
   "id": "exp_01JDEF",
   "type": "dsfinvk",
-  "status": "ready",
+  "status": "queued",
   "schema_version": "1.0",
   "register_id": "reg_01HABC",
   "from": "2026-03-01T00:00:00Z",
