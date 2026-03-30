@@ -9,44 +9,30 @@ Exports are asynchronous. You create an export job, poll it until the artifact i
 
 Every export response includes the schema version, retention deadline, and a download link once the status reaches `ready`.
 
-## Generic exports
-
-Use generic exports for ERP sync, lake ingestion, and reconciliation verification.
-
-```json
-{
-  "type": "operations",
-  "format": "jsonl",
-  "from": "2026-03-01T00:00:00Z",
-  "to": "2026-03-31T23:59:59Z"
-}
-```
+## Export types
 
 | Type | Description |
 | --- | --- |
 | `operations` | All POS operations in the time range |
 | `receipts` | Receipt data |
 | `audit_events` | Audit trail events |
+| `dsfinvk` | Germany (KassenSichV) — DSFinV-K archive containing 20 CSV files, `index.xml`, and GDPdU DTD |
+| `tse_tar` | Germany (KassenSichV) — Raw TSE transaction data |
+| `dep7` | Austria (RKSV) — DEP7 data export |
 
-Generic exports support `csv`, `jsonl`, and `parquet` formats.
+The first three are generic data exports for ERP sync, lake ingestion, and reconciliation. The last three are country-specific fiscal exports scoped to a single register.
 
-## Country-specific fiscal exports
+```json
+{
+  "type": "operations",
+  "from": "2026-03-01T00:00:00Z",
+  "to": "2026-03-31T23:59:59Z"
+}
+```
 
-Fiscal exports produce compliance artifacts required by local tax authorities. These are scoped to a single register and use a fixed output format determined by the export type.
+## Fiscal exports
 
-| Type | Country | Regime | Format | Description |
-| --- | --- | --- | --- | --- |
-| `dsfinvk` | Germany | KassenSichV | `tar` | DSFinV-K archive (20 CSV files, `index.xml`, GDPdU DTD) |
-| `tse_tar` | Germany | KassenSichV | `tar` | Raw TSE transaction data |
-| `dep7` | Austria | RKSV | `json` | DEP7 data export |
-
-<Info>
-  The `format` field is ignored for fiscal export types. The output format is fixed by the compliance regime.
-</Info>
-
-### Requesting a fiscal export
-
-Fiscal exports require a `register_id`. The `format` field can be omitted.
+Fiscal exports produce compliance artifacts required by local tax authorities. They require a `register_id`.
 
 <Tabs>
   <Tab title="Germany — DSFinV-K">
@@ -108,20 +94,17 @@ All export types follow the same async lifecycle:
 
 1. `POST /exports` returns a job with status `queued`
 2. Poll `GET /exports/{exportId}` until status is `ready`
-3. Download from `download_url`
 
 ```json
 {
   "id": "exp_01JDEF",
   "type": "dsfinvk",
-  "format": "tar",
   "status": "ready",
   "schema_version": "1.0",
   "register_id": "reg_01HABC",
   "from": "2026-03-01T00:00:00Z",
   "to": "2026-03-31T23:59:59Z",
   "retention_expires_at": "2026-04-07T00:00:00Z",
-  "download_url": "https://exports.openfiskal.com/exp_01JDEF/dsfinvk.tar",
   "created_at": "2026-03-31T12:00:00Z"
 }
 ```
