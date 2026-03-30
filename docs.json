@@ -33,10 +33,7 @@
           },
           {
             "group": "Operations and delivery",
-            "pages": [
-              "errors-and-limits",
-              "sandbox-and-go-live"
-            ]
+            "pages": ["errors-and-limits", "sandbox-and-go-live"]
           },
           {
             "group": "Fiscalization API",
@@ -47,7 +44,7 @@
       {
         "tab": "Reporting API",
         "pages": [
-          "exports-and-reconciliation",
+          "reporting-api-getting-started",
           {
             "group": "Reporting API",
             "openapi": "api-reference/reporting-openapi.yaml"

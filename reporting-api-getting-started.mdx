@@ -1,6 +1,6 @@
 ---
-title: "Exports and reconciliation"
-description: "How to use export jobs, country-specific fiscal exports, and reconciliation workflows."
+title: "Getting Started"
+description: "How to use export jobs and obtain country-specific fiscal exports."
 ---
 
 ## Overview
@@ -100,22 +100,6 @@ Create response:
 }
 ```
 
-## Reconciliation guidance
-
-Reconcile by:
-
-- operation ID
-- external ID
-- payment ID
-- receipt ID
-
-Use exports for bulk comparison. Poll export and operation resources when you need updated state.
-
 ## Retention
 
 Export artifacts remain downloadable until the `retention_expires_at` timestamp. Copy each artifact to your own durable storage before that deadline.
-
-## Next steps
-
-- [Errors and limits](/errors-and-limits)
-- [Supported scope](/supported-scope)
