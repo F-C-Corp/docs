@@ -1,17 +1,17 @@
 ---
 title: "Exports and reconciliation"
-description: "How to use export jobs and reconciliation workflows."
+description: "How to use export jobs, country-specific fiscal exports, and reconciliation workflows."
 ---
 
 ## Overview
 
-Exports remain asynchronous in the current `v1` contract. You create an export job and poll it until the artifact is ready.
+Exports are asynchronous. You create an export job, poll it until the artifact is ready, then download the file before the retention deadline.
 
-Every export response includes the schema version, retention deadline, and a download link after readiness.
+Every export response includes the schema version, retention deadline, and a download link once the status reaches `ready`.
 
-## Export request
+## Generic exports
 
-Use time-bounded export jobs for ERP sync, lake ingestion, and reconciliation verification.
+Use generic exports for ERP sync, lake ingestion, and reconciliation verification.
 
 ```json
 {
@@ -22,9 +22,113 @@ Use time-bounded export jobs for ERP sync, lake ingestion, and reconciliation ve
 }
 ```
 
+| Type | Description |
+| --- | --- |
+| `operations` | All POS operations in the time range |
+| `receipts` | Receipt data |
+| `audit_events` | Audit trail events |
+
+Generic exports support `csv`, `jsonl`, and `parquet` formats.
+
+## Country-specific fiscal exports
+
+Fiscal exports produce compliance artifacts required by local tax authorities. These are scoped to a single register and use a fixed output format determined by the export type.
+
+| Type | Country | Regime | Format | Description |
+| --- | --- | --- | --- | --- |
+| `dsfinvk` | Germany | KassenSichV | `tar` | DSFinV-K archive (20 CSV files, `index.xml`, GDPdU DTD) |
+| `tse_tar` | Germany | KassenSichV | `tar` | Raw TSE transaction data |
+| `dep7` | Austria | RKSV | `json` | DEP7 data export |
+
+<Info>
+  The `format` field is ignored for fiscal export types. The output format is fixed by the compliance regime.
+</Info>
+
+### Requesting a fiscal export
+
+Fiscal exports require a `register_id`. The `format` field can be omitted.
+
+<Tabs>
+  <Tab title="Germany — DSFinV-K">
+    ```bash
+    curl -X POST https://sandbox.api.openfiskal.com/v1/exports \
+      -H "Authorization: Bearer ofk_test_abc123" \
+      -H "X-OpenFiskal-Organization: org_01HXYZ" \
+      -H "Idempotency-Key: dsfinvk-2026-03" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "type": "dsfinvk",
+        "register_id": "reg_01HABC",
+        "from": "2026-03-01T00:00:00Z",
+        "to": "2026-03-31T23:59:59Z"
+      }'
+    ```
+
+    The resulting TAR archive contains the full DSFinV-K dataset: `cashpointclosing.csv`, `transactions.csv`, `lines.csv`, `payment.csv`, `vat.csv`, and other mandated files alongside `index.xml` and the GDPdU DTD.
+  </Tab>
+  <Tab title="Germany — TSE data">
+    ```bash
+    curl -X POST https://sandbox.api.openfiskal.com/v1/exports \
+      -H "Authorization: Bearer ofk_test_abc123" \
+      -H "X-OpenFiskal-Organization: org_01HXYZ" \
+      -H "Idempotency-Key: tse-2026-03" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "type": "tse_tar",
+        "register_id": "reg_01HABC",
+        "from": "2026-03-01T00:00:00Z",
+        "to": "2026-03-31T23:59:59Z"
+      }'
+    ```
+
+    Returns the raw TSE (Technical Security Equipment) transaction log for the register's signing unit.
+  </Tab>
+  <Tab title="Austria — DEP7">
+    ```bash
+    curl -X POST https://sandbox.api.openfiskal.com/v1/exports \
+      -H "Authorization: Bearer ofk_test_abc123" \
+      -H "X-OpenFiskal-Organization: org_01HXYZ" \
+      -H "Idempotency-Key: dep7-2026-03" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "type": "dep7",
+        "register_id": "reg_01HABC",
+        "from": "2026-03-01T00:00:00Z",
+        "to": "2026-03-31T23:59:59Z"
+      }'
+    ```
+
+    Returns the DEP7 (Datenerfassungsprotokoll) export in JSON, as required by Austrian RKSV regulations.
+  </Tab>
+</Tabs>
+
+### Polling and download
+
+All export types follow the same async lifecycle:
+
+1. `POST /exports` returns a job with status `queued`
+2. Poll `GET /exports/{exportId}` until status is `ready`
+3. Download from `download_url`
+
+```json
+{
+  "id": "exp_01JDEF",
+  "type": "dsfinvk",
+  "format": "tar",
+  "status": "ready",
+  "schema_version": "1.0",
+  "register_id": "reg_01HABC",
+  "from": "2026-03-01T00:00:00Z",
+  "to": "2026-03-31T23:59:59Z",
+  "retention_expires_at": "2026-04-07T00:00:00Z",
+  "download_url": "https://exports.openfiskal.com/exp_01JDEF/dsfinvk.tar",
+  "created_at": "2026-03-31T12:00:00Z"
+}
+```
+
 ## Reconciliation guidance
 
-You should reconcile by:
+Reconcile by:
 
 - operation ID
 - external ID
@@ -35,8 +139,9 @@ Use exports for bulk comparison. Poll export and operation resources when you ne
 
 ## Retention
 
-Export artifacts remain downloadable until the `retention_expires_at` timestamp. You should copy each artifact to your own durable storage before that deadline.
+Export artifacts remain downloadable until the `retention_expires_at` timestamp. Copy each artifact to your own durable storage before that deadline.
 
 ## Next steps
 
 - [Errors and limits](/errors-and-limits)
+- [Supported scope](/supported-scope)

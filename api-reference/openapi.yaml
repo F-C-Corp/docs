@@ -1624,15 +1624,25 @@ components:
           type: string
         type:
           type: string
-          enum: [operations, receipts, audit_events]
+          enum: [operations, receipts, audit_events, dsfinvk, tse_tar, dep7]
+          description: |
+            Export type. `operations`, `receipts`, and `audit_events` are generic data exports.
+            `dsfinvk`, `tse_tar`, and `dep7` are country-specific fiscal exports.
         format:
           type: string
-          enum: [csv, jsonl, parquet]
+          enum: [csv, jsonl, parquet, tar, json]
+          description: |
+            Output format. For generic exports you choose the format.
+            Fiscal exports use a fixed format: `dsfinvk` → `tar`, `tse_tar` → `tar`, `dep7` → `json`.
         status:
           type: string
           enum: [queued, processing, ready, failed, expired]
         schema_version:
           type: string
+        register_id:
+          type: string
+          nullable: true
+          description: Register the export is scoped to. Present on fiscal export types (`dsfinvk`, `tse_tar`, `dep7`).
         from:
           type: string
           format: date-time
@@ -1654,14 +1664,21 @@ components:
       properties:
         type:
           type: string
-          enum: [operations, receipts, audit_events]
+          enum: [operations, receipts, audit_events, dsfinvk, tse_tar, dep7]
+          description: |
+            Export type. Use `dsfinvk` or `tse_tar` for German fiscal exports,
+            `dep7` for Austrian RKSV exports. These require `register_id`.
         format:
           type: string
           enum: [csv, jsonl, parquet]
+          description: Output format for generic exports. Ignored for fiscal export types which use a fixed format.
+        register_id:
+          type: string
+          description: Required for fiscal export types (`dsfinvk`, `tse_tar`, `dep7`). Identifies the register to export.
         from:
           type: string
           format: date-time
         to:
           type: string
           format: date-time
-      required: [type, format, from, to]
+      required: [type, from, to]
