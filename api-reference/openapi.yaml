@@ -16,8 +16,8 @@ servers:
   - url: https://sandbox.api.openfiskal.com/v1
     description: Sandbox
 tags:
-  - name: Organizations
-    description: Create and manage merchant organizations.
+  - name: Sellers
+    description: Create and manage merchant sellers.
   - name: Locations
     description: Create and manage merchant locations.
   - name: Registers
@@ -25,10 +25,10 @@ tags:
   - name: Operations
     description: Start, update, complete, cancel, list, and read operations.
 paths:
-  /organizations:
+  /sellers:
     get:
-      tags: [Organizations]
-      summary: List organizations
+      tags: [Sellers]
+      summary: List sellers
       security:
         - BearerAuth: []
       parameters:
@@ -36,21 +36,21 @@ paths:
         - $ref: "#/components/parameters/Cursor"
       responses:
         "200":
-          description: Organizations returned
+          description: Sellers returned
           headers:
             X-Request-Id:
               $ref: "#/components/headers/XRequestId"
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/OrganizationListResponse"
+                $ref: "#/components/schemas/SellerListResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
     post:
-      tags: [Organizations]
-      summary: Create organization
+      tags: [Sellers]
+      summary: Create seller
       security:
         - BearerAuth: []
       requestBody:
@@ -58,17 +58,17 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/OrganizationCreateRequest"
+              $ref: "#/components/schemas/SellerCreateRequest"
       responses:
         "201":
-          description: Organization created
+          description: Seller created
           headers:
             X-Request-Id:
               $ref: "#/components/headers/XRequestId"
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Organization"
+                $ref: "#/components/schemas/Seller"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -78,24 +78,24 @@ paths:
         "422":
           $ref: "#/components/responses/UnprocessableEntity"
 
-  /organizations/{organizationId}:
+  /sellers/{sellerId}:
     get:
-      tags: [Organizations]
-      summary: Get organization
+      tags: [Sellers]
+      summary: Get seller
       security:
         - BearerAuth: []
       parameters:
-        - $ref: "#/components/parameters/OrganizationId"
+        - $ref: "#/components/parameters/SellerId"
       responses:
         "200":
-          description: Organization returned
+          description: Seller returned
           headers:
             X-Request-Id:
               $ref: "#/components/headers/XRequestId"
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Organization"
+                $ref: "#/components/schemas/Seller"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -103,28 +103,28 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
     patch:
-      tags: [Organizations]
-      summary: Update organization
+      tags: [Sellers]
+      summary: Update seller
       security:
         - BearerAuth: []
       parameters:
-        - $ref: "#/components/parameters/OrganizationId"
+        - $ref: "#/components/parameters/SellerId"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/OrganizationUpdateRequest"
+              $ref: "#/components/schemas/SellerUpdateRequest"
       responses:
         "200":
-          description: Organization updated
+          description: Seller updated
           headers:
             X-Request-Id:
               $ref: "#/components/headers/XRequestId"
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Organization"
+                $ref: "#/components/schemas/Seller"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -138,7 +138,7 @@ paths:
 
   /locations:
     parameters:
-      - $ref: "#/components/parameters/OrganizationHeader"
+      - $ref: "#/components/parameters/SellerHeader"
     get:
       tags: [Locations]
       summary: List locations
@@ -193,7 +193,7 @@ paths:
 
   /locations/{locationId}:
     parameters:
-      - $ref: "#/components/parameters/OrganizationHeader"
+      - $ref: "#/components/parameters/SellerHeader"
     get:
       tags: [Locations]
       summary: Get location
@@ -272,7 +272,7 @@ paths:
 
   /registers:
     parameters:
-      - $ref: "#/components/parameters/OrganizationHeader"
+      - $ref: "#/components/parameters/SellerHeader"
     get:
       tags: [Registers]
       summary: List registers
@@ -327,7 +327,7 @@ paths:
 
   /registers/{registerId}:
     parameters:
-      - $ref: "#/components/parameters/OrganizationHeader"
+      - $ref: "#/components/parameters/SellerHeader"
     get:
       tags: [Registers]
       summary: Get register
@@ -406,7 +406,7 @@ paths:
 
   /operations:
     parameters:
-      - $ref: "#/components/parameters/OrganizationHeader"
+      - $ref: "#/components/parameters/SellerHeader"
     get:
       tags: [Operations]
       summary: List operations
@@ -482,7 +482,7 @@ paths:
 
   /operations/{operationId}:
     parameters:
-      - $ref: "#/components/parameters/OrganizationHeader"
+      - $ref: "#/components/parameters/SellerHeader"
     get:
       tags: [Operations]
       summary: Get operation
@@ -564,7 +564,7 @@ paths:
 
   /operations/{operationId}/complete:
     parameters:
-      - $ref: "#/components/parameters/OrganizationHeader"
+      - $ref: "#/components/parameters/SellerHeader"
     patch:
       tags: [Operations]
       summary: Complete operation
@@ -612,7 +612,7 @@ paths:
 
   /operations/{operationId}/cancel:
     parameters:
-      - $ref: "#/components/parameters/OrganizationHeader"
+      - $ref: "#/components/parameters/SellerHeader"
     patch:
       tags: [Operations]
       summary: Cancel operation
@@ -689,20 +689,20 @@ components:
       in: query
       schema:
         type: string
-    OrganizationHeader:
-      name: X-OpenFiskal-Organization
+    SellerHeader:
+      name: X-OpenFiskal-Seller
       in: header
       required: true
       schema:
         type: string
-      description: Organization identifier returned by the organizations resource.
+      description: Seller identifier returned by the sellers resource.
     IdempotencyKey:
       name: Idempotency-Key
       in: header
       required: true
       schema:
         type: string
-      description: Unique key per endpoint, organization, and tenant. Retained for at least 24 hours.
+      description: Unique key per endpoint, seller, and tenant. Retained for at least 24 hours.
     IfMatch:
       name: If-Match
       in: header
@@ -710,8 +710,8 @@ components:
       schema:
         type: string
       description: Latest operation `ETag` returned by OpenFiskal. Replace it after every successful mutation.
-    OrganizationId:
-      name: organizationId
+    SellerId:
+      name: sellerId
       in: path
       required: true
       schema:
@@ -762,7 +762,7 @@ components:
             message: Authentication failed.
             retryable: false
     Forbidden:
-      description: Authenticated caller is not allowed to access the requested tenant, country, or organization.
+      description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
       headers:
         X-Request-Id:
           $ref: "#/components/headers/XRequestId"
@@ -893,7 +893,7 @@ components:
           maxLength: 3
           example: DEU
       required: [line1, city, postal_code, country_code]
-    Organization:
+    Seller:
       type: object
       properties:
         id:
@@ -934,7 +934,7 @@ components:
           created_at,
           updated_at,
         ]
-    OrganizationCreateRequest:
+    SellerCreateRequest:
       type: object
       properties:
         legal_name:
@@ -950,7 +950,7 @@ components:
         address:
           $ref: "#/components/schemas/Address"
       required: [legal_name, country_code, tax_id, address]
-    OrganizationUpdateRequest:
+    SellerUpdateRequest:
       type: object
       properties:
         legal_name:
@@ -962,13 +962,13 @@ components:
           enum: [active, inactive]
         address:
           $ref: "#/components/schemas/Address"
-    OrganizationListResponse:
+    SellerListResponse:
       type: object
       properties:
         data:
           type: array
           items:
-            $ref: "#/components/schemas/Organization"
+            $ref: "#/components/schemas/Seller"
         next_cursor:
           type: string
           nullable: true
@@ -978,7 +978,7 @@ components:
       properties:
         id:
           type: string
-        organization_id:
+        seller_id:
           type: string
         name:
           type: string
@@ -992,7 +992,7 @@ components:
         created_at:
           type: string
           format: date-time
-      required: [id, organization_id, name, timezone, address, created_at]
+      required: [id, seller_id, name, timezone, address, created_at]
     LocationCreateRequest:
       type: object
       properties:
@@ -1032,7 +1032,7 @@ components:
       properties:
         id:
           type: string
-        organization_id:
+        seller_id:
           type: string
         location_id:
           type: string
@@ -1049,7 +1049,7 @@ components:
       required:
         [
           id,
-          organization_id,
+          seller_id,
           location_id,
           name,
           external_id,
@@ -1515,7 +1515,7 @@ components:
         resource_version:
           type: string
           description: Current server-issued version for the operation. The same value is returned in the `ETag` header and changes on every successful mutation.
-        organization_id:
+        seller_id:
           type: string
         location_id:
           type: string
@@ -1554,7 +1554,7 @@ components:
         [
           id,
           resource_version,
-          organization_id,
+          seller_id,
           location_id,
           register_id,
           source,

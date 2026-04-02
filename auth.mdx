@@ -1,6 +1,6 @@
 ---
 title: "Authentication"
-description: "How authentication, organization scoping, idempotency, and conditional writes work in the OpenFiskal API."
+description: "How authentication, seller scoping, idempotency, and conditional writes work in the OpenFiskal API."
 ---
 
 ## API scope
@@ -28,25 +28,25 @@ Although the credential is an API key, the API uses the standard HTTP bearer pat
 
 This keeps the API compatible with standard API tooling, gateways, proxies, and security middleware.
 
-## Organization scoping
+## Seller scoping
 
-For every organization-scoped request, also send:
+For every seller-scoped request, also send:
 
 ```bash
--H "X-OpenFiskal-Organization: org_01HXYZ"
+-H "X-OpenFiskal-Seller: seller_01HXYZ"
 ```
 
-This header must contain the OpenFiskal organization ID, not the API key.
+This header must contain the OpenFiskal seller ID, not the API key.
 
-Together, a typical organization-scoped request looks like this:
+Together, a typical seller-scoped request looks like this:
 
 ```bash
 curl https://api.openfiskal.com/v1/operations \
   -H "Authorization: Bearer ofk_live_abc123..." \
-  -H "X-OpenFiskal-Organization: org_01HXYZ"
+  -H "X-OpenFiskal-Seller: seller_01HXYZ"
 ```
 
-Organization-scoped resources include:
+Seller-scoped resources include:
 
 - Locations
 - Registers
@@ -54,7 +54,7 @@ Organization-scoped resources include:
 - Exports
 - Receipts
 
-You do not need `X-OpenFiskal-Organization` when you create, update, delete, or read the organization itself.
+You do not need `X-OpenFiskal-Seller` when you create, update, delete, or read the seller itself.
 
 ## Idempotency
 
@@ -63,7 +63,7 @@ For mutating requests that create or finalize state, send an `Idempotency-Key` h
 ```bash
 curl -X POST https://api.openfiskal.com/v1/operations \
   -H "Authorization: Bearer ofk_live_abc123..." \
-  -H "X-OpenFiskal-Organization: org_01HXYZ" \
+  -H "X-OpenFiskal-Seller: seller_01HXYZ" \
   -H "Idempotency-Key: op-order-1001-start" \
   -H "Content-Type: application/json" \
   -d '{ "...": "..." }'
@@ -76,7 +76,7 @@ The platform retains keys for at least 24 hours. Reusing the same key with a dif
 ## Recommended handling
 
 - Return `401` when authentication is missing or invalid.
-- Return `403` when the API key is valid but not allowed to access the requested tenant, country, or organization.
+- Return `403` when the API key is valid but not allowed to access the requested tenant, country, or seller.
 - Return `412 Precondition Failed` when an operation update, completion, or cancellation uses a stale `If-Match` value.
 - Return `429 Too Many Requests` with `Retry-After` when the caller exceeds `500 requests/second` per API key.
 

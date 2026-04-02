@@ -20,7 +20,7 @@ tags:
 paths:
   /exports:
     parameters:
-      - $ref: "#/components/parameters/OrganizationHeader"
+      - $ref: "#/components/parameters/SellerHeader"
     get:
       tags: [Exports]
       summary: List export jobs
@@ -88,7 +88,7 @@ paths:
 
   /exports/{exportId}:
     parameters:
-      - $ref: "#/components/parameters/OrganizationHeader"
+      - $ref: "#/components/parameters/SellerHeader"
     get:
       tags: [Exports]
       summary: Get export job
@@ -147,20 +147,20 @@ components:
       description: Opaque pagination token. Pass the `next_cursor` value from a previous response to fetch the next page. Omit on the first request.
       schema:
         type: string
-    OrganizationHeader:
-      name: X-OpenFiskal-Organization
+    SellerHeader:
+      name: X-OpenFiskal-Seller
       in: header
       required: true
       schema:
         type: string
-      description: Organization identifier returned by the organizations resource.
+      description: Seller identifier returned by the sellers resource.
     IdempotencyKey:
       name: Idempotency-Key
       in: header
       required: true
       schema:
         type: string
-      description: Unique key per endpoint, organization, and tenant. Retained for at least 24 hours.
+      description: Unique key per endpoint, seller, and tenant. Retained for at least 24 hours.
     ExportId:
       name: exportId
       in: path
@@ -195,7 +195,7 @@ components:
             message: Authentication failed.
             retryable: false
     Forbidden:
-      description: Authenticated caller is not allowed to access the requested tenant, country, or organization.
+      description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
       headers:
         X-Request-Id:
           $ref: "#/components/headers/XRequestId"

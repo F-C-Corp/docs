@@ -7,14 +7,14 @@ description: "How to integrate OpenFiskal through your backend."
 
 OpenFiskal currently supports one public integration topology: server-to-server.
 
-Your backend holds the API key, adds the organization-scoping header, and calls OpenFiskal on behalf of your locations and registers. Registers, browsers, and mobile apps should never call the API directly.
+Your backend holds the API key, adds the seller-scoping header, and calls OpenFiskal on behalf of your locations and registers. Registers, browsers, and mobile apps should never call the API directly.
 
 ```mermaid
 flowchart LR
     R1["Register 1"] --> B["POS backend"]
     R2["Register 2"] --> B
     R3["Register 3"] --> B
-    B -- "Bearer token + X-OpenFiskal-Organization" --> O["OpenFiskal API"]
+    B -- "Bearer token + X-OpenFiskal-Seller" --> O["OpenFiskal API"]
 ```
 
 ## Not supported

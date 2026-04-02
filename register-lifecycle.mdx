@@ -20,12 +20,12 @@ Registers have two public states:
 
 ## Commissioning a register
 
-Create the register after you already know the target organization and location:
+Create the register after you already know the target seller and location:
 
 ```bash
 curl -X POST https://api.openfiskal.com/v1/registers \
   -H "Authorization: Bearer $API_KEY" \
-  -H "X-OpenFiskal-Organization: org_01HXYZ" \
+  -H "X-OpenFiskal-Seller: seller_01HXYZ" \
   -H "Content-Type: application/json" \
   -d '{
     "location_id": "loc_01HXYZ",
@@ -41,7 +41,7 @@ Use `PATCH /registers/{registerId}` when your backend needs to rename the regist
 ```bash
 curl -X PATCH https://api.openfiskal.com/v1/registers/reg_01HXYZ \
   -H "Authorization: Bearer $API_KEY" \
-  -H "X-OpenFiskal-Organization: org_01HXYZ" \
+  -H "X-OpenFiskal-Seller: seller_01HXYZ" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Kasse 2 - Front Counter",
@@ -58,7 +58,7 @@ curl -X PATCH https://api.openfiskal.com/v1/registers/reg_01HXYZ \
 
 ## Listing and lookup
 
-Use `GET /registers` to list registers in the current organization. Use `GET /registers/{registerId}` when you need the current representation for a specific register.
+Use `GET /registers` to list registers in the current seller. Use `GET /registers/{registerId}` when you need the current representation for a specific register.
 
 ## Next steps
 

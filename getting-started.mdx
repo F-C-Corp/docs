@@ -24,27 +24,27 @@ Use the standard bearer header on every request:
 -H "Authorization: Bearer ofk_live_abc123..."
 ```
 
-Every organization-scoped request must also include:
+Every seller-scoped request must also include:
 
 ```bash
--H "X-OpenFiskal-Organization: org_01HXYZ"
+-H "X-OpenFiskal-Seller: seller_01HXYZ"
 ```
 
-This header value is the organization ID returned by `POST /organizations`, not your API key.
+This header value is the seller ID returned by `POST /sellers`, not your API key.
 
 ## Create resources
 
-First create the tenant-scoped and organization-scoped resources your integration needs before you process any fiscalized transactions.
+First create the tenant-scoped and seller-scoped resources your integration needs before you process any fiscalized transactions.
 
 <Steps>
   <Step title="Create your API key">
     Start in the OpenFiskal tenant dashboard. Create a tenant-scoped, country-scoped API key for the country you want to operate in, then store it in your secrets manager.
   </Step>
-  <Step title="Create an organization">
-    An organization represents the merchant legal entity.
+  <Step title="Create a seller">
+    A seller represents the merchant legal entity.
 
     ```bash
-    curl -X POST https://sandbox.api.openfiskal.com/v1/organizations \
+    curl -X POST https://sandbox.api.openfiskal.com/v1/sellers \
       -H "Authorization: Bearer ofk_live_abc123..." \
       -H "Content-Type: application/json" \
       -d '{
@@ -60,7 +60,7 @@ First create the tenant-scoped and organization-scoped resources your integratio
       }'
     ```
 
-    The returned `id` becomes the `X-OpenFiskal-Organization` header on every organization-scoped request that follows.
+    The returned `id` becomes the `X-OpenFiskal-Seller` header on every seller-scoped request that follows.
   </Step>
   <Step title="Create a location">
     A location is a physical point of sale such as a store or restaurant.
@@ -68,7 +68,7 @@ First create the tenant-scoped and organization-scoped resources your integratio
     ```bash
     curl -X POST https://sandbox.api.openfiskal.com/v1/locations \
       -H "Authorization: Bearer ofk_live_abc123..." \
-      -H "X-OpenFiskal-Organization: org_01HXYZ" \
+      -H "X-OpenFiskal-Seller: seller_01HXYZ" \
       -H "Content-Type: application/json" \
       -d '{
         "name": "Berlin Mitte",
@@ -88,7 +88,7 @@ First create the tenant-scoped and organization-scoped resources your integratio
     ```bash
     curl -X POST https://sandbox.api.openfiskal.com/v1/registers \
       -H "Authorization: Bearer ofk_live_abc123..." \
-      -H "X-OpenFiskal-Organization: org_01HXYZ" \
+      -H "X-OpenFiskal-Seller: seller_01HXYZ" \
       -H "Content-Type: application/json" \
       -d '{
         "location_id": "loc_01HXYZ",
@@ -98,7 +98,7 @@ First create the tenant-scoped and organization-scoped resources your integratio
     ```
   </Step>
   <Step title="Verify your saved IDs">
-    Persist the returned organization, location, and register IDs. You will use them for every later operation request.
+    Persist the returned seller, location, and register IDs. You will use them for every later operation request.
   </Step>
 </Steps>
 
@@ -113,7 +113,7 @@ Once your resources exist, you can create, update, and complete a sale operation
     ```bash
     curl -X POST https://sandbox.api.openfiskal.com/v1/operations \
       -H "Authorization: Bearer ofk_live_abc123..." \
-      -H "X-OpenFiskal-Organization: org_01HXYZ" \
+      -H "X-OpenFiskal-Seller: seller_01HXYZ" \
       -H "Idempotency-Key: op-order-1001-start" \
       -H "Content-Type: application/json" \
       -d '{
@@ -142,7 +142,7 @@ Once your resources exist, you can create, update, and complete a sale operation
     {
       "id": "op_01HXYZ",
       "resource_version": "opv_01HXYZ",
-      "organization_id": "org_01HXYZ",
+      "seller_id": "seller_01HXYZ",
       "location_id": "loc_01HXYZ",
       "register_id": "reg_01HXYZ",
       "source": "POS",
@@ -166,7 +166,7 @@ Once your resources exist, you can create, update, and complete a sale operation
     ```bash
     curl -X PATCH https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ \
       -H "Authorization: Bearer ofk_live_abc123..." \
-      -H "X-OpenFiskal-Organization: org_01HXYZ" \
+      -H "X-OpenFiskal-Seller: seller_01HXYZ" \
       -H 'If-Match: "opv_01HXYZ"' \
       -H "Content-Type: application/json" \
       -d '{
@@ -198,7 +198,7 @@ Once your resources exist, you can create, update, and complete a sale operation
     {
       "id": "op_01HXYZ",
       "resource_version": "opv_01HXYA",
-      "organization_id": "org_01HXYZ",
+      "seller_id": "seller_01HXYZ",
       "location_id": "loc_01HXYZ",
       "register_id": "reg_01HXYZ",
       "source": "POS",
@@ -230,7 +230,7 @@ Once your resources exist, you can create, update, and complete a sale operation
     ```bash
     curl -X PATCH https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ/complete \
       -H "Authorization: Bearer ofk_live_abc123..." \
-      -H "X-OpenFiskal-Organization: org_01HXYZ" \
+      -H "X-OpenFiskal-Seller: seller_01HXYZ" \
       -H "Idempotency-Key: op-order-1001-complete" \
       -H 'If-Match: "opv_01HXYA"' \
       -H "Content-Type: application/json" \
@@ -263,7 +263,7 @@ Once your resources exist, you can create, update, and complete a sale operation
     {
       "id": "op_01HXYZ",
       "resource_version": "opv_01HXYB",
-      "organization_id": "org_01HXYZ",
+      "seller_id": "seller_01HXYZ",
       "location_id": "loc_01HXYZ",
       "register_id": "reg_01HXYZ",
       "source": "POS",
@@ -330,7 +330,7 @@ Use export jobs after you have processed operations and want to reconcile or arc
     ```bash
     curl -X POST https://sandbox.api.openfiskal.com/v1/exports \
       -H "Authorization: Bearer ofk_live_abc123..." \
-      -H "X-OpenFiskal-Organization: org_01HXYZ" \
+      -H "X-OpenFiskal-Seller: seller_01HXYZ" \
       -H "Content-Type: application/json" \
       -d '{
         "type": "operations",
