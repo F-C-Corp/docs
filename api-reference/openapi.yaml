@@ -1,20 +1,1512 @@
-openapi: 3.1.0
+openapi: 3.0.0
+paths:
+  /sellers:
+    get:
+      operationId: SellersController_list
+      parameters: []
+      responses:
+        "200":
+          description: Sellers returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SellerListResponse"
+        "401":
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: unauthorized
+                  value:
+                    code: unauthorized
+                    message: Authentication failed.
+                    retryable: false
+        "403":
+          description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: forbidden
+                  value:
+                    code: forbidden
+                    message: The authenticated caller cannot access this resource.
+                    retryable: false
+      security: &a1
+        - BearerAuth: []
+      summary: List sellers
+      tags: &a2
+        - Sellers
+    post:
+      operationId: SellersController_create
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSellerDto"
+      responses:
+        "201":
+          description: Seller created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Seller"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: invalid_request
+                  value:
+                    code: invalid_request
+                    message: The request body is malformed.
+                    retryable: false
+        "401":
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: unauthorized
+                  value:
+                    code: unauthorized
+                    message: Authentication failed.
+                    retryable: false
+        "403":
+          description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: forbidden
+                  value:
+                    code: forbidden
+                    message: The authenticated caller cannot access this resource.
+                    retryable: false
+        "422":
+          description: Domain validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: regime_validation_failed
+                  value:
+                    code: regime_validation_failed
+                    message: The payload violates regime-specific validation rules.
+                    retryable: false
+      security: *a1
+      summary: Create seller
+      tags: *a2
+  /sellers/{sellerId}:
+    get:
+      operationId: SellersController_get
+      parameters:
+        - name: sellerId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Seller returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Seller"
+        "401":
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: unauthorized
+                  value:
+                    code: unauthorized
+                    message: Authentication failed.
+                    retryable: false
+        "403":
+          description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: forbidden
+                  value:
+                    code: forbidden
+                    message: The authenticated caller cannot access this resource.
+                    retryable: false
+        "404":
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: not_found
+                  value:
+                    code: not_found
+                    message: The requested resource does not exist.
+                    retryable: false
+      security: *a1
+      summary: Get seller
+      tags: *a2
+    patch:
+      operationId: SellersController_update
+      parameters:
+        - name: sellerId
+          required: true
+          in: path
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSellerDto"
+      responses:
+        "200":
+          description: Seller updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Seller"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: invalid_request
+                  value:
+                    code: invalid_request
+                    message: The request body is malformed.
+                    retryable: false
+        "401":
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: unauthorized
+                  value:
+                    code: unauthorized
+                    message: Authentication failed.
+                    retryable: false
+        "403":
+          description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: forbidden
+                  value:
+                    code: forbidden
+                    message: The authenticated caller cannot access this resource.
+                    retryable: false
+        "404":
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: not_found
+                  value:
+                    code: not_found
+                    message: The requested resource does not exist.
+                    retryable: false
+        "422":
+          description: Domain validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: regime_validation_failed
+                  value:
+                    code: regime_validation_failed
+                    message: The payload violates regime-specific validation rules.
+                    retryable: false
+      security: *a1
+      summary: Update seller
+      tags: *a2
+  /registers:
+    get:
+      operationId: RegistersController_list
+      parameters:
+        - &a3
+          name: X-OpenFiskal-Seller
+          in: header
+          description: Seller identifier returned by the sellers resource.
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Registers returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegisterListResponse"
+        "401":
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: unauthorized
+                  value:
+                    code: unauthorized
+                    message: Authentication failed.
+                    retryable: false
+        "403":
+          description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: forbidden
+                  value:
+                    code: forbidden
+                    message: The authenticated caller cannot access this resource.
+                    retryable: false
+      security: &a4
+        - BearerAuth: []
+      summary: List registers
+      tags: &a5
+        - Registers
+    post:
+      operationId: RegistersController_create
+      parameters:
+        - *a3
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRegisterDto"
+      responses:
+        "201":
+          description: Register created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Register"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: invalid_request
+                  value:
+                    code: invalid_request
+                    message: The request body is malformed.
+                    retryable: false
+        "401":
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: unauthorized
+                  value:
+                    code: unauthorized
+                    message: Authentication failed.
+                    retryable: false
+        "403":
+          description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: forbidden
+                  value:
+                    code: forbidden
+                    message: The authenticated caller cannot access this resource.
+                    retryable: false
+        "404":
+          description: Location not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: not_found
+                  value:
+                    code: not_found
+                    message: The requested resource does not exist.
+                    retryable: false
+        "422":
+          description: Domain validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: regime_validation_failed
+                  value:
+                    code: regime_validation_failed
+                    message: The payload violates regime-specific validation rules.
+                    retryable: false
+      security: *a4
+      summary: Create register
+      tags: *a5
+  /registers/{registerId}:
+    get:
+      operationId: RegistersController_get
+      parameters:
+        - *a3
+        - name: registerId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Register returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Register"
+        "401":
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: unauthorized
+                  value:
+                    code: unauthorized
+                    message: Authentication failed.
+                    retryable: false
+        "403":
+          description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: forbidden
+                  value:
+                    code: forbidden
+                    message: The authenticated caller cannot access this resource.
+                    retryable: false
+        "404":
+          description: Register not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: not_found
+                  value:
+                    code: not_found
+                    message: The requested resource does not exist.
+                    retryable: false
+      security: *a4
+      summary: Get register
+      tags: *a5
+    patch:
+      operationId: RegistersController_update
+      parameters:
+        - *a3
+        - name: registerId
+          required: true
+          in: path
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateRegisterDto"
+      responses:
+        "200":
+          description: Register updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Register"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: invalid_request
+                  value:
+                    code: invalid_request
+                    message: The request body is malformed.
+                    retryable: false
+        "401":
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: unauthorized
+                  value:
+                    code: unauthorized
+                    message: Authentication failed.
+                    retryable: false
+        "403":
+          description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: forbidden
+                  value:
+                    code: forbidden
+                    message: The authenticated caller cannot access this resource.
+                    retryable: false
+        "404":
+          description: Register not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: not_found
+                  value:
+                    code: not_found
+                    message: The requested resource does not exist.
+                    retryable: false
+        "422":
+          description: Domain validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: regime_validation_failed
+                  value:
+                    code: regime_validation_failed
+                    message: The payload violates regime-specific validation rules.
+                    retryable: false
+      security: *a4
+      summary: Update register
+      tags: *a5
+    delete:
+      operationId: RegistersController_delete
+      parameters:
+        - *a3
+        - name: registerId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Register deleted
+        "401":
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: unauthorized
+                  value:
+                    code: unauthorized
+                    message: Authentication failed.
+                    retryable: false
+        "403":
+          description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: forbidden
+                  value:
+                    code: forbidden
+                    message: The authenticated caller cannot access this resource.
+                    retryable: false
+        "404":
+          description: Register not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: not_found
+                  value:
+                    code: not_found
+                    message: The requested resource does not exist.
+                    retryable: false
+        "409":
+          description: Register has operations or is fiscalized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: register_delete_conflict
+                  value:
+                    code: register_delete_conflict
+                    message: Cannot delete a register that has operations or is fiscalized.
+                    retryable: false
+      security: *a4
+      summary: Delete register
+      tags: *a5
+  /registers/{registerId}/fiscalize:
+    post:
+      operationId: RegistersController_fiscalize
+      parameters:
+        - *a3
+        - name: registerId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "202":
+          description: Fiscalization enqueued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Register"
+        "401":
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: unauthorized
+                  value:
+                    code: unauthorized
+                    message: Authentication failed.
+                    retryable: false
+        "403":
+          description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: forbidden
+                  value:
+                    code: forbidden
+                    message: The authenticated caller cannot access this resource.
+                    retryable: false
+        "404":
+          description: Register not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: not_found
+                  value:
+                    code: not_found
+                    message: The requested resource does not exist.
+                    retryable: false
+        "409":
+          description: Already fiscalized or in progress
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: fiscalization_conflict
+                  value:
+                    code: fiscalization_conflict
+                    message: Register is already fiscalized or a fiscalization is in progress.
+                    retryable: false
+        "422":
+          description: Fiscalization not supported for this register
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: regime_validation_failed
+                  value:
+                    code: regime_validation_failed
+                    message: The payload violates regime-specific validation rules.
+                    retryable: false
+      security: *a4
+      summary: Fiscalize register (DE/KassenSichV)
+      tags: *a5
+  /locations:
+    get:
+      operationId: LocationsController_list
+      parameters:
+        - &a6
+          name: X-OpenFiskal-Seller
+          in: header
+          description: Seller identifier returned by the sellers resource.
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Locations returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationListResponse"
+        "401":
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: unauthorized
+                  value:
+                    code: unauthorized
+                    message: Authentication failed.
+                    retryable: false
+        "403":
+          description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: forbidden
+                  value:
+                    code: forbidden
+                    message: The authenticated caller cannot access this resource.
+                    retryable: false
+      security: &a7
+        - BearerAuth: []
+      summary: List locations
+      tags: &a8
+        - Locations
+    post:
+      operationId: LocationsController_create
+      parameters:
+        - *a6
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLocationDto"
+      responses:
+        "201":
+          description: Location created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Location"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: invalid_request
+                  value:
+                    code: invalid_request
+                    message: The request body is malformed.
+                    retryable: false
+        "401":
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: unauthorized
+                  value:
+                    code: unauthorized
+                    message: Authentication failed.
+                    retryable: false
+        "403":
+          description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: forbidden
+                  value:
+                    code: forbidden
+                    message: The authenticated caller cannot access this resource.
+                    retryable: false
+        "422":
+          description: Domain validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: regime_validation_failed
+                  value:
+                    code: regime_validation_failed
+                    message: The payload violates regime-specific validation rules.
+                    retryable: false
+      security: *a7
+      summary: Create location
+      tags: *a8
+  /locations/{locationId}:
+    get:
+      operationId: LocationsController_get
+      parameters:
+        - *a6
+        - name: locationId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Location returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Location"
+        "401":
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: unauthorized
+                  value:
+                    code: unauthorized
+                    message: Authentication failed.
+                    retryable: false
+        "403":
+          description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: forbidden
+                  value:
+                    code: forbidden
+                    message: The authenticated caller cannot access this resource.
+                    retryable: false
+        "404":
+          description: Location not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: not_found
+                  value:
+                    code: not_found
+                    message: The requested resource does not exist.
+                    retryable: false
+      security: *a7
+      summary: Get location
+      tags: *a8
+    patch:
+      operationId: LocationsController_update
+      parameters:
+        - *a6
+        - name: locationId
+          required: true
+          in: path
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateLocationDto"
+      responses:
+        "200":
+          description: Location updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Location"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: invalid_request
+                  value:
+                    code: invalid_request
+                    message: The request body is malformed.
+                    retryable: false
+        "401":
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: unauthorized
+                  value:
+                    code: unauthorized
+                    message: Authentication failed.
+                    retryable: false
+        "403":
+          description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: forbidden
+                  value:
+                    code: forbidden
+                    message: The authenticated caller cannot access this resource.
+                    retryable: false
+        "404":
+          description: Location not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: not_found
+                  value:
+                    code: not_found
+                    message: The requested resource does not exist.
+                    retryable: false
+        "422":
+          description: Domain validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: regime_validation_failed
+                  value:
+                    code: regime_validation_failed
+                    message: The payload violates regime-specific validation rules.
+                    retryable: false
+      security: *a7
+      summary: Update location
+      tags: *a8
+    delete:
+      operationId: LocationsController_delete
+      parameters:
+        - *a6
+        - name: locationId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Location deleted
+        "401":
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: unauthorized
+                  value:
+                    code: unauthorized
+                    message: Authentication failed.
+                    retryable: false
+        "403":
+          description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: forbidden
+                  value:
+                    code: forbidden
+                    message: The authenticated caller cannot access this resource.
+                    retryable: false
+        "404":
+          description: Location not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: not_found
+                  value:
+                    code: not_found
+                    message: The requested resource does not exist.
+                    retryable: false
+        "409":
+          description: Location has registers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: location_has_registers
+                  value:
+                    code: location_has_registers
+                    message: Cannot delete a location that has registers.
+                    retryable: false
+      security: *a7
+      summary: Delete location
+      tags: *a8
+  /operations/{operationId}:
+    get:
+      operationId: OperationsController_get
+      parameters:
+        - &a9
+          name: X-OpenFiskal-Seller
+          in: header
+          description: Seller identifier returned by the sellers resource.
+          required: true
+          schema:
+            type: string
+        - name: operationId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Operation returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Operation"
+        "401":
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: unauthorized
+                  value:
+                    code: unauthorized
+                    message: Authentication failed.
+                    retryable: false
+        "403":
+          description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: forbidden
+                  value:
+                    code: forbidden
+                    message: The authenticated caller cannot access this resource.
+                    retryable: false
+        "404":
+          description: Operation not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: not_found
+                  value:
+                    code: not_found
+                    message: The requested resource does not exist.
+                    retryable: false
+      security: &a10
+        - BearerAuth: []
+      summary: Get operation
+      tags: &a11
+        - Operations
+  /operations:
+    post:
+      description: Starts a new operation.
+      operationId: OperationsController_create
+      parameters:
+        - *a9
+        - name: Idempotency-Key
+          in: header
+          description: Unique key per endpoint, seller, and tenant. Retained for at least 24 hours.
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOperationDto"
+      responses:
+        "201":
+          description: Operation created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Operation"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: invalid_request
+                  value:
+                    code: invalid_request
+                    message: The request body is malformed.
+                    retryable: false
+        "401":
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: unauthorized
+                  value:
+                    code: unauthorized
+                    message: Authentication failed.
+                    retryable: false
+        "403":
+          description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: forbidden
+                  value:
+                    code: forbidden
+                    message: The authenticated caller cannot access this resource.
+                    retryable: false
+        "409":
+          description: Idempotency key reused with a different payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: idempotency_key_conflict
+                  value:
+                    code: idempotency_key_conflict
+                    message: The idempotency key was already used with a different payload.
+                    retryable: false
+        "422":
+          description: Domain validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: regime_validation_failed
+                  value:
+                    code: regime_validation_failed
+                    message: The payload violates regime-specific validation rules.
+                    retryable: false
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: rate_limit_exceeded
+                  value:
+                    code: rate_limit_exceeded
+                    message: Too many requests.
+                    retryable: true
+      security: *a10
+      summary: Create operation
+      tags: *a11
+  /operations/{operationId}/complete:
+    patch:
+      description: Finalizes an operation and attaches the typed payment contract used for fiscalization and reconciliation.
+      operationId: OperationsController_complete
+      parameters:
+        - *a9
+        - name: operationId
+          required: true
+          in: path
+          schema:
+            type: string
+        - name: If-Match
+          required: true
+          in: header
+          description: Latest operation `ETag` returned by OpenFiskal. Replace it after every successful mutation.
+          schema:
+            type: string
+        - name: Idempotency-Key
+          in: header
+          description: Unique key per endpoint, seller, and tenant. Retained for at least 24 hours.
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompleteOperationDto"
+      responses:
+        "200":
+          description: Operation completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Operation"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: invalid_request
+                  value:
+                    code: invalid_request
+                    message: The request body is malformed.
+                    retryable: false
+        "401":
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: unauthorized
+                  value:
+                    code: unauthorized
+                    message: Authentication failed.
+                    retryable: false
+        "403":
+          description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: forbidden
+                  value:
+                    code: forbidden
+                    message: The authenticated caller cannot access this resource.
+                    retryable: false
+        "404":
+          description: Operation not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: not_found
+                  value:
+                    code: not_found
+                    message: The requested resource does not exist.
+                    retryable: false
+        "409":
+          description: Operation not in OPEN status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: operation_invalid_state
+                  value:
+                    code: operation_invalid_state
+                    message: Only OPEN operations can be completed.
+                    retryable: false
+        "412":
+          description: Stale `If-Match` header
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: precondition_failed
+                  value:
+                    code: precondition_failed
+                    message: The supplied If-Match value is stale.
+                    retryable: true
+                    details:
+                      current_resource_version: 2
+        "422":
+          description: Domain validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: regime_validation_failed
+                  value:
+                    code: regime_validation_failed
+                    message: The payload violates regime-specific validation rules.
+                    retryable: false
+        "428":
+          description: Missing `If-Match` header
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: precondition_required
+                  value:
+                    code: precondition_required
+                    message: This operation requires an If-Match header.
+                    retryable: false
+      security: *a10
+      summary: Complete operation
+      tags: *a11
+  /operations/{operationId}/void:
+    patch:
+      description: Voids an open operation before completion. Use a refund operation after completion.
+      operationId: OperationsController_voidOperation
+      parameters:
+        - *a9
+        - name: operationId
+          required: true
+          in: path
+          schema:
+            type: string
+        - name: If-Match
+          required: true
+          in: header
+          description: Latest operation `ETag` returned by OpenFiskal. Replace it after every successful mutation.
+          schema:
+            type: string
+        - name: Idempotency-Key
+          in: header
+          description: Unique key per endpoint, seller, and tenant. Retained for at least 24 hours.
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VoidOperationDto"
+      responses:
+        "200":
+          description: Operation voided
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Operation"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: invalid_request
+                  value:
+                    code: invalid_request
+                    message: The request body is malformed.
+                    retryable: false
+        "401":
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: unauthorized
+                  value:
+                    code: unauthorized
+                    message: Authentication failed.
+                    retryable: false
+        "403":
+          description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: forbidden
+                  value:
+                    code: forbidden
+                    message: The authenticated caller cannot access this resource.
+                    retryable: false
+        "404":
+          description: Operation not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: not_found
+                  value:
+                    code: not_found
+                    message: The requested resource does not exist.
+                    retryable: false
+        "409":
+          description: Operation not in OPEN status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: operation_invalid_state
+                  value:
+                    code: operation_invalid_state
+                    message: Only OPEN operations can be voided.
+                    retryable: false
+        "412":
+          description: Stale `If-Match` header
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: precondition_failed
+                  value:
+                    code: precondition_failed
+                    message: The supplied If-Match value is stale.
+                    retryable: true
+                    details:
+                      current_resource_version: 2
+        "422":
+          description: Domain validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: regime_validation_failed
+                  value:
+                    code: regime_validation_failed
+                    message: The payload violates regime-specific validation rules.
+                    retryable: false
+        "428":
+          description: Missing `If-Match` header
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: precondition_required
+                  value:
+                    code: precondition_required
+                    message: This operation requires an If-Match header.
+                    retryable: false
+      security: *a10
+      summary: Void operation
+      tags: *a11
 info:
   title: OpenFiskal fiscalization API
-  version: 1.1.0
-  license:
-    name: Proprietary
-  description: |
+  description: |-
     OpenFiskal exposes a server-to-server fiscalization API for merchant onboarding,
     register setup, operation handling, and exports.
 
     The `v1` contract uses server-issued resource versions and conditional
     writes through `If-Match` for safe concurrent mutation handling.
-servers:
-  - url: https://api.openfiskal.com/v1
-    description: Production
-  - url: https://sandbox.api.openfiskal.com/v1
-    description: Sandbox
+  version: 1.1.0
+  contact: {}
+  license:
+    name: Proprietary
 tags:
   - name: Sellers
     description: Create and manage merchant sellers.
@@ -24,857 +1516,88 @@ tags:
     description: Create and manage registers or terminals.
   - name: Operations
     description: Start, update, complete, cancel, list, and read operations.
-paths:
-  /sellers:
-    get:
-      tags: [Sellers]
-      summary: List sellers
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: "#/components/parameters/Limit"
-        - $ref: "#/components/parameters/Cursor"
-      responses:
-        "200":
-          description: Sellers returned
-          headers:
-            X-Request-Id:
-              $ref: "#/components/headers/XRequestId"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SellerListResponse"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-    post:
-      tags: [Sellers]
-      summary: Create seller
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/SellerCreateRequest"
-      responses:
-        "201":
-          description: Seller created
-          headers:
-            X-Request-Id:
-              $ref: "#/components/headers/XRequestId"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Seller"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "422":
-          $ref: "#/components/responses/UnprocessableEntity"
-
-  /sellers/{sellerId}:
-    get:
-      tags: [Sellers]
-      summary: Get seller
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: "#/components/parameters/SellerId"
-      responses:
-        "200":
-          description: Seller returned
-          headers:
-            X-Request-Id:
-              $ref: "#/components/headers/XRequestId"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Seller"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-    patch:
-      tags: [Sellers]
-      summary: Update seller
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: "#/components/parameters/SellerId"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/SellerUpdateRequest"
-      responses:
-        "200":
-          description: Seller updated
-          headers:
-            X-Request-Id:
-              $ref: "#/components/headers/XRequestId"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Seller"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "422":
-          $ref: "#/components/responses/UnprocessableEntity"
-
-  /locations:
-    parameters:
-      - $ref: "#/components/parameters/SellerHeader"
-    get:
-      tags: [Locations]
-      summary: List locations
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: "#/components/parameters/Limit"
-        - $ref: "#/components/parameters/Cursor"
-      responses:
-        "200":
-          description: Locations returned
-          headers:
-            X-Request-Id:
-              $ref: "#/components/headers/XRequestId"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LocationListResponse"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-    post:
-      tags: [Locations]
-      summary: Create location
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/LocationCreateRequest"
-      responses:
-        "201":
-          description: Location created
-          headers:
-            X-Request-Id:
-              $ref: "#/components/headers/XRequestId"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Location"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "422":
-          $ref: "#/components/responses/UnprocessableEntity"
-
-  /locations/{locationId}:
-    parameters:
-      - $ref: "#/components/parameters/SellerHeader"
-    get:
-      tags: [Locations]
-      summary: Get location
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: "#/components/parameters/LocationId"
-      responses:
-        "200":
-          description: Location returned
-          headers:
-            X-Request-Id:
-              $ref: "#/components/headers/XRequestId"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Location"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-    patch:
-      tags: [Locations]
-      summary: Update location
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: "#/components/parameters/LocationId"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/LocationUpdateRequest"
-      responses:
-        "200":
-          description: Location updated
-          headers:
-            X-Request-Id:
-              $ref: "#/components/headers/XRequestId"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Location"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "422":
-          $ref: "#/components/responses/UnprocessableEntity"
-    delete:
-      tags: [Locations]
-      summary: Delete location
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: "#/components/parameters/LocationId"
-      responses:
-        "204":
-          description: Location deleted
-          headers:
-            X-Request-Id:
-              $ref: "#/components/headers/XRequestId"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-
-  /registers:
-    parameters:
-      - $ref: "#/components/parameters/SellerHeader"
-    get:
-      tags: [Registers]
-      summary: List registers
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: "#/components/parameters/Limit"
-        - $ref: "#/components/parameters/Cursor"
-      responses:
-        "200":
-          description: Registers returned
-          headers:
-            X-Request-Id:
-              $ref: "#/components/headers/XRequestId"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RegisterListResponse"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-    post:
-      tags: [Registers]
-      summary: Create register
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/RegisterCreateRequest"
-      responses:
-        "201":
-          description: Register created
-          headers:
-            X-Request-Id:
-              $ref: "#/components/headers/XRequestId"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Register"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "422":
-          $ref: "#/components/responses/UnprocessableEntity"
-
-  /registers/{registerId}:
-    parameters:
-      - $ref: "#/components/parameters/SellerHeader"
-    get:
-      tags: [Registers]
-      summary: Get register
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: "#/components/parameters/RegisterId"
-      responses:
-        "200":
-          description: Register returned
-          headers:
-            X-Request-Id:
-              $ref: "#/components/headers/XRequestId"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Register"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-    patch:
-      tags: [Registers]
-      summary: Update register
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: "#/components/parameters/RegisterId"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/RegisterUpdateRequest"
-      responses:
-        "200":
-          description: Register updated
-          headers:
-            X-Request-Id:
-              $ref: "#/components/headers/XRequestId"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Register"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "422":
-          $ref: "#/components/responses/UnprocessableEntity"
-    delete:
-      tags: [Registers]
-      summary: Delete register
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: "#/components/parameters/RegisterId"
-      responses:
-        "204":
-          description: Register deleted
-          headers:
-            X-Request-Id:
-              $ref: "#/components/headers/XRequestId"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-
-  /operations:
-    parameters:
-      - $ref: "#/components/parameters/SellerHeader"
-    get:
-      tags: [Operations]
-      summary: List operations
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: "#/components/parameters/Limit"
-        - $ref: "#/components/parameters/Cursor"
-        - name: status
-          in: query
-          schema:
-            $ref: "#/components/schemas/OperationStatus"
-        - name: type
-          in: query
-          schema:
-            $ref: "#/components/schemas/OperationType"
-        - name: external_id
-          in: query
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Operations returned
-          headers:
-            X-Request-Id:
-              $ref: "#/components/headers/XRequestId"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/OperationListResponse"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-    post:
-      tags: [Operations]
-      summary: Create operation
-      description: Starts a new operation.
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: "#/components/parameters/IdempotencyKey"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/OperationCreateRequest"
-      responses:
-        "201":
-          description: Operation created
-          headers:
-            ETag:
-              $ref: "#/components/headers/ETag"
-            X-Request-Id:
-              $ref: "#/components/headers/XRequestId"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Operation"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "409":
-          $ref: "#/components/responses/IdempotencyConflict"
-        "422":
-          $ref: "#/components/responses/UnprocessableEntity"
-        "429":
-          $ref: "#/components/responses/RateLimited"
-
-  /operations/{operationId}:
-    parameters:
-      - $ref: "#/components/parameters/SellerHeader"
-    get:
-      tags: [Operations]
-      summary: Get operation
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: "#/components/parameters/OperationId"
-      responses:
-        "200":
-          description: Operation returned
-          headers:
-            ETag:
-              $ref: "#/components/headers/ETag"
-            X-Request-Id:
-              $ref: "#/components/headers/XRequestId"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Operation"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-    patch:
-      tags: [Operations]
-      summary: Update operation
-      description: |
-        Updates a mutable operation by using a server-issued `ETag` in `If-Match`.
-
-        Conditional write flow:
-
-        1. Read or create the operation.
-        2. Persist the returned `resource_version` and `ETag`.
-        3. Send that `ETag` value in `If-Match` on the next update request.
-        4. Replace your stored value with the new `resource_version` and `ETag` from every successful mutation response.
-
-        The server issues a new operation resource version on every successful mutation. The response body returns that value as `resource_version`, and the response header returns the same value as `ETag`.
-
-        If you omit `If-Match`, the API returns `428 precondition_required`. If you send a stale value, the API returns `412 precondition_failed`.
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: "#/components/parameters/OperationId"
-        - $ref: "#/components/parameters/IfMatch"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/OperationPatchRequest"
-      responses:
-        "200":
-          description: Operation updated
-          headers:
-            ETag:
-              $ref: "#/components/headers/ETag"
-            X-Request-Id:
-              $ref: "#/components/headers/XRequestId"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Operation"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "412":
-          $ref: "#/components/responses/PreconditionFailed"
-        "422":
-          $ref: "#/components/responses/UnprocessableEntity"
-        "428":
-          $ref: "#/components/responses/PreconditionRequired"
-
-  /operations/{operationId}/complete:
-    parameters:
-      - $ref: "#/components/parameters/SellerHeader"
-    patch:
-      tags: [Operations]
-      summary: Complete operation
-      description: Finalizes an operation and attaches the typed payment contract used for fiscalization and reconciliation.
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: "#/components/parameters/OperationId"
-        - $ref: "#/components/parameters/IfMatch"
-        - $ref: "#/components/parameters/IdempotencyKey"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/OperationCompleteRequest"
-      responses:
-        "200":
-          description: Operation completed
-          headers:
-            ETag:
-              $ref: "#/components/headers/ETag"
-            X-Request-Id:
-              $ref: "#/components/headers/XRequestId"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Operation"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "409":
-          $ref: "#/components/responses/IdempotencyConflict"
-        "412":
-          $ref: "#/components/responses/PreconditionFailed"
-        "422":
-          $ref: "#/components/responses/UnprocessableEntity"
-        "428":
-          $ref: "#/components/responses/PreconditionRequired"
-
-  /operations/{operationId}/cancel:
-    parameters:
-      - $ref: "#/components/parameters/SellerHeader"
-    patch:
-      tags: [Operations]
-      summary: Cancel operation
-      description: Cancels an operation before completion. Use a refund operation after completion.
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: "#/components/parameters/OperationId"
-        - $ref: "#/components/parameters/IfMatch"
-        - $ref: "#/components/parameters/IdempotencyKey"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/OperationCancelRequest"
-      responses:
-        "200":
-          description: Operation cancelled
-          headers:
-            ETag:
-              $ref: "#/components/headers/ETag"
-            X-Request-Id:
-              $ref: "#/components/headers/XRequestId"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Operation"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "409":
-          $ref: "#/components/responses/IdempotencyConflict"
-        "412":
-          $ref: "#/components/responses/PreconditionFailed"
-        "422":
-          $ref: "#/components/responses/UnprocessableEntity"
-        "428":
-          $ref: "#/components/responses/PreconditionRequired"
-
+servers:
+  - url: https://api.openfiskal.com/v1
+    description: Production
+  - url: https://sandbox.api.openfiskal.com/v1
+    description: Sandbox
 components:
   securitySchemes:
     BearerAuth:
-      type: http
       scheme: bearer
       bearerFormat: API key
-  headers:
-    ETag:
-      description: Server-issued operation resource version as a quoted integer. A new value is returned on every successful operation mutation and must be sent back in `If-Match` on the next mutation.
-      schema:
-        type: string
-        example: '"1"'
-    XRequestId:
-      description: Stable request trace identifier.
-      schema:
-        type: string
-        example: req_01JABCXYZ
-  parameters:
-    Limit:
-      name: limit
-      in: query
-      schema:
-        type: integer
-        minimum: 1
-        maximum: 100
-        default: 20
-    Cursor:
-      name: cursor
-      in: query
-      schema:
-        type: string
-    SellerHeader:
-      name: X-OpenFiskal-Seller
-      in: header
-      required: true
-      schema:
-        type: string
-      description: Seller identifier returned by the sellers resource.
-    IdempotencyKey:
-      name: Idempotency-Key
-      in: header
-      required: true
-      schema:
-        type: string
-      description: Unique key per endpoint, seller, and tenant. Retained for at least 24 hours.
-    IfMatch:
-      name: If-Match
-      in: header
-      required: true
-      schema:
-        type: string
-      description: Latest operation `ETag` returned by OpenFiskal. Replace it after every successful mutation.
-    SellerId:
-      name: sellerId
-      in: path
-      required: true
-      schema:
-        type: string
-    LocationId:
-      name: locationId
-      in: path
-      required: true
-      schema:
-        type: string
-    RegisterId:
-      name: registerId
-      in: path
-      required: true
-      schema:
-        type: string
-    OperationId:
-      name: operationId
-      in: path
-      required: true
-      schema:
-        type: string
-  responses:
-    BadRequest:
-      description: Invalid request
-      headers:
-        X-Request-Id:
-          $ref: "#/components/headers/XRequestId"
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/Error"
-          example:
-            code: invalid_request
-            message: The request body is malformed.
-            retryable: false
-    Unauthorized:
-      description: Authentication failed
-      headers:
-        X-Request-Id:
-          $ref: "#/components/headers/XRequestId"
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/Error"
-          example:
-            code: unauthorized
-            message: Authentication failed.
-            retryable: false
-    Forbidden:
-      description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
-      headers:
-        X-Request-Id:
-          $ref: "#/components/headers/XRequestId"
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/Error"
-          example:
-            code: forbidden
-            message: The authenticated caller cannot access this resource.
-            retryable: false
-    NotFound:
-      description: Resource not found
-      headers:
-        X-Request-Id:
-          $ref: "#/components/headers/XRequestId"
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/Error"
-          example:
-            code: not_found
-            message: The requested resource does not exist.
-            retryable: false
-    UnprocessableEntity:
-      description: Domain validation failed
-      headers:
-        X-Request-Id:
-          $ref: "#/components/headers/XRequestId"
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/Error"
-          example:
-            code: regime_validation_failed
-            message: The payload violates regime-specific validation rules.
-            retryable: false
-    RateLimited:
-      description: Rate limit exceeded
-      headers:
-        X-Request-Id:
-          $ref: "#/components/headers/XRequestId"
-        Retry-After:
-          schema:
-            type: integer
-          description: Seconds to wait before retrying.
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/Error"
-          example:
-            code: rate_limit_exceeded
-            message: Too many requests.
-            retryable: true
-    IdempotencyConflict:
-      description: Idempotency key reused with a different payload
-      headers:
-        X-Request-Id:
-          $ref: "#/components/headers/XRequestId"
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/Error"
-          example:
-            code: idempotency_key_conflict
-            message: The idempotency key was already used with a different payload.
-            retryable: false
-    PreconditionRequired:
-      description: Missing `If-Match` header
-      headers:
-        X-Request-Id:
-          $ref: "#/components/headers/XRequestId"
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/Error"
-          example:
-            code: precondition_required
-            message: This operation requires an If-Match header.
-            retryable: false
-    PreconditionFailed:
-      description: Stale `If-Match` header
-      headers:
-        X-Request-Id:
-          $ref: "#/components/headers/XRequestId"
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/Error"
-          example:
-            code: precondition_failed
-            message: The supplied If-Match value is stale.
-            retryable: true
-            details:
-              current_resource_version: 2
+      type: http
   schemas:
-    Error:
+    FiscalIdentityDeuDto:
       type: object
       properties:
-        code:
+        country:
           type: string
-        message:
+          enum:
+            - DEU
+          example: DEU
+        tax_number:
           type: string
-        retryable:
-          type: boolean
-        request_id:
+          example: 21/815/08150
+          description: Steuernummer
+        vat_id:
           type: string
-        details:
-          type: object
-          additionalProperties: true
-      required: [code, message, retryable]
-    Address:
+          example: DE123456789
+          description: USt-IdNr
+      required:
+        - country
+    FiscalIdentityAutDto:
+      type: object
+      properties:
+        country:
+          type: string
+          enum:
+            - AUT
+          example: AUT
+        vat_id:
+          type: string
+          example: ATU12345678
+        tax_number:
+          type: string
+        legal_entity_id_type:
+          type: string
+          enum:
+            - VAT_ID
+            - TAX_ID
+            - GLN
+          example: VAT_ID
+        gln:
+          type: string
+          description: 13-digit Global Location Number, required when legal_entity_id_type is GLN
+      required:
+        - country
+        - legal_entity_id_type
+    FiscalIdentityItaDto:
+      type: object
+      properties:
+        country:
+          type: string
+          enum:
+            - ITA
+          example: ITA
+        vat_id:
+          type: string
+          example: IT01234567890
+          description: Partita IVA
+        codice_fiscale:
+          type: string
+          example: RSSMRA85M01H501Z
+          description: Codice Fiscale
+        legal_entity_type:
+          type: string
+          enum:
+            - COMPANY
+            - INDIVIDUAL
+          example: COMPANY
+      required:
+        - country
+        - legal_entity_type
+    AddressResponse:
       type: object
       properties:
         line1:
@@ -892,7 +1615,11 @@ components:
           minLength: 3
           maxLength: 3
           example: DEU
-      required: [line1, city, postal_code, country_code]
+      required:
+        - line1
+        - city
+        - postal_code
+        - country_code
     Seller:
       type: object
       properties:
@@ -910,13 +1637,25 @@ components:
           type: string
         status:
           type: string
-          enum: [active, inactive]
+          enum:
+            - active
+            - inactive
         address:
-          $ref: "#/components/schemas/Address"
-        capabilities:
+          $ref: "#/components/schemas/AddressResponse"
+        fiscal_identities:
           type: array
+          description: Country-specific fiscal identities.
           items:
-            type: string
+            oneOf:
+              - $ref: "#/components/schemas/FiscalIdentityDeuDto"
+              - $ref: "#/components/schemas/FiscalIdentityAutDto"
+              - $ref: "#/components/schemas/FiscalIdentityItaDto"
+            discriminator:
+              propertyName: country
+              mapping:
+                DEU: "#/components/schemas/FiscalIdentityDeuDto"
+                AUT: "#/components/schemas/FiscalIdentityAutDto"
+                ITA: "#/components/schemas/FiscalIdentityItaDto"
         created_at:
           type: string
           format: date-time
@@ -924,44 +1663,15 @@ components:
           type: string
           format: date-time
       required:
-        [
-          id,
-          legal_name,
-          country_code,
-          tax_id,
-          status,
-          address,
-          created_at,
-          updated_at,
-        ]
-    SellerCreateRequest:
-      type: object
-      properties:
-        legal_name:
-          type: string
-        country_code:
-          type: string
-          description: ISO 3166-1 alpha-3 country code for the legal entity.
-          minLength: 3
-          maxLength: 3
-          example: DEU
-        tax_id:
-          type: string
-        address:
-          $ref: "#/components/schemas/Address"
-      required: [legal_name, country_code, tax_id, address]
-    SellerUpdateRequest:
-      type: object
-      properties:
-        legal_name:
-          type: string
-        tax_id:
-          type: string
-        status:
-          type: string
-          enum: [active, inactive]
-        address:
-          $ref: "#/components/schemas/Address"
+        - id
+        - legal_name
+        - country_code
+        - tax_id
+        - status
+        - address
+        - fiscal_identities
+        - created_at
+        - updated_at
     SellerListResponse:
       type: object
       properties:
@@ -972,7 +1682,230 @@ components:
         next_cursor:
           type: string
           nullable: true
-      required: [data]
+      required:
+        - data
+    ErrorDto:
+      type: object
+      properties:
+        code:
+          type: string
+          description: Stable machine-readable error code.
+          example: invalid_request
+        message:
+          type: string
+          description: Human-readable explanation of the error.
+        retryable:
+          type: boolean
+          description: Whether retrying the request is safe.
+        request_id:
+          type: string
+          description: Stable request trace identifier.
+        details:
+          type: object
+          description: Additional structured context for the error.
+          additionalProperties: true
+      required:
+        - code
+        - message
+        - retryable
+    AddressDto:
+      type: object
+      properties:
+        line1:
+          type: string
+          example: Musterstr. 1
+        line2:
+          type: string
+          example: Apt 4
+          nullable: true
+        city:
+          type: string
+          example: Berlin
+        postal_code:
+          type: string
+          example: "10115"
+        country_code:
+          type: string
+          example: DEU
+          minLength: 3
+          maxLength: 3
+          description: ISO 3166-1 alpha-3
+      required:
+        - line1
+        - city
+        - postal_code
+        - country_code
+    CreateSellerDto:
+      type: object
+      properties:
+        legal_name:
+          type: string
+          example: Test GmbH
+        country_code:
+          type: string
+          example: DEU
+          minLength: 3
+          maxLength: 3
+          description: ISO 3166-1 alpha-3 country code for the legal entity
+        tax_id:
+          type: string
+          example: DE123456789
+        address:
+          $ref: "#/components/schemas/AddressDto"
+        fiscal_identities:
+          type: array
+          description: Country-specific fiscal identities
+          items:
+            oneOf:
+              - $ref: "#/components/schemas/FiscalIdentityDeuDto"
+              - $ref: "#/components/schemas/FiscalIdentityAutDto"
+              - $ref: "#/components/schemas/FiscalIdentityItaDto"
+            discriminator:
+              propertyName: country
+              mapping:
+                DEU: "#/components/schemas/FiscalIdentityDeuDto"
+                AUT: "#/components/schemas/FiscalIdentityAutDto"
+                ITA: "#/components/schemas/FiscalIdentityItaDto"
+      required:
+        - legal_name
+        - country_code
+        - tax_id
+        - address
+    UpdateSellerDto:
+      type: object
+      properties:
+        legal_name:
+          type: string
+          example: Updated GmbH
+        tax_id:
+          type: string
+          example: DE987654321
+        status:
+          type: string
+          enum:
+            - active
+            - inactive
+          example: inactive
+        address:
+          $ref: "#/components/schemas/AddressDto"
+        fiscal_identities:
+          type: array
+          description: Country-specific fiscal identities (merge by country key)
+          items:
+            oneOf:
+              - $ref: "#/components/schemas/FiscalIdentityDeuDto"
+              - $ref: "#/components/schemas/FiscalIdentityAutDto"
+              - $ref: "#/components/schemas/FiscalIdentityItaDto"
+            discriminator:
+              propertyName: country
+              mapping:
+                DEU: "#/components/schemas/FiscalIdentityDeuDto"
+                AUT: "#/components/schemas/FiscalIdentityAutDto"
+                ITA: "#/components/schemas/FiscalIdentityItaDto"
+    RegisterFiscalization:
+      type: object
+      properties:
+        regime:
+          type: string
+        fiscalized_at:
+          type: string
+          format: date-time
+          nullable: true
+        tse_serial:
+          type: string
+          nullable: true
+        client_id:
+          type: string
+          nullable: true
+      required:
+        - regime
+    Register:
+      type: object
+      properties:
+        id:
+          type: string
+        seller_id:
+          type: string
+        location_id:
+          type: string
+        name:
+          type: string
+        external_id:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum:
+            - active
+            - inactive
+        fiscalization_status:
+          type: string
+          enum:
+            - not_fiscalized
+            - pending
+            - failed
+            - fiscalized
+            - decommissioned
+        fiscalization:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/RegisterFiscalization"
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - seller_id
+        - location_id
+        - name
+        - status
+        - fiscalization_status
+        - created_at
+    RegisterListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Register"
+        next_cursor:
+          type: string
+          nullable: true
+      required:
+        - data
+    CreateRegisterDto:
+      type: object
+      properties:
+        location_id:
+          type: string
+          example: loc_abc123
+          description: ID of the location this register belongs to
+        name:
+          type: string
+          example: Register 1
+        external_id:
+          type: string
+          example: POS-001
+          description: Your own identifier for this register
+      required:
+        - location_id
+        - name
+    UpdateRegisterDto:
+      type: object
+      properties:
+        name:
+          type: string
+          example: Register 1
+        external_id:
+          type: string
+          example: POS-001
+          description: Your own identifier for this register
+        status:
+          type: string
+          enum:
+            - active
+            - inactive
+          example: active
     Location:
       type: object
       properties:
@@ -987,35 +1920,18 @@ components:
           nullable: true
         timezone:
           type: string
+          nullable: true
         address:
-          $ref: "#/components/schemas/Address"
+          $ref: "#/components/schemas/AddressResponse"
         created_at:
           type: string
           format: date-time
-      required: [id, seller_id, name, timezone, address, created_at]
-    LocationCreateRequest:
-      type: object
-      properties:
-        name:
-          type: string
-        external_id:
-          type: string
-        timezone:
-          type: string
-        address:
-          $ref: "#/components/schemas/Address"
-      required: [name, timezone, address]
-    LocationUpdateRequest:
-      type: object
-      properties:
-        name:
-          type: string
-        external_id:
-          type: string
-        timezone:
-          type: string
-        address:
-          $ref: "#/components/schemas/Address"
+      required:
+        - id
+        - seller_id
+        - name
+        - address
+        - created_at
     LocationListResponse:
       type: object
       properties:
@@ -1026,300 +1942,175 @@ components:
         next_cursor:
           type: string
           nullable: true
-      required: [data]
-    Register:
+      required:
+        - data
+    CreateLocationDto:
+      type: object
+      properties:
+        name:
+          type: string
+          example: Main Store
+        external_id:
+          type: string
+          example: loc-001
+        address:
+          $ref: "#/components/schemas/AddressDto"
+        timezone:
+          type: string
+          example: Europe/Berlin
+      required:
+        - name
+        - address
+        - timezone
+    UpdateLocationDto:
+      type: object
+      properties:
+        name:
+          type: string
+          example: Updated Store Name
+        external_id:
+          type: string
+          example: loc-002
+        address:
+          $ref: "#/components/schemas/AddressDto"
+        timezone:
+          type: string
+          example: Europe/Vienna
+    LineItemTax:
       type: object
       properties:
         id:
           type: string
-        seller_id:
-          type: string
-        location_id:
-          type: string
         name:
           type: string
-        external_id:
+        rate:
           type: string
-        status:
+          description: Tax rate as a decimal string (e.g. "0.19").
+        tax_amount:
           type: string
-          enum: [active, inactive]
-        created_at:
-          type: string
-          format: date-time
+          description: Tax amount as a decimal string.
       required:
-        [
-          id,
-          seller_id,
-          location_id,
-          name,
-          external_id,
-          status,
-          created_at,
-        ]
-    RegisterCreateRequest:
+        - id
+        - name
+        - rate
+        - tax_amount
+    LineItem:
       type: object
       properties:
-        location_id:
+        id:
           type: string
-        name:
+        title:
           type: string
-        external_id:
-          type: string
-      required: [location_id, name, external_id]
-    RegisterUpdateRequest:
-      type: object
-      properties:
-        location_id:
-          type: string
-        name:
-          type: string
-        external_id:
-          type: string
-        status:
-          type: string
-          enum: [active, inactive]
-    RegisterListResponse:
-      type: object
-      properties:
-        data:
-          type: array
-          items:
-            $ref: "#/components/schemas/Register"
-        next_cursor:
-          type: string
-          nullable: true
-      required: [data]
-    OperationSource:
-      type: string
-      enum: [POS, ONLINE]
-    OperationType:
-      type: string
-      enum: [sale, refund, exchange, custom]
-    OperationStatus:
-      type: string
-      enum: [open, completed, cancelled]
-    PaymentMethod:
-      type: string
-      enum:
-        [
-          cash,
-          card,
-          voucher,
-          gift_card,
-          bank_transfer,
-          digital_wallet,
-          store_credit,
-          other,
-        ]
-    PaymentStatus:
-      type: string
-      enum:
-        [
-          pending,
-          authorized,
-          partially_approved,
-          captured,
-          failed,
-          voided,
-          refunded,
-        ]
-    LineItemInput:
-      type: object
-      properties:
-        name:
-          type: string
-        sku:
-          type: string
-          nullable: true
         quantity:
           type: number
         unit_price:
-          type: integer
-        total_amount:
-          type: integer
-        tax_code:
           type: string
-          nullable: true
-      required: [name, quantity, unit_price, total_amount]
-    LineItem:
-      allOf:
-        - $ref: "#/components/schemas/LineItemInput"
-        - type: object
-          properties:
-            id:
-              type: string
-    Totals:
-      type: object
-      properties:
-        subtotal_amount:
-          type: integer
-        tip_amount:
-          type: integer
-        tax_amount:
-          type: integer
         total_amount:
-          type: integer
-      required: [total_amount]
-    PaymentInput:
+          type: string
+        taxes:
+          type: array
+          items:
+            $ref: "#/components/schemas/LineItemTax"
+      required:
+        - id
+        - title
+        - quantity
+        - unit_price
+        - total_amount
+        - taxes
+    Payment:
       type: object
       properties:
+        id:
+          type: string
         payment_id:
           type: string
+          description: Merchant or PSP identifier for the payment.
         method:
-          $ref: "#/components/schemas/PaymentMethod"
-        status:
-          $ref: "#/components/schemas/PaymentStatus"
+          type: string
         amount:
-          type: integer
+          type: string
         currency:
           type: string
-        requested_amount:
-          type: integer
-          nullable: true
-        approved_amount:
-          type: integer
-          nullable: true
+        status:
+          type: string
+          enum:
+            - pending
+            - authorized
+            - captured
+            - failed
+            - voided
+            - refunded
         processor:
           type: string
           nullable: true
-        processor_reference:
-          type: string
-          nullable: true
-        related_payment_id:
-          type: string
-          nullable: true
         card_brand:
+          type: string
+          nullable: true
+        processor_reference:
           type: string
           nullable: true
         processed_at:
           type: string
           format: date-time
           nullable: true
-      required: [payment_id, method, status, amount, currency]
-    Payment:
-      allOf:
-        - $ref: "#/components/schemas/PaymentInput"
-        - type: object
-          properties:
-            created_at:
-              type: string
-              format: date-time
-    OperationBase:
+      required:
+        - id
+        - payment_id
+        - method
+        - amount
+        - currency
+        - status
+    FiscalInformationStartEvent:
       type: object
       properties:
-        currency:
+        signed_at:
           type: string
-        amount:
-          type: integer
-        tip_amount:
-          type: integer
-          default: 0
-        line_items:
-          type: array
-          items:
-            $ref: "#/components/schemas/LineItemInput"
-        related_operation_id:
+          format: date-time
+        transaction_counter:
+          type: number
+        signature:
           type: string
-          nullable: true
-        note:
-          type: string
-          nullable: true
-      required: [currency, amount]
-    SaleOperation:
-      allOf:
-        - $ref: "#/components/schemas/OperationBase"
-        - type: object
-          title: SaleOperation
-          properties:
-            type:
-              type: string
-              const: sale
-            line_items:
-              type: array
-              items:
-                $ref: "#/components/schemas/LineItemInput"
-          required: [type]
-    RefundOperation:
-      allOf:
-        - $ref: "#/components/schemas/OperationBase"
-        - type: object
-          title: RefundOperation
-          properties:
-            type:
-              type: string
-              const: refund
-            related_operation_id:
-              type: string
-              nullable: true
-            line_items:
-              type: array
-              items:
-                $ref: "#/components/schemas/LineItemInput"
-          required: [type]
-    ExchangeOperation:
-      allOf:
-        - $ref: "#/components/schemas/OperationBase"
-        - type: object
-          title: ExchangeOperation
-          properties:
-            type:
-              type: string
-              const: exchange
-            related_operation_id:
-              type: string
-              nullable: true
-            returned_line_items:
-              type: array
-              items:
-                $ref: "#/components/schemas/LineItemInput"
-            new_line_items:
-              type: array
-              items:
-                $ref: "#/components/schemas/LineItemInput"
-          required: [type]
-    CustomOperation:
-      allOf:
-        - $ref: "#/components/schemas/OperationBase"
-        - type: object
-          title: CustomOperation
-          properties:
-            type:
-              type: string
-              const: custom
-            name:
-              type: string
-          required: [type, name]
-    OperationData:
-      oneOf:
-        - $ref: "#/components/schemas/SaleOperation"
-        - $ref: "#/components/schemas/RefundOperation"
-        - $ref: "#/components/schemas/ExchangeOperation"
-        - $ref: "#/components/schemas/CustomOperation"
-      discriminator:
-        propertyName: type
-        mapping:
-          sale: "#/components/schemas/SaleOperation"
-          refund: "#/components/schemas/RefundOperation"
-          exchange: "#/components/schemas/ExchangeOperation"
-          custom: "#/components/schemas/CustomOperation"
-    FiscalInformation:
-      oneOf:
-        - $ref: "#/components/schemas/FiscalInformationKassenSichV"
-        - $ref: "#/components/schemas/FiscalInformationRKSV"
-        - $ref: "#/components/schemas/FiscalInformationRT"
-      discriminator:
-        propertyName: regime
-        mapping:
-          KassenSichV: "#/components/schemas/FiscalInformationKassenSichV"
-          RKSV: "#/components/schemas/FiscalInformationRKSV"
-          RT: "#/components/schemas/FiscalInformationRT"
-    FiscalInformationKassenSichV:
+      required:
+        - signed_at
+        - transaction_counter
+        - signature
+    FiscalInformationEndEvent:
       type: object
-      title: FiscalInformationKassenSichV
+      properties:
+        signed_at:
+          type: string
+          format: date-time
+        transaction_counter:
+          type: number
+        signature:
+          type: string
+        process_type:
+          type: string
+        process_data:
+          type: string
+      required:
+        - signed_at
+        - transaction_counter
+        - signature
+        - process_type
+        - process_data
+    FiscalInformationVerification:
+      type: object
+      properties:
+        qr_data:
+          type: string
+      required:
+        - qr_data
+    FiscalInformation:
+      type: object
       properties:
         regime:
           type: string
-          const: KassenSichV
+          enum:
+            - kassensichv
+            - rksv
+            - rt
         document_number:
           type: string
         document_type:
@@ -1333,208 +2124,76 @@ components:
         time_format:
           type: string
         start_event:
-          $ref: "#/components/schemas/FiscalInformationKassenSichVStartEvent"
+          $ref: "#/components/schemas/FiscalInformationStartEvent"
         end_event:
-          $ref: "#/components/schemas/FiscalInformationKassenSichVEndEvent"
+          $ref: "#/components/schemas/FiscalInformationEndEvent"
         verification:
-          $ref: "#/components/schemas/FiscalInformationKassenSichVVerification"
+          $ref: "#/components/schemas/FiscalInformationVerification"
       required:
-        [
-          regime,
-          document_number,
-          document_type,
-          tse_serial,
-          client_id,
-          signature_algorithm,
-          time_format,
-          start_event,
-          end_event,
-          verification,
-        ]
-    FiscalInformationKassenSichVStartEvent:
-      type: object
-      properties:
-        signed_at:
-          type: string
-          format: date-time
-        transaction_counter:
-          type: integer
-        signature:
-          type: string
-      required: [signed_at, transaction_counter, signature]
-    FiscalInformationKassenSichVEndEvent:
-      type: object
-      properties:
-        signed_at:
-          type: string
-          format: date-time
-        transaction_counter:
-          type: integer
-        signature:
-          type: string
-        process_type:
-          type: string
-        process_data:
-          type: string
-      required:
-        [signed_at, transaction_counter, signature, process_type, process_data]
-    FiscalInformationKassenSichVVerification:
-      type: object
-      properties:
-        qr_data:
-          type: string
-      required: [qr_data]
-    FiscalInformationRKSV:
-      type: object
-      title: FiscalInformationRKSV
-      properties:
-        regime:
-          type: string
-          const: RKSV
-        document_number:
-          type: string
-        document_type:
-          type: string
-        transmitted_at:
-          type: string
-          format: date-time
-          nullable: true
-        cashbox_id:
-          type: string
-        certificate_serial:
-          type: string
-        signature:
-          $ref: "#/components/schemas/FiscalInformationRKSVSignature"
-        verification:
-          $ref: "#/components/schemas/FiscalInformationRKSVVerification"
-      required:
-        [
-          regime,
-          document_number,
-          document_type,
-          cashbox_id,
-          signature,
-          verification,
-        ]
-    FiscalInformationRKSVSignature:
-      type: object
-      properties:
-        signed_at:
-          type: string
-          format: date-time
-        transaction_counter:
-          type: integer
-        turnover_counter:
-          type: string
-        signature:
-          type: string
-        certificate_serial:
-          type: string
-      required:
-        [
-          signed_at,
-          transaction_counter,
-          turnover_counter,
-          signature,
-          certificate_serial,
-        ]
-    FiscalInformationRKSVVerification:
-      type: object
-      properties:
-        qr_data:
-          type: string
-      required: [qr_data]
-    FiscalInformationRT:
-      type: object
-      title: FiscalInformationRT
-      properties:
-        regime:
-          type: string
-          const: RT
-        document_number:
-          type: string
-        document_type:
-          type: string
-        transmitted_at:
-          type: string
-          format: date-time
-          nullable: true
-        rt_serial:
-          type: string
-        rt_firmware:
-          type: string
-        progressive_number:
-          type: integer
-        daily_closing_number:
-          type: integer
-        lottery_code:
-          type: string
-          nullable: true
-        signature:
-          $ref: "#/components/schemas/FiscalInformationRTSignature"
-      required:
-        [
-          regime,
-          document_number,
-          document_type,
-          rt_serial,
-          rt_firmware,
-          progressive_number,
-          daily_closing_number,
-          signature,
-        ]
-    FiscalInformationRTSignature:
-      type: object
-      properties:
-        signed_at:
-          type: string
-          format: date-time
-        signature:
-          type: string
-      required: [signed_at, signature]
-    PosOperationEnvelope:
-      type: object
-      properties:
-        location_id:
-          type: string
-        register_id:
-          type: string
-        source:
-          $ref: "#/components/schemas/OperationSource"
-        external_id:
-          type: string
-          description: Merchant or POS identifier for the upstream order, ticket, or checkout in the caller's system.
-        data:
-          $ref: "#/components/schemas/OperationData"
-      required: [location_id, register_id, source, external_id, data]
+        - regime
+        - document_number
+        - document_type
+        - tse_serial
+        - client_id
+        - signature_algorithm
+        - time_format
+        - start_event
+        - end_event
+        - verification
     Operation:
       type: object
       properties:
         id:
           type: string
-        resource_version:
-          type: integer
-          minimum: 1
-          description: Current server-issued version for the operation, starting at 1 and incremented on every successful mutation. The same value is returned in the `ETag` header as a quoted integer.
         seller_id:
           type: string
         location_id:
           type: string
         register_id:
           type: string
+          nullable: true
         source:
-          $ref: "#/components/schemas/OperationSource"
-        external_id:
           type: string
-          description: Merchant or POS identifier for the upstream order, ticket, or checkout in the caller's system.
-        status:
-          $ref: "#/components/schemas/OperationStatus"
+          enum:
+            - POS
+            - ONLINE
         type:
-          $ref: "#/components/schemas/OperationType"
+          type: string
+          enum:
+            - sale
+            - refund
+            - exchange
+        status:
+          type: string
+          enum:
+            - open
+            - completed
+            - cancelled
         currency:
           type: string
-        totals:
-          $ref: "#/components/schemas/Totals"
+          description: ISO 4217 currency code.
+          example: EUR
+        external_id:
+          type: string
+          description: Merchant or POS identifier for the upstream order.
+          nullable: true
+        related_operation_id:
+          type: string
+          nullable: true
+        note:
+          type: string
+          nullable: true
+        pretax_amount:
+          type: string
+        tax_amount:
+          type: string
+        tip_amount:
+          type: string
+        total_amount:
+          type: string
+        resource_version:
+          type: number
+          description: Current server-issued version for the operation, starting at 1. Returned as `ETag` header.
         line_items:
           type: array
           items:
@@ -1544,7 +2203,20 @@ components:
           items:
             $ref: "#/components/schemas/Payment"
         fiscal_information:
-          $ref: "#/components/schemas/FiscalInformation"
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/FiscalInformation"
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        voided_at:
+          type: string
+          format: date-time
+          nullable: true
+        void_reason:
+          type: string
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -1552,68 +2224,219 @@ components:
           type: string
           format: date-time
       required:
-        [
-          id,
-          resource_version,
-          seller_id,
-          location_id,
-          register_id,
-          source,
-          external_id,
-          status,
-          type,
-          currency,
-          totals,
-          payments,
-          created_at,
-          updated_at,
-        ]
-    OperationCreateRequest:
-      allOf:
-        - $ref: "#/components/schemas/PosOperationEnvelope"
-    OperationPatchRequest:
+        - id
+        - seller_id
+        - location_id
+        - source
+        - type
+        - status
+        - currency
+        - pretax_amount
+        - tax_amount
+        - tip_amount
+        - total_amount
+        - resource_version
+        - line_items
+        - payments
+        - created_at
+        - updated_at
+    LineItemTaxDto:
       type: object
-      description: |
-        Mutable operation fields. The server manages `status`.
-        Clients update fiscal inputs on the operation and use dedicated
-        endpoints to finalize or cancel it.
       properties:
-        data:
-          $ref: "#/components/schemas/OperationData"
-      required: [data]
-    OperationCompleteRequest:
+        name:
+          type: string
+          example: State SUT
+          description: Tax name, e.g. "Municipal Tax" or "State Tax"
+        rate:
+          type: string
+          example: "0.105"
+          description: Tax rate as a decimal string, e.g. "0.105" for 10.5%
+        tax_amount:
+          type: string
+          example: "1.58"
+          description: Computed tax amount for this line item
+      required:
+        - name
+        - rate
+        - tax_amount
+    LineItemDto:
+      type: object
+      properties:
+        title:
+          type: string
+          example: Café Latte
+        quantity:
+          type: number
+          example: 2
+        unit_price:
+          type: string
+          example: "4.50"
+          description: Price per unit
+        total_amount:
+          type: string
+          example: "9.00"
+          description: Total amount for this line item (quantity * unit_price)
+        taxes:
+          type: array
+          items:
+            $ref: "#/components/schemas/LineItemTaxDto"
+      required:
+        - title
+        - quantity
+        - unit_price
+        - total_amount
+    CreateOperationDto:
+      type: object
+      properties:
+        location_id:
+          type: string
+          example: loc_abc123
+        register_id:
+          type: string
+          example: reg_abc123
+          description: Required for POS, must be null for ONLINE
+        source:
+          type: string
+          enum:
+            - POS
+            - ONLINE
+          example: POS
+        type:
+          type: string
+          enum:
+            - sale
+            - refund
+            - exchange
+          example: sale
+        currency:
+          type: string
+          example: USD
+          description: ISO 4217 currency code
+        external_id:
+          type: string
+          example: order-12345
+          description: Merchant or POS identifier for the upstream order.
+        related_operation_id:
+          type: string
+          example: op_abc123
+          description: "For refunds/exchanges: the original operation ID"
+        note:
+          type: string
+          example: Customer requested extra napkins
+        pretax_amount:
+          type: string
+          example: "9.00"
+          description: Total before taxes
+        tax_amount:
+          type: string
+          example: "0.95"
+          description: Total tax amount
+        tip_amount:
+          type: string
+          example: "0.00"
+          description: Tip amount
+        total_amount:
+          type: string
+          example: "9.95"
+          description: Total amount (pretax + tax + tip)
+        line_items:
+          type: array
+          items:
+            $ref: "#/components/schemas/LineItemDto"
+      required:
+        - location_id
+        - source
+        - type
+        - currency
+        - pretax_amount
+        - tax_amount
+        - tip_amount
+        - total_amount
+        - line_items
+    PaymentDto:
+      type: object
+      properties:
+        payment_id:
+          type: string
+          example: pay_1001_card
+          description: Integrator payment ID
+        method:
+          type: string
+          enum:
+            - cash
+            - card
+            - voucher
+            - gift_card
+            - bank_transfer
+            - digital_wallet
+            - store_credit
+            - other
+          example: card
+        amount:
+          type: string
+          example: "47.50"
+          description: Payment amount as decimal string
+        currency:
+          type: string
+          example: EUR
+          description: ISO 4217 3-char currency code
+        status:
+          type: string
+          enum:
+            - pending
+            - authorized
+            - captured
+            - failed
+            - voided
+            - refunded
+          example: captured
+        processor:
+          type: string
+          example: sumup
+          description: Payment processor name
+        card_brand:
+          type: string
+          example: visa
+          description: Card brand if method is card
+        processor_reference:
+          type: string
+          example: ch_123
+          description: Processor reference ID
+        processed_at:
+          type: string
+          example: 2026-02-26T12:05:00Z
+          description: When the payment was processed (ISO 8601)
+      required:
+        - payment_id
+        - method
+        - amount
+        - currency
+        - status
+    CompleteOperationDto:
       type: object
       properties:
         payments:
+          description: Payments tendered for this operation
           type: array
           items:
-            $ref: "#/components/schemas/PaymentInput"
+            $ref: "#/components/schemas/PaymentDto"
         completed_at:
           type: string
-          format: date-time
-          nullable: true
-      required: [payments]
-    OperationCancelRequest:
+          example: 2026-02-26T12:05:00Z
+          description: Completion timestamp (ISO 8601), defaults to now
+      required:
+        - payments
+    VoidOperationDto:
       type: object
       properties:
         reason:
           type: string
           enum:
-            [
-              customer_abandoned_checkout,
-              void_before_completion,
-              operator_cancelled,
-              payment_failed,
-            ]
-      required: [reason]
-    OperationListResponse:
-      type: object
-      properties:
-        data:
-          type: array
-          items:
-            $ref: "#/components/schemas/Operation"
-        next_cursor:
-          type: string
-          nullable: true
-      required: [data]
+            - void_before_completion
+            - customer_abandoned_checkout
+            - operator_cancelled
+            - payment_failed
+          example: customer_abandoned_checkout
+          description: Reason for voiding the operation
+      required:
+        - reason
