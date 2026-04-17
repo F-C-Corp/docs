@@ -134,14 +134,14 @@ Once your resources exist, you can create, update, and complete a sale operation
 
     ```http
     HTTP/1.1 201 Created
-    ETag: "opv_01HXYZ"
+    ETag: "1"
     X-Request-Id: req_01JSTART
     ```
 
     ```json
     {
       "id": "op_01HXYZ",
-      "resource_version": "opv_01HXYZ",
+      "resource_version": 1,
       "seller_id": "seller_01HXYZ",
       "location_id": "loc_01HXYZ",
       "register_id": "reg_01HXYZ",
@@ -167,7 +167,7 @@ Once your resources exist, you can create, update, and complete a sale operation
     curl -X PATCH https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ \
       -H "Authorization: Bearer ofk_live_abc123..." \
       -H "X-OpenFiskal-Seller: seller_01HXYZ" \
-      -H 'If-Match: "opv_01HXYZ"' \
+      -H 'If-Match: "1"' \
       -H "Content-Type: application/json" \
       -d '{
         "data": {
@@ -190,14 +190,14 @@ Once your resources exist, you can create, update, and complete a sale operation
 
     ```http
     HTTP/1.1 200 OK
-    ETag: "opv_01HXYA"
+    ETag: "2"
     X-Request-Id: req_01JUPDATE
     ```
 
     ```json
     {
       "id": "op_01HXYZ",
-      "resource_version": "opv_01HXYA",
+      "resource_version": 2,
       "seller_id": "seller_01HXYZ",
       "location_id": "loc_01HXYZ",
       "register_id": "reg_01HXYZ",
@@ -232,7 +232,7 @@ Once your resources exist, you can create, update, and complete a sale operation
       -H "Authorization: Bearer ofk_live_abc123..." \
       -H "X-OpenFiskal-Seller: seller_01HXYZ" \
       -H "Idempotency-Key: op-order-1001-complete" \
-      -H 'If-Match: "opv_01HXYA"' \
+      -H 'If-Match: "2"' \
       -H "Content-Type: application/json" \
       -d '{
         "payments": [
@@ -255,14 +255,14 @@ Once your resources exist, you can create, update, and complete a sale operation
 
     ```http
     HTTP/1.1 200 OK
-    ETag: "opv_01HXYB"
+    ETag: "3"
     X-Request-Id: req_01JCOMPLETE
     ```
 
     ```json
     {
       "id": "op_01HXYZ",
-      "resource_version": "opv_01HXYB",
+      "resource_version": 3,
       "seller_id": "seller_01HXYZ",
       "location_id": "loc_01HXYZ",
       "register_id": "reg_01HXYZ",

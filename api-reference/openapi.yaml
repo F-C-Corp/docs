@@ -666,10 +666,10 @@ components:
       bearerFormat: API key
   headers:
     ETag:
-      description: Server-issued operation resource version. A new value is returned on every successful operation mutation and must be sent back in `If-Match` on the next mutation.
+      description: Server-issued operation resource version as a quoted integer. A new value is returned on every successful operation mutation and must be sent back in `If-Match` on the next mutation.
       schema:
         type: string
-        example: '"opv_01JXYZ"'
+        example: '"1"'
     XRequestId:
       description: Stable request trace identifier.
       schema:
@@ -857,7 +857,7 @@ components:
             message: The supplied If-Match value is stale.
             retryable: true
             details:
-              current_resource_version: opv_01JXYZNEW
+              current_resource_version: 2
   schemas:
     Error:
       type: object
@@ -1513,8 +1513,9 @@ components:
         id:
           type: string
         resource_version:
-          type: string
-          description: Current server-issued version for the operation. The same value is returned in the `ETag` header and changes on every successful mutation.
+          type: integer
+          minimum: 1
+          description: Current server-issued version for the operation, starting at 1 and incremented on every successful mutation. The same value is returned in the `ETag` header as a quoted integer.
         seller_id:
           type: string
         location_id:

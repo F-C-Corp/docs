@@ -128,7 +128,7 @@ curl -X PATCH https://api.openfiskal.com/v1/operations/op_01HXYZ/cancel \
   -H "Authorization: Bearer $API_KEY" \
   -H "X-OpenFiskal-Seller: seller_01HXYZ" \
   -H "Idempotency-Key: op-order-1001-cancel" \
-  -H 'If-Match: "opv_01HXYZ"' \
+  -H 'If-Match: "1"' \
   -H "Content-Type: application/json" \
   -d '{
     "reason": "void_before_completion"
