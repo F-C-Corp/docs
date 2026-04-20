@@ -28,7 +28,7 @@ Every export requires a `type`, `register_id`, and a time range.
     ```bash
     curl -X POST https://sandbox.api.openfiskal.com/v1/exports \
       -H "Authorization: Bearer ofk_test_abc123" \
-      -H "X-OpenFiskal-Seller: seller_01HXYZ" \
+      -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
       -H "Idempotency-Key: dsfinvk-2026-03" \
       -H "Content-Type: application/json" \
       -d '{
@@ -45,7 +45,7 @@ Every export requires a `type`, `register_id`, and a time range.
     ```bash
     curl -X POST https://sandbox.api.openfiskal.com/v1/exports \
       -H "Authorization: Bearer ofk_test_abc123" \
-      -H "X-OpenFiskal-Seller: seller_01HXYZ" \
+      -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
       -H "Idempotency-Key: tse-2026-03" \
       -H "Content-Type: application/json" \
       -d '{
@@ -62,7 +62,7 @@ Every export requires a `type`, `register_id`, and a time range.
     ```bash
     curl -X POST https://sandbox.api.openfiskal.com/v1/exports \
       -H "Authorization: Bearer ofk_test_abc123" \
-      -H "X-OpenFiskal-Seller: seller_01HXYZ" \
+      -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
       -H "Idempotency-Key: dep7-2026-03" \
       -H "Content-Type: application/json" \
       -d '{

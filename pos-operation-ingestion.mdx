@@ -44,7 +44,7 @@ Create operations with `POST /operations`. The request includes a `source` field
 ```bash
 curl -X POST https://api.openfiskal.com/v1/operations \
   -H "Authorization: Bearer $API_KEY" \
-  -H "X-OpenFiskal-Seller: seller_01HXYZ" \
+  -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
   -H "Idempotency-Key: op-order-1001-start" \
   -H "Content-Type: application/json" \
   -d '{ "...": "..." }'
@@ -126,7 +126,7 @@ Use `PATCH /operations/{operationId}/cancel` only while the operation is still o
 ```bash
 curl -X PATCH https://api.openfiskal.com/v1/operations/op_01HXYZ/cancel \
   -H "Authorization: Bearer $API_KEY" \
-  -H "X-OpenFiskal-Seller: seller_01HXYZ" \
+  -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
   -H "Idempotency-Key: op-order-1001-cancel" \
   -H 'If-Match: "1"' \
   -H "Content-Type: application/json" \

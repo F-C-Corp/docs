@@ -1,16 +1,16 @@
 openapi: 3.0.0
 paths:
-  /sellers:
+  /merchants:
     get:
-      operationId: SellersController_list
+      operationId: MerchantsController_list
       parameters: []
       responses:
         "200":
-          description: Sellers returned
+          description: Merchants returned
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SellerListResponse"
+                $ref: "#/components/schemas/MerchantListResponse"
         "401":
           description: Authentication failed
           content:
@@ -25,7 +25,7 @@ paths:
                     message: Authentication failed.
                     retryable: false
         "403":
-          description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
+          description: Authenticated caller is not allowed to access the requested tenant, country, or merchant.
           content:
             application/json:
               schema:
@@ -39,25 +39,25 @@ paths:
                     retryable: false
       security: &a1
         - BearerAuth: []
-      summary: List sellers
+      summary: List merchants
       tags: &a2
-        - Sellers
+        - Merchants
     post:
-      operationId: SellersController_create
+      operationId: MerchantsController_create
       parameters: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateSellerDto"
+              $ref: "#/components/schemas/CreateMerchantDto"
       responses:
         "201":
-          description: Seller created
+          description: Merchant created
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Seller"
+                $ref: "#/components/schemas/Merchant"
         "400":
           description: Invalid request
           content:
@@ -85,7 +85,7 @@ paths:
                     message: Authentication failed.
                     retryable: false
         "403":
-          description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
+          description: Authenticated caller is not allowed to access the requested tenant, country, or merchant.
           content:
             application/json:
               schema:
@@ -111,24 +111,24 @@ paths:
                     message: The payload violates regime-specific validation rules.
                     retryable: false
       security: *a1
-      summary: Create seller
+      summary: Create merchant
       tags: *a2
-  /sellers/{sellerId}:
+  /merchants/{merchantId}:
     get:
-      operationId: SellersController_get
+      operationId: MerchantsController_get
       parameters:
-        - name: sellerId
+        - name: merchantId
           required: true
           in: path
           schema:
             type: string
       responses:
         "200":
-          description: Seller returned
+          description: Merchant returned
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Seller"
+                $ref: "#/components/schemas/Merchant"
         "401":
           description: Authentication failed
           content:
@@ -143,7 +143,7 @@ paths:
                     message: Authentication failed.
                     retryable: false
         "403":
-          description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
+          description: Authenticated caller is not allowed to access the requested tenant, country, or merchant.
           content:
             application/json:
               schema:
@@ -169,12 +169,12 @@ paths:
                     message: The requested resource does not exist.
                     retryable: false
       security: *a1
-      summary: Get seller
+      summary: Get merchant
       tags: *a2
     patch:
-      operationId: SellersController_update
+      operationId: MerchantsController_update
       parameters:
-        - name: sellerId
+        - name: merchantId
           required: true
           in: path
           schema:
@@ -184,14 +184,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UpdateSellerDto"
+              $ref: "#/components/schemas/UpdateMerchantDto"
       responses:
         "200":
-          description: Seller updated
+          description: Merchant updated
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Seller"
+                $ref: "#/components/schemas/Merchant"
         "400":
           description: Invalid request
           content:
@@ -219,7 +219,7 @@ paths:
                     message: Authentication failed.
                     retryable: false
         "403":
-          description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
+          description: Authenticated caller is not allowed to access the requested tenant, country, or merchant.
           content:
             application/json:
               schema:
@@ -258,16 +258,16 @@ paths:
                     message: The payload violates regime-specific validation rules.
                     retryable: false
       security: *a1
-      summary: Update seller
+      summary: Update merchant
       tags: *a2
   /registers:
     get:
       operationId: RegistersController_list
       parameters:
         - &a3
-          name: X-OpenFiskal-Seller
+          name: X-OpenFiskal-Merchant
           in: header
-          description: Seller identifier returned by the sellers resource.
+          description: Merchant identifier returned by the merchants resource.
           required: true
           schema:
             type: string
@@ -292,7 +292,7 @@ paths:
                     message: Authentication failed.
                     retryable: false
         "403":
-          description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
+          description: Authenticated caller is not allowed to access the requested tenant, country, or merchant.
           content:
             application/json:
               schema:
@@ -353,7 +353,7 @@ paths:
                     message: Authentication failed.
                     retryable: false
         "403":
-          description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
+          description: Authenticated caller is not allowed to access the requested tenant, country, or merchant.
           content:
             application/json:
               schema:
@@ -425,7 +425,7 @@ paths:
                     message: Authentication failed.
                     retryable: false
         "403":
-          description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
+          description: Authenticated caller is not allowed to access the requested tenant, country, or merchant.
           content:
             application/json:
               schema:
@@ -502,7 +502,7 @@ paths:
                     message: Authentication failed.
                     retryable: false
         "403":
-          description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
+          description: Authenticated caller is not allowed to access the requested tenant, country, or merchant.
           content:
             application/json:
               schema:
@@ -569,7 +569,7 @@ paths:
                     message: Authentication failed.
                     retryable: false
         "403":
-          description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
+          description: Authenticated caller is not allowed to access the requested tenant, country, or merchant.
           content:
             application/json:
               schema:
@@ -641,7 +641,7 @@ paths:
                     message: Authentication failed.
                     retryable: false
         "403":
-          description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
+          description: Authenticated caller is not allowed to access the requested tenant, country, or merchant.
           content:
             application/json:
               schema:
@@ -726,7 +726,7 @@ paths:
                     message: Authentication failed.
                     retryable: false
         "403":
-          description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
+          description: Authenticated caller is not allowed to access the requested tenant, country, or merchant.
           content:
             application/json:
               schema:
@@ -785,9 +785,9 @@ paths:
       operationId: LocationsController_list
       parameters:
         - &a6
-          name: X-OpenFiskal-Seller
+          name: X-OpenFiskal-Merchant
           in: header
-          description: Seller identifier returned by the sellers resource.
+          description: Merchant identifier returned by the merchants resource.
           required: true
           schema:
             type: string
@@ -812,7 +812,7 @@ paths:
                     message: Authentication failed.
                     retryable: false
         "403":
-          description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
+          description: Authenticated caller is not allowed to access the requested tenant, country, or merchant.
           content:
             application/json:
               schema:
@@ -873,7 +873,7 @@ paths:
                     message: Authentication failed.
                     retryable: false
         "403":
-          description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
+          description: Authenticated caller is not allowed to access the requested tenant, country, or merchant.
           content:
             application/json:
               schema:
@@ -932,7 +932,7 @@ paths:
                     message: Authentication failed.
                     retryable: false
         "403":
-          description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
+          description: Authenticated caller is not allowed to access the requested tenant, country, or merchant.
           content:
             application/json:
               schema:
@@ -1009,7 +1009,7 @@ paths:
                     message: Authentication failed.
                     retryable: false
         "403":
-          description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
+          description: Authenticated caller is not allowed to access the requested tenant, country, or merchant.
           content:
             application/json:
               schema:
@@ -1076,7 +1076,7 @@ paths:
                     message: Authentication failed.
                     retryable: false
         "403":
-          description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
+          description: Authenticated caller is not allowed to access the requested tenant, country, or merchant.
           content:
             application/json:
               schema:
@@ -1122,9 +1122,9 @@ paths:
       operationId: OperationsController_get
       parameters:
         - &a9
-          name: X-OpenFiskal-Seller
+          name: X-OpenFiskal-Merchant
           in: header
-          description: Seller identifier returned by the sellers resource.
+          description: Merchant identifier returned by the merchants resource.
           required: true
           schema:
             type: string
@@ -1154,7 +1154,7 @@ paths:
                     message: Authentication failed.
                     retryable: false
         "403":
-          description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
+          description: Authenticated caller is not allowed to access the requested tenant, country, or merchant.
           content:
             application/json:
               schema:
@@ -1192,7 +1192,7 @@ paths:
         - *a9
         - name: Idempotency-Key
           in: header
-          description: Unique key per endpoint, seller, and tenant. Retained for at least 24 hours.
+          description: Unique key per endpoint, merchant, and tenant. Retained for at least 24 hours.
           required: true
           schema:
             type: string
@@ -1236,7 +1236,7 @@ paths:
                     message: Authentication failed.
                     retryable: false
         "403":
-          description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
+          description: Authenticated caller is not allowed to access the requested tenant, country, or merchant.
           content:
             application/json:
               schema:
@@ -1309,7 +1309,7 @@ paths:
             type: string
         - name: Idempotency-Key
           in: header
-          description: Unique key per endpoint, seller, and tenant. Retained for at least 24 hours.
+          description: Unique key per endpoint, merchant, and tenant. Retained for at least 24 hours.
           required: true
           schema:
             type: string
@@ -1353,7 +1353,7 @@ paths:
                     message: Authentication failed.
                     retryable: false
         "403":
-          description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
+          description: Authenticated caller is not allowed to access the requested tenant, country, or merchant.
           content:
             application/json:
               schema:
@@ -1454,7 +1454,7 @@ paths:
             type: string
         - name: Idempotency-Key
           in: header
-          description: Unique key per endpoint, seller, and tenant. Retained for at least 24 hours.
+          description: Unique key per endpoint, merchant, and tenant. Retained for at least 24 hours.
           required: true
           schema:
             type: string
@@ -1498,7 +1498,7 @@ paths:
                     message: Authentication failed.
                     retryable: false
         "403":
-          description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
+          description: Authenticated caller is not allowed to access the requested tenant, country, or merchant.
           content:
             application/json:
               schema:
@@ -1593,8 +1593,8 @@ info:
   license:
     name: Proprietary
 tags:
-  - name: Sellers
-    description: Create and manage merchant sellers.
+  - name: Merchants
+    description: Create and manage merchant merchants.
   - name: Locations
     description: Create and manage merchant locations.
   - name: Registers
@@ -1705,7 +1705,7 @@ components:
         - city
         - postal_code
         - country_code
-    Seller:
+    Merchant:
       type: object
       properties:
         id:
@@ -1757,13 +1757,13 @@ components:
         - fiscal_identities
         - created_at
         - updated_at
-    SellerListResponse:
+    MerchantListResponse:
       type: object
       properties:
         data:
           type: array
           items:
-            $ref: "#/components/schemas/Seller"
+            $ref: "#/components/schemas/Merchant"
         next_cursor:
           type: string
           nullable: true
@@ -1820,7 +1820,7 @@ components:
         - city
         - postal_code
         - country_code
-    CreateSellerDto:
+    CreateMerchantDto:
       type: object
       properties:
         legal_name:
@@ -1856,7 +1856,7 @@ components:
         - country_code
         - tax_id
         - address
-    UpdateSellerDto:
+    UpdateMerchantDto:
       type: object
       properties:
         legal_name:
@@ -1909,7 +1909,7 @@ components:
       properties:
         id:
           type: string
-        seller_id:
+        merchant_id:
           type: string
         location_id:
           type: string
@@ -1940,7 +1940,7 @@ components:
           format: date-time
       required:
         - id
-        - seller_id
+        - merchant_id
         - location_id
         - name
         - status
@@ -1996,7 +1996,7 @@ components:
       properties:
         id:
           type: string
-        seller_id:
+        merchant_id:
           type: string
         name:
           type: string
@@ -2013,7 +2013,7 @@ components:
           format: date-time
       required:
         - id
-        - seller_id
+        - merchant_id
         - name
         - address
         - created_at
@@ -2334,7 +2334,7 @@ components:
       properties:
         id:
           type: string
-        seller_id:
+        merchant_id:
           type: string
         location_id:
           type: string
@@ -2425,7 +2425,7 @@ components:
           format: date-time
       required:
         - id
-        - seller_id
+        - merchant_id
         - source
         - type
         - status
