@@ -695,6 +695,91 @@ paths:
       security: *a4
       summary: Fiscalize register (DE/KassenSichV)
       tags: *a5
+  /registers/{registerId}/decommission:
+    post:
+      operationId: RegistersController_decommission
+      parameters:
+        - *a3
+        - name: registerId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Register decommissioned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Register"
+        "401":
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: unauthorized
+                  value:
+                    code: unauthorized
+                    message: Authentication failed.
+                    retryable: false
+        "403":
+          description: Authenticated caller is not allowed to access the requested tenant, country, or seller.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: forbidden
+                  value:
+                    code: forbidden
+                    message: The authenticated caller cannot access this resource.
+                    retryable: false
+        "404":
+          description: Register not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: not_found
+                  value:
+                    code: not_found
+                    message: The requested resource does not exist.
+                    retryable: false
+        "409":
+          description: Register is not fiscalized or already decommissioned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: decommission_conflict
+                  value:
+                    code: decommission_conflict
+                    message: Register is not fiscalized or has already been decommissioned.
+                    retryable: false
+        "422":
+          description: Decommission not supported for this register
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: regime_validation_failed
+                  value:
+                    code: regime_validation_failed
+                    message: The payload violates regime-specific validation rules.
+                    retryable: false
+      security: *a4
+      summary: Decommission register (DE/KassenSichV)
+      tags: *a5
   /locations:
     get:
       operationId: LocationsController_list
@@ -2253,9 +2338,12 @@ components:
           type: string
         location_id:
           type: string
+          nullable: true
+          description: "Only set for source: POS."
         register_id:
           type: string
           nullable: true
+          description: "Only set for source: POS."
         source:
           type: string
           enum:
@@ -2338,7 +2426,6 @@ components:
       required:
         - id
         - seller_id
-        - location_id
         - source
         - type
         - status
@@ -2400,13 +2487,10 @@ components:
     CreateOperationDto:
       type: object
       properties:
-        location_id:
-          type: string
-          example: loc_abc123
         register_id:
           type: string
           example: reg_abc123
-          description: Required for POS, must be null for ONLINE
+          description: Required for POS, must be null for ONLINE.
         source:
           type: string
           enum:
@@ -2456,7 +2540,6 @@ components:
           items:
             $ref: "#/components/schemas/LineItemDto"
       required:
-        - location_id
         - source
         - type
         - currency
