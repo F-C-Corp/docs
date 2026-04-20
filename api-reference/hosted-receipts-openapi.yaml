@@ -9,7 +9,7 @@ info:
     delivering completed receipts.
 
     Authentication uses the same server-to-server bearer token and
-    `X-OpenFiskal-Seller` scoping model as the core fiscalization API.
+    `X-OpenFiskal-Merchant` scoping model as the core fiscalization API.
 
 servers:
   - url: https://api.openfiskal.com/v1
@@ -24,7 +24,7 @@ tags:
 paths:
   /receipts/{receiptId}:
     parameters:
-      - $ref: '#/components/parameters/SellerHeader'
+      - $ref: '#/components/parameters/MerchantHeader'
     get:
       tags: [Receipts]
       summary: Get receipt
@@ -51,7 +51,7 @@ paths:
 
   /operations/{operationId}/receipt:
     parameters:
-      - $ref: '#/components/parameters/SellerHeader'
+      - $ref: '#/components/parameters/MerchantHeader'
     get:
       tags: [Receipts]
       summary: Get receipt by operation
@@ -80,7 +80,7 @@ paths:
 
   /receipts/{receiptId}/pdf:
     parameters:
-      - $ref: '#/components/parameters/SellerHeader'
+      - $ref: '#/components/parameters/MerchantHeader'
     get:
       tags: [Receipts]
       summary: Download receipt PDF
@@ -108,7 +108,7 @@ paths:
 
   /receipts/{receiptId}/send:
     parameters:
-      - $ref: '#/components/parameters/SellerHeader'
+      - $ref: '#/components/parameters/MerchantHeader'
     post:
       tags: [Receipts]
       summary: Send receipt
@@ -151,8 +151,8 @@ components:
       scheme: bearer
       bearerFormat: API key
   parameters:
-    SellerHeader:
-      name: X-OpenFiskal-Seller
+    MerchantHeader:
+      name: X-OpenFiskal-Merchant
       in: header
       required: true
       schema:
@@ -274,7 +274,7 @@ components:
           type: string
         operation_id:
           type: string
-        seller_id:
+        merchant_id:
           type: string
         location_id:
           type: string
@@ -311,7 +311,7 @@ components:
           type: object
           additionalProperties: true
       required:
-        [id, operation_id, seller_id, location_id, register_id, status, currency, issued_at, issuer, line_items, totals, payments, links]
+        [id, operation_id, merchant_id, location_id, register_id, status, currency, issued_at, issuer, line_items, totals, payments, links]
     ReceiptIssuer:
       type: object
       additionalProperties: false

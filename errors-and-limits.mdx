@@ -22,7 +22,7 @@ Use `Idempotency-Key` on every mutating operation, export creation, and receipt 
 Current platform rules:
 
 - retention window is at least 24 hours
-- uniqueness scope is endpoint plus seller plus authenticated tenant
+- uniqueness scope is endpoint plus merchant plus authenticated tenant
 - reusing a key with the same payload returns the original response
 - reusing a key with a different payload returns `409 idempotency_key_conflict`
 

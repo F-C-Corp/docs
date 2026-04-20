@@ -16,7 +16,7 @@ Before go-live, you should manually test and validate:
 ## Important Implementation Checks
 
 1. Correctly setting `Idempotency-Key` on retries.
-2. Correctly setting `X-OpenFiskal-Seller` on all seller-scoped requests.
+2. Correctly setting `X-OpenFiskal-Merchant` on all merchant-scoped requests.
 3. Every operation writer persists and reuses the latest `ETag`
 
 ## Next steps
