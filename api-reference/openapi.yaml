@@ -1814,7 +1814,7 @@ components:
           example: DEU
           minLength: 3
           maxLength: 3
-          description: ISO 3166-1 alpha-3
+          description: ISO 3166-1 alpha-3 (uppercase)
       required:
         - line1
         - city
@@ -1831,7 +1831,7 @@ components:
           example: DEU
           minLength: 3
           maxLength: 3
-          description: ISO 3166-1 alpha-3 country code for the legal entity
+          description: ISO 3166-1 alpha-3 country code for the legal entity (uppercase)
         tax_id:
           type: string
           example: DE123456789
