@@ -36,6 +36,20 @@ OpenFiskal owns this lifecycle. Clients do not send operation `status` in reques
 | `return` | Return against an earlier sale (set `related_operation_id`) |
 | `exchange` | Return plus replacement in a single operation |
 
+### Sign convention
+
+Amounts carry their sign end-to-end — the API does not re-derive sale-vs-return from the operation type. Send amounts with the sign that reflects what actually moves at the register.
+
+| Type | `total_amount` | `line_items[].total_amount` |
+| --- | --- | --- |
+| `sale` | ≥ 0 | ≥ 0 |
+| `return` | ≤ 0 | ≤ 0 |
+| `exchange` | any sign | any sign (mixed within one operation is allowed) |
+
+The API rejects a request with the wrong sign for its type with `422 unprocessable_entity`. The operation-level arithmetic rule still holds: `pretax_amount + tax_amount + tip_amount = total_amount`. When a `return` is signed, the `pretax_amount` and `tax_amount` are negative too.
+
+This sign is the only on-wire signal Fiskaly's TSE has for sale-vs-return, so making it explicit in the request payload keeps intent, fiscal signature, and downstream exports aligned.
+
 ## Start an operation
 
 Create operations with `POST /operations`. The request is flat — `source` (`POS` or `ONLINE`), `type` (`sale` / `return` / `exchange`), `currency`, all four amount fields (`pretax_amount`, `tax_amount`, `tip_amount`, `total_amount`) as decimal strings, and `line_items`. `register_id` is required for `POS`, must be omitted for `ONLINE`. The response returns the operation resource, a `resource_version`, and an `ETag` header.
@@ -106,6 +120,8 @@ Completion is a fiscal event. Use an idempotency key on every completion request
 
 ### Return against prior receipt
 
+All amounts are negative: the customer is getting €12 back, goods are flowing back into stock, VAT is being reversed. The completion payload mirrors this — `payment.amount` is negative too (the merchant is paying the customer), and `status` stays `captured` so the payment counts toward the operation total.
+
 ```json
 {
   "register_id": "reg_01HXYZ",
@@ -113,17 +129,17 @@ Completion is a fiscal event. Use an idempotency key on every completion request
   "type": "return",
   "currency": "EUR",
   "related_operation_id": "op_01HSALE",
-  "pretax_amount": "11.21",
-  "tax_amount": "0.79",
+  "pretax_amount": "-11.21",
+  "tax_amount": "-0.79",
   "tip_amount": "0.00",
-  "total_amount": "12.00",
+  "total_amount": "-12.00",
   "line_items": [
     {
       "title": "Menu (return)",
       "quantity": 1,
-      "unit_price": "12.00",
-      "total_amount": "12.00",
-      "taxes": [{ "name": "MwSt. 7%", "rate": "0.07", "tax_amount": "0.79" }]
+      "unit_price": "-12.00",
+      "total_amount": "-12.00",
+      "taxes": [{ "name": "MwSt. 7%", "rate": "0.07", "tax_amount": "-0.79" }]
     }
   ]
 }
@@ -146,10 +162,6 @@ Include both the returned and replacement items in the same `line_items` array. 
 The operation amounts must remain arithmetically consistent: `pretax_amount + tax_amount + tip_amount = total_amount`. When the net delta is negative, all three of `pretax_amount`, `tax_amount`, and `total_amount` are negative.
 
 `related_operation_id` is required and points at the original `sale` being exchanged against.
-
-<Note>
-  This differs from `type: return`, where you send the return value as positive amounts and OpenFiskal negates them internally for the fiscal signature. `type: exchange` uses caller-supplied signs throughout — the API passes them through.
-</Note>
 
 ### Customer pays the difference
 
