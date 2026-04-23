@@ -2473,12 +2473,8 @@ components:
           example: "9.00"
           description: Total amount for this line item (quantity * unit_price)
         taxes:
+          description: One entry per VAT rate applied to this line. At least one entry required.
           type: array
-          description: >-
-            One entry per VAT rate applied to this line. Required for correct
-            multi-VAT breakdown on receipts and fiscal documents (DSFinV-K
-            vat.csv, RKSV signatures). Send an empty array only for genuinely
-            tax-exempt lines.
           items:
             $ref: "#/components/schemas/LineItemTaxDto"
       required:
