@@ -1618,7 +1618,7 @@ components:
     FiscalIdentityDeuDto:
       type: object
       properties:
-        country:
+        country_code:
           type: string
           enum:
             - DEU
@@ -1632,11 +1632,13 @@ components:
           example: DE123456789
           description: USt-IdNr
       required:
-        - country
+        - country_code
+        - tax_number
+        - vat_id
     FiscalIdentityAutDto:
       type: object
       properties:
-        country:
+        country_code:
           type: string
           enum:
             - AUT
@@ -1657,12 +1659,12 @@ components:
           type: string
           description: 13-digit Global Location Number, required when legal_entity_id_type is GLN
       required:
-        - country
+        - country_code
         - legal_entity_id_type
     FiscalIdentityItaDto:
       type: object
       properties:
-        country:
+        country_code:
           type: string
           enum:
             - ITA
@@ -1682,7 +1684,7 @@ components:
             - INDIVIDUAL
           example: COMPANY
       required:
-        - country
+        - country_code
         - legal_entity_type
     AddressResponse:
       type: object
@@ -1738,7 +1740,7 @@ components:
               - $ref: "#/components/schemas/FiscalIdentityAutDto"
               - $ref: "#/components/schemas/FiscalIdentityItaDto"
             discriminator:
-              propertyName: country
+              propertyName: country_code
               mapping:
                 DEU: "#/components/schemas/FiscalIdentityDeuDto"
                 AUT: "#/components/schemas/FiscalIdentityAutDto"
@@ -1848,7 +1850,7 @@ components:
               - $ref: "#/components/schemas/FiscalIdentityAutDto"
               - $ref: "#/components/schemas/FiscalIdentityItaDto"
             discriminator:
-              propertyName: country
+              propertyName: country_code
               mapping:
                 DEU: "#/components/schemas/FiscalIdentityDeuDto"
                 AUT: "#/components/schemas/FiscalIdentityAutDto"
@@ -1884,7 +1886,7 @@ components:
               - $ref: "#/components/schemas/FiscalIdentityAutDto"
               - $ref: "#/components/schemas/FiscalIdentityItaDto"
             discriminator:
-              propertyName: country
+              propertyName: country_code
               mapping:
                 DEU: "#/components/schemas/FiscalIdentityDeuDto"
                 AUT: "#/components/schemas/FiscalIdentityAutDto"
