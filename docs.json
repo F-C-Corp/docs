@@ -38,6 +38,10 @@
           {
             "group": "Fiscalization API",
             "openapi": "api-reference/openapi.yaml"
+          },
+          {
+            "group": "Changelog",
+            "pages": ["changelog"]
           }
         ]
       },

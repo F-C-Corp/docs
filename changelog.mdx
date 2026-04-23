@@ -1,0 +1,21 @@
+---
+title: "Changelog"
+description: "API contract updates to the OpenFiskal Fiscalization API."
+rss: true
+---
+
+<Update label="April 23, 2026" description="Fiscalization API" tags={["Breaking"]}>
+  **KassenSichV schema changes**
+
+  - `FiscalInformationKassenSichVVerification`: renamed `tse_serial` to `tss_serial_number` and `client_id` to `pos_client_serial_number`. Both remain required.
+  - `FiscalInformationKassenSichVEndEvent`: added required `public_key` (string).
+  - `FiscalInformationKassenSichVStartEvent`: removed `transaction_counter` and `signature`. `signed_at` is now the only required field.
+
+  Update integrations that submit or parse KassenSichV fiscal information before your next release.
+</Update>
+
+<Update label="April 23, 2026" description="Fiscalization API" tags={["Clarification"]}>
+  **Country code casing**
+
+  Clarified that the `country` field on `Address` and on the legal entity schema must be an ISO 3166-1 alpha-3 code in uppercase (for example, `DEU`). No behavior change; existing uppercase values continue to validate.
+</Update>
