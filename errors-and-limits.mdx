@@ -22,7 +22,7 @@ Every error response uses the same envelope:
 ```json
 {
   "code": "precondition_failed",
-  "message": "The supplied If-Match value is stale.",
+  "message": "Resource version mismatch. Expected 1, current is 2.",
   "retryable": true
 }
 ```

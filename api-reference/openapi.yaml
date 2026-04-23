@@ -1402,7 +1402,7 @@ paths:
                   summary: precondition_failed
                   value:
                     code: precondition_failed
-                    message: The supplied If-Match value is stale.
+                    message: "Resource version mismatch. Expected 1, current is 2."
                     retryable: true
                     details:
                       current_resource_version: 2
@@ -1547,7 +1547,7 @@ paths:
                   summary: precondition_failed
                   value:
                     code: precondition_failed
-                    message: The supplied If-Match value is stale.
+                    message: "Resource version mismatch. Expected 1, current is 2."
                     retryable: true
                     details:
                       current_resource_version: 2
@@ -2357,7 +2357,7 @@ components:
           enum:
             - open
             - completed
-            - cancelled
+            - voided
         currency:
           type: string
           description: ISO 4217 currency code.
