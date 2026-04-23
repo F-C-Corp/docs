@@ -5,6 +5,20 @@ rss: true
 ---
 
 <Update label="April 23, 2026" description="Fiscalization API" tags={["Breaking"]}>
+  **Operation type `refund` renamed to `return`**
+
+  The `Operation.type` enum now uses `return` instead of `refund` for operations where goods come back from the customer. The valid values are `sale | return | exchange`.
+
+  OpenFiskal now distinguishes goods movement from money movement: *operations* model goods (sale/return/exchange), *refund* is reserved for money movement (a negative payment transaction on an operation) and is not an operation type. This unlocks flows the old terminology could not express cleanly — return with store credit (goods back, no money), goodwill refund (money back, no goods), or partial refunds on kept items.
+
+  - `POST /operations` with `type: "refund"` will now reject. Use `type: "return"`.
+  - Response shapes now return `type: "return"` for what was previously `type: "refund"`.
+  - `Payment.status` enum is unchanged — `refunded` is still the correct status for a payment that has been reversed, because it describes money movement.
+
+  Update integrator code that creates or parses return/refund operations before your next release.
+</Update>
+
+<Update label="April 23, 2026" description="Fiscalization API" tags={["Breaking"]}>
   **KassenSichV schema changes**
 
   - `FiscalInformationKassenSichVVerification`: renamed `tse_serial` to `tss_serial_number` and `client_id` to `pos_client_serial_number`. Both remain required.
