@@ -22,15 +22,19 @@ Every error response uses the same envelope:
 ```json
 {
   "code": "precondition_failed",
-  "message": "The supplied If-Match value is stale.",
-  "retryable": true
+  "message": "Resource version mismatch.",
+  "retryable": true,
+  "details": {
+    "expected_resource_version": 1,
+    "current_resource_version": 2
+  }
 }
 ```
 
-- `code` — stable machine-readable identifier (see catalog below)
-- `message` — human-readable reason, safe to log but not locale-stable
+- `code` — stable machine-readable identifier (see catalog below); switch on this, not on `message`
+- `message` — short human-readable label, safe to log but not locale-stable
 - `retryable` — whether retrying the same request with the same idempotency key can succeed
-- `details` (optional) — endpoint-specific context (e.g. `{ "current_resource_version": 2 }` on `precondition_failed`)
+- `details` (optional) — endpoint-specific structured context (e.g. `expected_resource_version` / `current_resource_version` on `precondition_failed`). Read variable state from here, not from `message`.
 
 `5xx`, `429`, and `412` responses are retryable; all other errors are terminal unless the message says otherwise.
 
@@ -47,7 +51,7 @@ Current platform rules:
 
 ## Concurrency rules
 
-Operation mutation endpoints (`/complete`, `/void`) require `If-Match` with the latest operation `ETag`. If you omit it, the API returns `428 precondition_required`. If you send a stale value, the API returns `412 precondition_failed` with `details.current_resource_version`.
+Operation mutation endpoints (`/complete`, `/void`) require `If-Match` with the latest operation `ETag`. If you omit it, the API returns `428 precondition_required`. If you send a stale value, the API returns `412 precondition_failed` with `details.expected_resource_version` and `details.current_resource_version`.
 
 ## Request tracing
 
