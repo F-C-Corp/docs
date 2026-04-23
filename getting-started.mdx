@@ -1,9 +1,9 @@
 ---
 title: "Getting started"
-description: "Create your API key, onboard a merchant, and complete your first operation."
+description: "Create your API key, onboard a merchant, fiscalize a register, and complete your first operation."
 ---
 
-This guide walks you through the current `v1` integration contract. You create an API key, onboard a merchant, register a location and terminal, start an operation, update it with `If-Match`, and complete it with the typed payment contract.
+This guide walks you through the current `v1` integration contract. You create an API key, onboard a merchant with fiscal identities, register a location and terminal, fiscalize the register, start an operation, and complete it with the typed payment contract.
 
 <Info>
   All examples use `https://sandbox.api.openfiskal.com/v1`. Replace with `https://api.openfiskal.com/v1` when you go live.
@@ -14,14 +14,14 @@ This guide walks you through the current `v1` integration contract. You create a
 - An OpenFiskal tenant
 - A tenant-scoped, country-scoped API key created in your tenant dashboard
 - `curl` or an HTTP client
-- A backend service / database to store your API key, entity IDs and ETags.
+- A backend service / database to store your API key, entity IDs and ETags
 
 ## Authentication model
 
-Use the standard bearer header on every request:
+Use the standard bearer header on every request. The key encodes the environment and country — e.g. `of_test_deu_…` for the German sandbox, `of_live_deu_…` for German production.
 
 ```bash
--H "Authorization: Bearer ofk_live_abc123..."
+-H "Authorization: Bearer of_live_deu_abc123..."
 ```
 
 Every merchant-scoped request must also include:
@@ -34,18 +34,18 @@ This header value is the merchant ID returned by `POST /merchants`, not your API
 
 ## Create resources
 
-First create the tenant-scoped and merchant-scoped resources your integration needs before you process any fiscalized transactions.
+Create these resources in order. The register cannot fiscalize until the merchant has `fiscal_identities` for the target country.
 
 <Steps>
   <Step title="Create your API key">
-    Start in the OpenFiskal tenant dashboard. Create a tenant-scoped, country-scoped API key for the country you want to operate in, then store it in your secrets manager.
+    Start in the OpenFiskal tenant dashboard. Create a key for the country you want to operate in (one key per country + environment). Store it in your secrets manager. Key format: `of_{env}_{country}_{random}`, e.g. `of_test_deu_abcdefgh12345678`.
   </Step>
   <Step title="Create a merchant">
-    A merchant represents the merchant legal entity.
+    A merchant represents the legal entity. `country_code` and every `address.country_code` must use **ISO 3166-1 alpha-3** codes (`DEU`, `AUT`, `ITA`) — not alpha-2. The key's embedded country must match; a `deu` key rejects an `AUT` payload.
 
     ```bash
     curl -X POST https://sandbox.api.openfiskal.com/v1/merchants \
-      -H "Authorization: Bearer ofk_live_abc123..." \
+      -H "Authorization: Bearer of_test_deu_abc123..." \
       -H "Content-Type: application/json" \
       -d '{
         "legal_name": "Mustermann GmbH",
@@ -56,18 +56,29 @@ First create the tenant-scoped and merchant-scoped resources your integration ne
           "city": "Berlin",
           "postal_code": "10117",
           "country_code": "DEU"
-        }
+        },
+        "fiscal_identities": [
+          {
+            "country": "DEU",
+            "tax_number": "21/815/08150",
+            "vat_id": "DE123456789"
+          }
+        ]
       }'
     ```
+
+    <Warning>
+      `fiscal_identities` is required on the merchant and must include one entry per country you intend to fiscalize in. Without a matching fiscal identity, `POST /registers/{id}/fiscalize` will fail. Fiscal identity shape varies by country — see the schema reference.
+    </Warning>
 
     The returned `id` becomes the `X-OpenFiskal-Merchant` header on every merchant-scoped request that follows.
   </Step>
   <Step title="Create a location">
-    A location is a physical point of sale such as a store or restaurant.
+    A location is a physical point of sale. `timezone` is a **required** IANA zone string — the fiscal regime is derived from the location's country and many regimes (e.g. KassenSichV, RKSV) embed local time into signed records.
 
     ```bash
     curl -X POST https://sandbox.api.openfiskal.com/v1/locations \
-      -H "Authorization: Bearer ofk_live_abc123..." \
+      -H "Authorization: Bearer of_test_deu_abc123..." \
       -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
       -H "Content-Type: application/json" \
       -d '{
@@ -87,7 +98,7 @@ First create the tenant-scoped and merchant-scoped resources your integration ne
 
     ```bash
     curl -X POST https://sandbox.api.openfiskal.com/v1/registers \
-      -H "Authorization: Bearer ofk_live_abc123..." \
+      -H "Authorization: Bearer of_test_deu_abc123..." \
       -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
       -H "Content-Type: application/json" \
       -d '{
@@ -97,6 +108,15 @@ First create the tenant-scoped and merchant-scoped resources your integration ne
       }'
     ```
   </Step>
+  <Step title="Fiscalize the register">
+    Before the register can accept operations, call `POST /registers/{id}/fiscalize`. This provisions the regime-specific fiscal components (TSS + client for KassenSichV, SCU + cash register for RKSV) using the merchant's `fiscal_identities` and the location's country. The response is `202 Accepted`; poll `GET /registers/{id}` until `fiscalizedAt` is populated.
+
+    ```bash
+    curl -X POST https://sandbox.api.openfiskal.com/v1/registers/reg_01HXYZ/fiscalize \
+      -H "Authorization: Bearer of_test_deu_abc123..." \
+      -H "X-OpenFiskal-Merchant: merchant_01HXYZ"
+    ```
+  </Step>
   <Step title="Verify your saved IDs">
     Persist the returned merchant, location, and register IDs. You will use them for every later operation request.
   </Step>
@@ -104,31 +124,45 @@ First create the tenant-scoped and merchant-scoped resources your integration ne
 
 ## Perform a fiscalized sale
 
-Once your resources exist, you can create, update, and complete a sale operation.
+Once your register is fiscalized, you can create and complete sale operations.
 
 <Steps>
   <Step title="Start an operation">
-    Start every operation with `POST /operations`. The request includes `source`, your upstream `external_id`, and a typed operation variant in `data`. Persist the returned `id`, `resource_version`, and `ETag`.
+    `POST /operations` is a single-shot create. All monetary fields are decimal strings, not integers. `pretax_amount + tax_amount + tip_amount` must equal `total_amount`. `line_items` is required with at least one entry.
 
     ```bash
     curl -X POST https://sandbox.api.openfiskal.com/v1/operations \
-      -H "Authorization: Bearer ofk_live_abc123..." \
+      -H "Authorization: Bearer of_test_deu_abc123..." \
       -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
       -H "Idempotency-Key: op-order-1001-start" \
       -H "Content-Type: application/json" \
       -d '{
-        "location_id": "loc_01HXYZ",
         "register_id": "reg_01HXYZ",
         "source": "POS",
+        "type": "sale",
+        "currency": "EUR",
         "external_id": "order-1001",
-        "data": {
-          "type": "sale",
-          "currency": "EUR",
-          "amount": 4250,
-          "tip_amount": 0
-        }
+        "pretax_amount": "39.72",
+        "tax_amount": "2.78",
+        "tip_amount": "0.00",
+        "total_amount": "42.50",
+        "line_items": [
+          {
+            "title": "Lunch menu",
+            "quantity": 1,
+            "unit_price": "42.50",
+            "total_amount": "42.50",
+            "taxes": [
+              { "name": "MwSt. 7%", "rate": "0.07", "tax_amount": "2.78" }
+            ]
+          }
+        ]
       }'
     ```
+
+    <Warning>
+      Always send `line_items[].taxes[]`. Omitting it prevents correct multi-VAT breakdown on the receipt and fiscal documents (DSFinV-K `vat.csv`, RKSV signatures). One tax entry per VAT rate on the line.
+    </Warning>
 
     Response:
 
@@ -150,96 +184,48 @@ Once your resources exist, you can create, update, and complete a sale operation
       "status": "open",
       "type": "sale",
       "currency": "EUR",
-      "totals": {
-        "total_amount": 4250,
-        "tip_amount": 0
-      },
+      "pretax_amount": "39.72",
+      "tax_amount": "2.78",
+      "tip_amount": "0.00",
+      "total_amount": "42.50",
+      "line_items": [
+        {
+          "id": "li_01HXYZ",
+          "title": "Lunch menu",
+          "quantity": 1,
+          "unit_price": "42.50",
+          "total_amount": "42.50",
+          "taxes": [
+            { "id": "lit_01HXYZ", "name": "MwSt. 7%", "rate": "0.07", "tax_amount": "2.78" }
+          ]
+        }
+      ],
       "payments": [],
       "created_at": "2026-02-26T12:00:00Z",
       "updated_at": "2026-02-26T12:00:00Z"
     }
     ```
   </Step>
-  <Step title="Update the operation while it is open">
-    You can patch the operation as long as it is still mutable. Send the latest operation `ETag` in `If-Match`. Every successful mutation returns a new `resource_version` and `ETag`, so replace your stored value after each write. If another writer updated the operation first, re-read the resource and retry with the new `ETag`.
-
-    ```bash
-    curl -X PATCH https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ \
-      -H "Authorization: Bearer ofk_live_abc123..." \
-      -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
-      -H 'If-Match: "1"' \
-      -H "Content-Type: application/json" \
-      -d '{
-        "data": {
-          "type": "sale",
-          "currency": "EUR",
-          "amount": 4750,
-          "line_items": [
-            {
-              "name": "Lunch menu",
-              "quantity": 1,
-              "unit_price": 4750,
-              "total_amount": 4750
-            }
-          ]
-        }
-      }'
-    ```
-
-    Response:
-
-    ```http
-    HTTP/1.1 200 OK
-    ETag: "2"
-    X-Request-Id: req_01JUPDATE
-    ```
-
-    ```json
-    {
-      "id": "op_01HXYZ",
-      "resource_version": 2,
-      "merchant_id": "merchant_01HXYZ",
-      "location_id": "loc_01HXYZ",
-      "register_id": "reg_01HXYZ",
-      "source": "POS",
-      "external_id": "order-1001",
-      "status": "open",
-      "type": "sale",
-      "currency": "EUR",
-      "totals": {
-        "total_amount": 4750,
-        "tip_amount": 0
-      },
-      "line_items": [
-        {
-          "name": "Lunch menu",
-          "quantity": 1,
-          "unit_price": 4750,
-          "total_amount": 4750
-        }
-      ],
-      "payments": [],
-      "created_at": "2026-02-26T12:00:00Z",
-      "updated_at": "2026-02-26T12:03:00Z"
-    }
-    ```
-  </Step>
   <Step title="Complete the operation">
-    Completion includes typed payment legs. Use one entry per tender leg and include processor references where available. The completed operation can return `fiscal_information` for regime-specific fiscal payloads. Store the returned `ETag` from the completion response if you will read the final operation again later.
+    Completion includes typed payment legs. Use one entry per tender leg and include processor references where available. Send the latest `ETag` in `If-Match`. The completed operation returns `fiscal_information` for regime-specific fiscal payloads.
+
+    <Note>
+      The current API has no generic `PATCH /operations/{id}` endpoint. Build the full line-item and amount set before calling `POST /operations`; you cannot amend the body after creation. Open operations only accept `/complete` and `/void`.
+    </Note>
 
     ```bash
     curl -X PATCH https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ/complete \
-      -H "Authorization: Bearer ofk_live_abc123..." \
+      -H "Authorization: Bearer of_test_deu_abc123..." \
       -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
       -H "Idempotency-Key: op-order-1001-complete" \
-      -H 'If-Match: "2"' \
+      -H 'If-Match: "1"' \
       -H "Content-Type: application/json" \
       -d '{
         "payments": [
           {
             "payment_id": "pay_1001_card",
             "method": "card",
-            "amount": 4750,
+            "amount": "42.50",
             "currency": "EUR",
             "status": "captured",
             "processor": "sumup",
@@ -255,31 +241,20 @@ Once your resources exist, you can create, update, and complete a sale operation
 
     ```http
     HTTP/1.1 200 OK
-    ETag: "3"
+    ETag: "2"
     X-Request-Id: req_01JCOMPLETE
     ```
 
     ```json
     {
       "id": "op_01HXYZ",
-      "resource_version": 3,
-      "merchant_id": "merchant_01HXYZ",
-      "location_id": "loc_01HXYZ",
-      "register_id": "reg_01HXYZ",
-      "source": "POS",
-      "external_id": "order-1001",
+      "resource_version": 2,
       "status": "completed",
-      "type": "sale",
-      "currency": "EUR",
-      "totals": {
-        "total_amount": 4750,
-        "tip_amount": 0
-      },
       "payments": [
         {
           "payment_id": "pay_1001_card",
           "method": "card",
-          "amount": 4750,
+          "amount": "42.50",
           "currency": "EUR",
           "status": "captured",
           "processor": "sumup",
@@ -311,40 +286,30 @@ Once your resources exist, you can create, update, and complete a sale operation
         "verification": {
           "qr_data": "V0;Kasse1;ecdsa-plain-SHA384;2026-02-25T19:02:11;2026-02-25T20:14:55;42.50;4822;base64encodedEndSignature=="
         }
-      },
-      "created_at": "2026-02-26T12:00:00Z",
-      "updated_at": "2026-02-26T12:05:02Z"
+      }
     }
     ```
   </Step>
 </Steps>
 
-## Create an export job
+## Void an open operation
 
-Use export jobs after you have processed operations and want to reconcile or archive results.
+If the sale is abandoned before completion, void the open operation:
 
-<Steps>
-  <Step title="Create an export job">
-    Exports are asynchronous. Create a time-bounded export job and poll it until it is ready.
+```bash
+curl -X PATCH https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ/void \
+  -H "Authorization: Bearer of_test_deu_abc123..." \
+  -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
+  -H "Idempotency-Key: op-order-1001-void" \
+  -H 'If-Match: "1"' \
+  -H "Content-Type: application/json" \
+  -d '{ "reason": "void_before_completion" }'
+```
 
-    ```bash
-    curl -X POST https://sandbox.api.openfiskal.com/v1/exports \
-      -H "Authorization: Bearer ofk_live_abc123..." \
-      -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
-      -H "Content-Type: application/json" \
-      -d '{
-        "type": "operations",
-        "format": "jsonl",
-        "from": "2026-02-01T00:00:00Z",
-        "to": "2026-02-29T23:59:59Z"
-      }'
-    ```
-  </Step>
-</Steps>
+Completed operations cannot be voided — use a `return` operation instead.
 
 ## Next steps
 
 - [Supported scope](/supported-scope)
-- [Transaction lifecycle](/pos-operation-ingestion)
-- Read [Transaction lifecycle](/pos-operation-ingestion) for the operation lifecycle in more detail
-- Read [Hosted Receipts API](/hosted-receipts-api) for receipt retrieval, rendering, and delivery
+- [Transaction lifecycle](/pos-operation-ingestion) — operation lifecycle in detail
+- [Payment lifecycle](/payment-lifecycle) — split tender, asynchronous settlement

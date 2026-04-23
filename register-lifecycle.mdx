@@ -1,26 +1,48 @@
 ---
 title: "Register lifecycle"
-description: "How to create, map, update, and retire registers in the OpenFiskal API."
+description: "How to create, fiscalize, update, and retire registers in the OpenFiskal API."
 ---
 
 ## Overview
 
-A register is the logical checkout or terminal that produces operations inside a location. In the current public API, a register stores identity, routing, and compliance metadata that you must keep stable over time.
+A register is the logical checkout or terminal that produces operations inside a location. In the current public API, a register stores identity, routing, and fiscal-provisioning metadata that you must keep stable over time.
 
 ## Register states
 
-Registers have two public states:
-
 ```
-[active] ──► [inactive]
+[created] ──► [fiscalized] ──► [decommissioned]
 ```
 
-- `active` means your backend can use the register to create operations
-- `inactive` means the register remains in the system for auditability, but your backend should stop creating new operations for it
+- `created` — the register exists but cannot accept operations yet
+- `fiscalized` — the register has regime-specific fiscal components provisioned (TSS + client for KassenSichV, SCU + cash register for RKSV) and can accept operations
+- `decommissioned` — the register is retired; historical data is preserved but no new operations can be created
+
+The fiscal regime is derived from the **location's country**, not the merchant's. A single merchant can operate registers across multiple regimes.
 
 ## Commissioning a register
 
-Create the register after you already know the target merchant and location:
+### 1. Prerequisite: merchant must have `fiscal_identities`
+
+Before fiscalizing a register, the parent merchant must have a `fiscal_identities[]` entry for the location's country. This is normally set at merchant creation (`POST /merchants`), but you can add it later:
+
+```bash
+curl -X PATCH https://api.openfiskal.com/v1/merchants/merchant_01HXYZ \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "fiscal_identities": [
+      {
+        "country": "DEU",
+        "tax_number": "21/815/08150",
+        "vat_id": "DE123456789"
+      }
+    ]
+  }'
+```
+
+Without a matching fiscal identity, `POST /registers/{id}/fiscalize` returns `409 fiscalization_conflict`. Fiscal identity shape varies by country (`DEU`, `AUT`, `ITA`) — see the schema reference.
+
+### 2. Create the register
 
 ```bash
 curl -X POST https://api.openfiskal.com/v1/registers \
@@ -34,9 +56,21 @@ curl -X POST https://api.openfiskal.com/v1/registers \
   }'
 ```
 
+### 3. Fiscalize the register
+
+Call `POST /registers/{id}/fiscalize`. This is an asynchronous operation — the endpoint returns `202 Accepted` and provisioning completes in the background.
+
+```bash
+curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/fiscalize \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "X-OpenFiskal-Merchant: merchant_01HXYZ"
+```
+
+Poll `GET /registers/{id}` until `fiscalizedAt` is populated, then the register is ready to accept operations.
+
 ## Updating a register
 
-Use `PATCH /registers/{registerId}` when your backend needs to rename the register, update its external mapping, or mark it inactive:
+Use `PATCH /registers/{registerId}` to rename the register or update its external mapping:
 
 ```bash
 curl -X PATCH https://api.openfiskal.com/v1/registers/reg_01HXYZ \
@@ -45,16 +79,28 @@ curl -X PATCH https://api.openfiskal.com/v1/registers/reg_01HXYZ \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Kasse 2 - Front Counter",
-    "status": "inactive"
+    "external_id": "store-berlin-kasse-2-updated"
   }'
 ```
+
+## Decommissioning
+
+Use `POST /registers/{id}/decommission` to retire a fiscalized register. This tears down the regime-specific fiscal components and marks the register as `decommissioned`.
+
+```bash
+curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/decommission \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "X-OpenFiskal-Merchant: merchant_01HXYZ"
+```
+
+Registers with open operations cannot be decommissioned (`409 decommission_conflict`). Complete or void them first.
 
 ## Operational guidance
 
 - Keep `external_id` aligned with the register identifier in your own POS platform
 - Capture the operator identity at runtime on the operation, not on the register resource
 - Do not recycle a register for a different physical checkout if you need clean audit history
-- Prefer inactivation over deletion when you want to preserve historical references
+- Prefer decommissioning over deletion when you want to preserve historical references
 
 ## Listing and lookup
 

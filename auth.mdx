@@ -18,12 +18,28 @@ Create API keys in the tenant dashboard. Each key is tenant-scoped and country-s
   Store the key in your secrets manager. Treat it like any other production secret.
 </Warning>
 
+## Key format
+
+Keys follow the pattern `of_{environment}_{country}_{random}` where:
+
+- `environment` is `test` (sandbox) or `live` (production)
+- `country` is the lowercase ISO 3166-1 alpha-3 country code (e.g. `deu`, `aut`)
+- `random` is the opaque secret portion
+
+Examples:
+
+- `of_test_deu_abcdefgh12345678` — sandbox key for Germany
+- `of_live_deu_…` — production key for Germany
+- `of_test_aut_…` — sandbox key for Austria
+
+The embedded country scopes every request. A `deu` key cannot create merchants in Austria.
+
 ## Use the standard authorization header
 
 Although the credential is an API key, the API uses the standard HTTP bearer pattern:
 
 ```bash
--H "Authorization: Bearer ofk_live_abc123..."
+-H "Authorization: Bearer of_live_deu_abc123..."
 ```
 
 This keeps the API compatible with standard API tooling, gateways, proxies, and security middleware.
@@ -42,7 +58,7 @@ Together, a typical merchant-scoped request looks like this:
 
 ```bash
 curl https://api.openfiskal.com/v1/operations \
-  -H "Authorization: Bearer ofk_live_abc123..." \
+  -H "Authorization: Bearer of_live_deu_abc123..." \
   -H "X-OpenFiskal-Merchant: merchant_01HXYZ"
 ```
 
@@ -51,8 +67,6 @@ Merchant-scoped resources include:
 - Locations
 - Registers
 - Operations
-- Exports
-- Receipts
 
 You do not need `X-OpenFiskal-Merchant` when you create, update, delete, or read the merchant itself.
 
@@ -62,14 +76,14 @@ For mutating requests that create or finalize state, send an `Idempotency-Key` h
 
 ```bash
 curl -X POST https://api.openfiskal.com/v1/operations \
-  -H "Authorization: Bearer ofk_live_abc123..." \
+  -H "Authorization: Bearer of_live_deu_abc123..." \
   -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
   -H "Idempotency-Key: op-order-1001-start" \
   -H "Content-Type: application/json" \
   -d '{ "...": "..." }'
 ```
 
-Use idempotency keys for operation start, operation completion, operation cancellation, export creation, and receipt delivery.
+Use idempotency keys on every `POST /operations`, `PATCH /operations/{id}/complete`, and `PATCH /operations/{id}/void` request.
 
 The platform retains keys for at least 24 hours. Reusing the same key with a different payload returns `409 idempotency_key_conflict`.
 

@@ -3,7 +3,11 @@ title: "Hosted Receipts API"
 description: "Retrieve, render, and deliver hosted receipts for completed fiscalized operations."
 ---
 
-The Hosted Receipts API is the separate public surface for receipt retrieval and delivery. Use it after an operation reaches `completed` state in the fiscalization API.
+<Warning>
+  **Planned — not yet available.** The endpoints described here are not implemented in sandbox or production. This page documents the intended contract. Calls to `GET /operations/{id}/receipt`, `GET /receipts/{id}`, `GET /receipts/{id}/pdf`, and `POST /receipts/{id}/send` currently return `404 not_found`.
+</Warning>
+
+The Hosted Receipts API will be the separate public surface for receipt retrieval and delivery. Use it after an operation reaches `completed` state in the fiscalization API.
 
 <Info>
   The Hosted Receipts API uses the same server-to-server authentication model as the fiscalization API: `Authorization: Bearer ...` plus `X-OpenFiskal-Merchant`.

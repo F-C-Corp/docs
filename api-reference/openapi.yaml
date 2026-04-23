@@ -2474,6 +2474,11 @@ components:
           description: Total amount for this line item (quantity * unit_price)
         taxes:
           type: array
+          description: >-
+            One entry per VAT rate applied to this line. Required for correct
+            multi-VAT breakdown on receipts and fiscal documents (DSFinV-K
+            vat.csv, RKSV signatures). Send an empty array only for genuinely
+            tax-exempt lines.
           items:
             $ref: "#/components/schemas/LineItemTaxDto"
       required:
@@ -2481,6 +2486,7 @@ components:
         - quantity
         - unit_price
         - total_amount
+        - taxes
     CreateOperationDto:
       type: object
       properties:
