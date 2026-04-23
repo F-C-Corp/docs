@@ -1438,7 +1438,7 @@ paths:
       tags: *a11
   /operations/{operationId}/void:
     patch:
-      description: Voids an open operation before completion. Use a refund operation after completion.
+      description: Voids an open operation before completion. Use a return operation after completion.
       operationId: OperationsController_voidOperation
       parameters:
         - *a9
@@ -2352,7 +2352,7 @@ components:
           type: string
           enum:
             - sale
-            - refund
+            - return
             - exchange
         status:
           type: string
@@ -2502,7 +2502,7 @@ components:
           type: string
           enum:
             - sale
-            - refund
+            - return
             - exchange
           example: sale
         currency:
@@ -2516,7 +2516,7 @@ components:
         related_operation_id:
           type: string
           example: op_abc123
-          description: "For refunds/exchanges: the original operation ID"
+          description: "For returns/exchanges: the original sale operation ID"
         note:
           type: string
           example: Customer requested extra napkins
