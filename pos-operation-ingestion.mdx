@@ -1,6 +1,6 @@
 ---
 title: "Transaction lifecycle"
-description: "How your backend creates, updates, completes, cancels, and refunds fiscalized operations."
+description: "How your backend creates, completes, voids, and refunds fiscalized operations."
 ---
 
 ## Overview
@@ -18,28 +18,27 @@ stateDiagram-v2
     open --> cancelled
 ```
 
-- `open` means the basket or order is still being assembled
-- `completed` means the fiscal event is final
-- `cancelled` means the operation was intentionally voided before completion
+- `open` — the operation has been created but not finalized
+- `completed` — the fiscal event is final and immutable
+- `cancelled` — the operation was voided before completion
 
-OpenFiskal owns this lifecycle. Clients do not send operation `status` in request payloads. They update mutable operation fields through `PATCH /operations/{operationId}`, complete the operation through `PATCH /operations/{operationId}/complete`, and cancel it through `PATCH /operations/{operationId}/cancel`.
+OpenFiskal owns this lifecycle. Clients do not send operation `status` in request payloads. They complete operations through `PATCH /operations/{operationId}/complete` and void them through `PATCH /operations/{operationId}/void`.
 
-Use a dedicated cancel action on the existing operation resource. Do not model cancellation as a separate operation type.
+<Warning>
+  The current API has **no generic `PATCH /operations/{id}`** endpoint. Operation bodies are immutable after `POST /operations`. Build the full line-item and amount set before creating the operation.
+</Warning>
 
 ## Operation types
-
-The public API currently supports these operation types:
 
 | Type | When to use it |
 | --- | --- |
 | `sale` | Standard sale flow |
-| `refund` | Return against an earlier sale |
+| `refund` | Return against an earlier sale (set `related_operation_id`) |
 | `exchange` | Return plus replacement in a single operation |
-| `custom` | Platform-specific fiscal event that still needs to be recorded |
 
 ## Start an operation
 
-Create operations with `POST /operations`. The request includes a `source` field with `POS` or `ONLINE`, an `external_id` from your own system, and a typed operation variant in `data`, such as `SaleOperation` or `RefundOperation`. The response returns the operation resource, a `resource_version`, and an `ETag` header.
+Create operations with `POST /operations`. The request is flat — `source` (`POS` or `ONLINE`), `type` (`sale` / `refund` / `exchange`), `currency`, all four amount fields (`pretax_amount`, `tax_amount`, `tip_amount`, `total_amount`) as decimal strings, and `line_items`. `register_id` is required for `POS`, must be omitted for `ONLINE`. The response returns the operation resource, a `resource_version`, and an `ETag` header.
 
 ```bash
 curl -X POST https://api.openfiskal.com/v1/operations \
@@ -50,20 +49,9 @@ curl -X POST https://api.openfiskal.com/v1/operations \
   -d '{ "...": "..." }'
 ```
 
-## Update an open operation
-
-Use `PATCH /operations/{operationId}` while the operation is still mutable. Send the latest `ETag` value in `If-Match`. This endpoint updates fiscal inputs such as amounts, line items, or related references. It does not accept a client-supplied operation `status`.
-
-This makes retries and concurrent writers safe:
-
-- the server owns the version
-- every successful mutation returns a new `resource_version` and `ETag`
-- the client retries with the same idempotency key where supported
-- stale writers receive `412 precondition_failed`
-
 ## Complete an operation
 
-Use `PATCH /operations/{operationId}/complete` when you want OpenFiskal to produce the final fiscal document and receipt state. Completion now accepts a typed `payments` array and can return `fiscal_information` for regime-specific fiscal payloads. Asynchronous payment follow-up is represented through payment-level status values, not a separate operation status.
+Use `PATCH /operations/{operationId}/complete` when you want OpenFiskal to produce the final fiscal document and receipt state. Completion accepts a typed `payments` array and returns `fiscal_information` for regime-specific fiscal payloads. Send the latest `ETag` in `If-Match`.
 
 Completion is a fiscal event. Use an idempotency key on every completion request.
 
@@ -73,16 +61,27 @@ Completion is a fiscal event. Use an idempotency key on every completion request
 
 ```json
 {
+  "register_id": "reg_01HXYZ",
   "source": "POS",
-  "data": {
-    "type": "sale",
-    "currency": "EUR",
-    "amount": 4750
-  }
+  "type": "sale",
+  "currency": "EUR",
+  "pretax_amount": "44.39",
+  "tax_amount": "3.11",
+  "tip_amount": "0.00",
+  "total_amount": "47.50",
+  "line_items": [
+    {
+      "title": "Menu",
+      "quantity": 1,
+      "unit_price": "47.50",
+      "total_amount": "47.50",
+      "taxes": [{ "name": "MwSt. 7%", "rate": "0.07", "tax_amount": "3.11" }]
+    }
+  ]
 }
 ```
 
-### Split tender
+### Split tender (on completion)
 
 ```json
 {
@@ -91,14 +90,14 @@ Completion is a fiscal event. Use an idempotency key on every completion request
       "payment_id": "pay_cash_1001",
       "method": "cash",
       "status": "captured",
-      "amount": 1500,
+      "amount": "15.00",
       "currency": "EUR"
     },
     {
       "payment_id": "pay_card_1001",
       "method": "card",
       "status": "captured",
-      "amount": 3250,
+      "amount": "32.50",
       "currency": "EUR"
     }
   ]
@@ -109,25 +108,36 @@ Completion is a fiscal event. Use an idempotency key on every completion request
 
 ```json
 {
+  "register_id": "reg_01HXYZ",
   "source": "POS",
-  "data": {
-    "type": "refund",
-    "related_operation_id": "op_01HSALE",
-    "currency": "EUR",
-    "amount": 1200
-  }
+  "type": "refund",
+  "currency": "EUR",
+  "related_operation_id": "op_01HSALE",
+  "pretax_amount": "11.21",
+  "tax_amount": "0.79",
+  "tip_amount": "0.00",
+  "total_amount": "12.00",
+  "line_items": [
+    {
+      "title": "Menu (refund)",
+      "quantity": 1,
+      "unit_price": "12.00",
+      "total_amount": "12.00",
+      "taxes": [{ "name": "MwSt. 7%", "rate": "0.07", "tax_amount": "0.79" }]
+    }
+  ]
 }
 ```
 
-## Cancel an open operation
+## Void an open operation
 
-Use `PATCH /operations/{operationId}/cancel` only while the operation is still open.
+Use `PATCH /operations/{operationId}/void` only while the operation is still `open`. The endpoint is named `/void`, not `/cancel`.
 
 ```bash
-curl -X PATCH https://api.openfiskal.com/v1/operations/op_01HXYZ/cancel \
+curl -X PATCH https://api.openfiskal.com/v1/operations/op_01HXYZ/void \
   -H "Authorization: Bearer $API_KEY" \
   -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
-  -H "Idempotency-Key: op-order-1001-cancel" \
+  -H "Idempotency-Key: op-order-1001-void" \
   -H 'If-Match: "1"' \
   -H "Content-Type: application/json" \
   -d '{
@@ -135,7 +145,9 @@ curl -X PATCH https://api.openfiskal.com/v1/operations/op_01HXYZ/cancel \
   }'
 ```
 
-Completed operations remain completed. This cancel action is not a replacement for refund or reversal workflows.
+Allowed `reason` values: `void_before_completion`, `customer_abandoned_checkout`, `operator_cancelled`, `payment_failed`.
+
+Completed operations remain completed. Voiding is not a replacement for refund or reversal — use `type: refund` for that.
 
 ## Concurrency model
 
@@ -144,12 +156,12 @@ Use conditional writes with server-issued versions:
 - create or read the operation
 - persist the returned `ETag`
 - treat `resource_version` in the body and `ETag` in the header as the same server-issued version
-- send that value in `If-Match` on the next mutation
+- send that value in `If-Match` on the next mutation (`/complete` or `/void`)
 - replace your stored version after every successful mutation
 - re-read on `412 precondition_failed`
+- a missing `If-Match` returns `428 precondition_required`
 
 ## Next steps
 
 - [Payment lifecycle](/payment-lifecycle)
 - [Offline guidance](/offline-guidance)
-- [Hosted Receipts API](/hosted-receipts-api)

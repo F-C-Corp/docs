@@ -3,6 +3,10 @@ title: "Getting Started"
 description: "How to use export jobs and obtain country-specific fiscal exports."
 ---
 
+<Warning>
+  **Planned — not yet available.** The export endpoints described here are not implemented in sandbox or production. Calls to `POST /exports`, `GET /exports`, and `GET /exports/{id}` currently return `404 not_found`. This page documents the intended contract.
+</Warning>
+
 ## Overview
 
 Exports are asynchronous. You create an export job, poll it until the artifact is ready, then download the file before the retention deadline.
@@ -27,7 +31,7 @@ Every export requires a `type`, `register_id`, and a time range.
   <Tab title="Germany — DSFinV-K">
     ```bash
     curl -X POST https://sandbox.api.openfiskal.com/v1/exports \
-      -H "Authorization: Bearer ofk_test_abc123" \
+      -H "Authorization: Bearer of_test_deu_abc123..." \
       -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
       -H "Idempotency-Key: dsfinvk-2026-03" \
       -H "Content-Type: application/json" \
@@ -44,7 +48,7 @@ Every export requires a `type`, `register_id`, and a time range.
   <Tab title="Germany — TSE data">
     ```bash
     curl -X POST https://sandbox.api.openfiskal.com/v1/exports \
-      -H "Authorization: Bearer ofk_test_abc123" \
+      -H "Authorization: Bearer of_test_deu_abc123..." \
       -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
       -H "Idempotency-Key: tse-2026-03" \
       -H "Content-Type: application/json" \
@@ -61,7 +65,7 @@ Every export requires a `type`, `register_id`, and a time range.
   <Tab title="Austria — DEP7">
     ```bash
     curl -X POST https://sandbox.api.openfiskal.com/v1/exports \
-      -H "Authorization: Bearer ofk_test_abc123" \
+      -H "Authorization: Bearer of_test_deu_abc123..." \
       -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
       -H "Idempotency-Key: dep7-2026-03" \
       -H "Content-Type: application/json" \
