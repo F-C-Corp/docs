@@ -141,9 +141,15 @@ Send the **net delta** — the amounts that actually move at the register after 
 - `total_amount` negative — merchant refunds the difference
 - `total_amount` zero — even swap, no money moves
 
-Include both the returned and replacement items in the same `line_items` array. Use negative `unit_price` and `total_amount` for returned items, positive for replacements, and set each item's taxes to match. OpenFiskal aggregates per VAT rate when it builds the signing payload, so the signed amounts reflect the net movement per rate.
+Include both the returned and replacement items in the same `line_items` array. Use negative `unit_price` and `total_amount` for returned items, positive for replacements, and set each item's taxes to match. Keep this sign convention on the line items regardless of whether the net delta is positive or negative — the net delta only changes the operation-level `pretax_amount`, `tax_amount`, and `total_amount`. OpenFiskal aggregates per VAT rate when it builds the signing payload, so the signed amounts reflect the net movement per rate.
+
+The operation amounts must remain arithmetically consistent: `pretax_amount + tax_amount + tip_amount = total_amount`. When the net delta is negative, all three of `pretax_amount`, `tax_amount`, and `total_amount` are negative.
 
 `related_operation_id` is required and points at the original `sale` being exchanged against.
+
+<Note>
+  This differs from `type: return`, where you send the return value as positive amounts and OpenFiskal negates them internally for the fiscal signature. `type: exchange` uses caller-supplied signs throughout — the API passes them through.
+</Note>
 
 ### Customer pays the difference
 
@@ -197,7 +203,53 @@ Complete with a single €50 payment:
 
 ### Merchant refunds the difference
 
-Invert the sign on `total_amount`, the line items, and the payment. Set `payment.status` to `refunded`.
+Customer returns a €150 item and picks up a €100 item. Net delta: merchant refunds €10 — so `total_amount`, `pretax_amount`, and `tax_amount` are negative, but the line items keep the standard sign convention (returned item negative, replacement positive).
+
+```json
+{
+  "register_id": "reg_01HXYZ",
+  "source": "POS",
+  "type": "exchange",
+  "currency": "EUR",
+  "related_operation_id": "op_01HSALE",
+  "pretax_amount": "-8.40",
+  "tax_amount": "-1.60",
+  "tip_amount": "0.00",
+  "total_amount": "-10.00",
+  "line_items": [
+    {
+      "title": "Widget Pro (returned)",
+      "quantity": 1,
+      "unit_price": "-60.00",
+      "total_amount": "-60.00",
+      "taxes": [{ "name": "MwSt. 19%", "rate": "0.19", "tax_amount": "-9.58" }]
+    },
+    {
+      "title": "Widget (replacement)",
+      "quantity": 1,
+      "unit_price": "50.00",
+      "total_amount": "50.00",
+      "taxes": [{ "name": "MwSt. 19%", "rate": "0.19", "tax_amount": "7.98" }]
+    }
+  ]
+}
+```
+
+Complete with a single negative-amount payment. Keep `status: "captured"` — the payment still counts toward the operation total under the [split-tender sum rule](/payment-lifecycle#split-tender). The negative sign encodes the refund direction.
+
+```json
+{
+  "payments": [
+    {
+      "payment_id": "pay_exch_refund_1001",
+      "method": "card",
+      "status": "captured",
+      "amount": "-10.00",
+      "currency": "EUR"
+    }
+  ]
+}
+```
 
 ### Cross-VAT exchanges
 
