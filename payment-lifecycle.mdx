@@ -5,7 +5,7 @@ description: "How to report payments, split tender, and asynchronous settlement 
 
 ## Overview
 
-Each payment entry represents one authorization, cash leg, voucher redemption, or refund settlement leg. Payments are supplied on `PATCH /operations/{id}/complete`; they cannot be reported before completion.
+Each payment entry represents one authorization, cash leg, voucher redemption, or return settlement leg. Payments are supplied on `PATCH /operations/{id}/complete`; they cannot be reported before completion.
 
 ## Payment enums
 
@@ -55,13 +55,9 @@ Some payment methods settle after the operation is fiscally completed. In that c
 - poll the operation resource for later state changes when needed
 - retain the processor and payment references for reconciliation
 
-## Refunds against prior sales
+## Returns on prior sales
 
-A refund is a **new operation** with `type: refund` and `related_operation_id` set to the original sale's operation ID. The refund's `payments` array on completion describes the settlement legs that returned money to the customer.
-
-<Note>
-  The current contract does not include a `related_payment_id` field or a `partially_approved` payment status. Acquirer partial approvals must be modelled by the integrator as multiple payment legs whose captured amounts sum to the operation total.
-</Note>
+A return is a **new operation** with `type: return` and `related_operation_id` set to the original sale's operation ID. The return's `payments` array on completion describes the settlement legs that returned money to the customer.
 
 ## Next steps
 

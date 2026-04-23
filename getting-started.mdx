@@ -128,7 +128,7 @@ Once your register is fiscalized, you can create and complete sale operations.
 
 <Steps>
   <Step title="Start an operation">
-    `POST /operations` is a single-shot create. The body is flat (no `data` wrapper). All monetary fields are decimal strings, not integers. `pretax_amount + tax_amount + tip_amount` must equal `total_amount`. `line_items` is required with at least one entry. `location_id` is not sent — the server derives it from the register.
+    `POST /operations` is a single-shot create. All monetary fields are decimal strings, not integers. `pretax_amount + tax_amount + tip_amount` must equal `total_amount`. `line_items` is required with at least one entry.
 
     ```bash
     curl -X POST https://sandbox.api.openfiskal.com/v1/operations \
@@ -142,8 +142,8 @@ Once your register is fiscalized, you can create and complete sale operations.
         "type": "sale",
         "currency": "EUR",
         "external_id": "order-1001",
-        "pretax_amount": "39.92",
-        "tax_amount": "2.58",
+        "pretax_amount": "39.72",
+        "tax_amount": "2.78",
         "tip_amount": "0.00",
         "total_amount": "42.50",
         "line_items": [
@@ -153,7 +153,7 @@ Once your register is fiscalized, you can create and complete sale operations.
             "unit_price": "42.50",
             "total_amount": "42.50",
             "taxes": [
-              { "name": "MwSt. 7%", "rate": "0.07", "tax_amount": "2.58" }
+              { "name": "MwSt. 7%", "rate": "0.07", "tax_amount": "2.78" }
             ]
           }
         ]
@@ -184,8 +184,8 @@ Once your register is fiscalized, you can create and complete sale operations.
       "status": "open",
       "type": "sale",
       "currency": "EUR",
-      "pretax_amount": "39.92",
-      "tax_amount": "2.58",
+      "pretax_amount": "39.72",
+      "tax_amount": "2.78",
       "tip_amount": "0.00",
       "total_amount": "42.50",
       "line_items": [
@@ -196,7 +196,7 @@ Once your register is fiscalized, you can create and complete sale operations.
           "unit_price": "42.50",
           "total_amount": "42.50",
           "taxes": [
-            { "id": "lit_01HXYZ", "name": "MwSt. 7%", "rate": "0.07", "tax_amount": "2.58" }
+            { "id": "lit_01HXYZ", "name": "MwSt. 7%", "rate": "0.07", "tax_amount": "2.78" }
           ]
         }
       ],
@@ -292,7 +292,7 @@ Once your register is fiscalized, you can create and complete sale operations.
   </Step>
 </Steps>
 
-## Cancel an open operation
+## Void an open operation
 
 If the sale is abandoned before completion, void the open operation:
 
@@ -306,7 +306,7 @@ curl -X PATCH https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ/void \
   -d '{ "reason": "void_before_completion" }'
 ```
 
-Completed operations cannot be voided — use a `refund` operation instead.
+Completed operations cannot be voided — use a `return` operation instead.
 
 ## Next steps
 
