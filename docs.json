@@ -70,6 +70,10 @@
   "navbar": {
     "links": [
       {
+        "label": "OpenAPI spec",
+        "href": "https://api.openfiskal.com/openapi-json"
+      },
+      {
         "label": "Support",
         "href": "mailto:support@openfiskal.com"
       }
