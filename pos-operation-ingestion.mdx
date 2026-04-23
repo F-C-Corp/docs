@@ -129,6 +129,84 @@ Completion is a fiscal event. Use an idempotency key on every completion request
 }
 ```
 
+## Exchanges
+
+An exchange is a goods swap — the customer returns one or more items and receives replacements in the same transaction. OpenFiskal signs an exchange as a single fiscal event against the register.
+
+### The mental model
+
+Send the **net delta** — the amounts that actually move at the register after the returned items are offset against the replacements. The sign of each amount drives the fiscal signature:
+
+- `total_amount` positive — customer pays the difference
+- `total_amount` negative — merchant refunds the difference
+- `total_amount` zero — even swap, no money moves
+
+Include both the returned and replacement items in the same `line_items` array. Use negative `unit_price` and `total_amount` for returned items, positive for replacements, and set each item's taxes to match. OpenFiskal aggregates per VAT rate when it builds the signing payload, so the signed amounts reflect the net movement per rate.
+
+`related_operation_id` is required and points at the original `sale` being exchanged against.
+
+### Customer pays the difference
+
+Customer returns a €100 item and picks up a €150 item. Net delta: customer pays €50.
+
+```json
+{
+  "register_id": "reg_01HXYZ",
+  "source": "POS",
+  "type": "exchange",
+  "currency": "EUR",
+  "related_operation_id": "op_01HSALE",
+  "pretax_amount": "42.02",
+  "tax_amount": "7.98",
+  "tip_amount": "0.00",
+  "total_amount": "50.00",
+  "line_items": [
+    {
+      "title": "Widget (returned)",
+      "quantity": 1,
+      "unit_price": "-100.00",
+      "total_amount": "-100.00",
+      "taxes": [{ "name": "MwSt. 19%", "rate": "0.19", "tax_amount": "-15.97" }]
+    },
+    {
+      "title": "Widget Pro (replacement)",
+      "quantity": 1,
+      "unit_price": "150.00",
+      "total_amount": "150.00",
+      "taxes": [{ "name": "MwSt. 19%", "rate": "0.19", "tax_amount": "23.95" }]
+    }
+  ]
+}
+```
+
+Complete with a single €50 payment:
+
+```json
+{
+  "payments": [
+    {
+      "payment_id": "pay_exch_1001",
+      "method": "card",
+      "status": "captured",
+      "amount": "50.00",
+      "currency": "EUR"
+    }
+  ]
+}
+```
+
+### Merchant refunds the difference
+
+Invert the sign on `total_amount`, the line items, and the payment. Set `payment.status` to `refunded`.
+
+### Cross-VAT exchanges
+
+If the returned and replacement items sit at different VAT rates — for example, a 19% item returned and a 0% item taken in its place — send each line item with its own rate. The signed fiscal payload will carry a negative amount in one VAT bucket and a positive amount in the other. This is the correct representation and is preserved in the KassenSichV QR code and DSFinV-K export.
+
+### Even swaps
+
+For a zero-net exchange, send `total_amount: "0.00"` and a single payment with `amount: "0.00"`. The API requires at least one payment entry on completion.
+
 ## Void an open operation
 
 Use `PATCH /operations/{operationId}/void` only while the operation is still `open`. The endpoint is named `/void`, not `/cancel`.
