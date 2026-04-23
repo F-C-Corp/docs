@@ -1402,9 +1402,10 @@ paths:
                   summary: precondition_failed
                   value:
                     code: precondition_failed
-                    message: The supplied If-Match value is stale.
+                    message: Resource version mismatch.
                     retryable: true
                     details:
+                      expected_resource_version: 1
                       current_resource_version: 2
         "422":
           description: Domain validation failed
@@ -1547,9 +1548,10 @@ paths:
                   summary: precondition_failed
                   value:
                     code: precondition_failed
-                    message: The supplied If-Match value is stale.
+                    message: Resource version mismatch.
                     retryable: true
                     details:
+                      expected_resource_version: 1
                       current_resource_version: 2
         "422":
           description: Domain validation failed
@@ -2357,7 +2359,7 @@ components:
           enum:
             - open
             - completed
-            - cancelled
+            - voided
         currency:
           type: string
           description: ISO 4217 currency code.
