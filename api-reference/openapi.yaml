@@ -2067,14 +2067,8 @@ components:
         signed_at:
           type: string
           format: date-time
-        transaction_counter:
-          type: number
-        signature:
-          type: string
       required:
         - signed_at
-        - transaction_counter
-        - signature
     FiscalInformationKassenSichVEndEvent:
       type: object
       properties:
@@ -2085,6 +2079,8 @@ components:
           type: number
         signature:
           type: string
+        public_key:
+          type: string
         process_type:
           type: string
         process_data:
@@ -2093,6 +2089,7 @@ components:
         - signed_at
         - transaction_counter
         - signature
+        - public_key
         - process_type
         - process_data
     FiscalInformationKassenSichVVerification:
@@ -2113,9 +2110,9 @@ components:
           type: string
         document_type:
           type: string
-        tse_serial:
+        tss_serial_number:
           type: string
-        client_id:
+        pos_client_serial_number:
           type: string
         signature_algorithm:
           type: string
@@ -2131,8 +2128,8 @@ components:
         - regime
         - document_number
         - document_type
-        - tse_serial
-        - client_id
+        - tss_serial_number
+        - pos_client_serial_number
         - signature_algorithm
         - time_format
         - start_event
