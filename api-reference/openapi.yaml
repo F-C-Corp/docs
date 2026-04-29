@@ -612,6 +612,10 @@ paths:
       tags: *a5
   /registers/{registerId}/fiscalize:
     post:
+      description: |-
+        Enqueues fiscalization for the register and returns immediately with `202 Accepted`. Provisioning of the TSS and client happens asynchronously in the background.
+
+        The register transitions through `fiscalization_status`: `pending` → `fiscalized` (or `failed`). Poll `GET /registers/{registerId}` until `fiscalization_status` is `fiscalized` before sending operations to the register.
       operationId: RegistersController_fiscalize
       parameters:
         - *a3
