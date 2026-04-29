@@ -33,8 +33,15 @@ OpenFiskal owns this lifecycle. Clients do not send operation `status` in reques
 | Type | When to use it |
 | --- | --- |
 | `sale` | Standard sale flow |
-| `return` | Return against an earlier sale (set `related_operation_id`) |
-| `exchange` | Return plus replacement in a single operation |
+| `return` | Return against an earlier sale (set `related_operation_id` or `external_related_operation`) |
+| `exchange` | Return plus replacement in a single operation (set `related_operation_id` or `external_related_operation`) |
+
+Every `return` and `exchange` must reference the original sale. Set exactly one of:
+
+- `related_operation_id` — when the original sale exists in OpenFiskal as an operation.
+- `external_related_operation` — when the original sale lives outside OpenFiskal (typical during platform migration). The object carries `description` (free-text identifying the upstream sale) and `external_operation_id` (the integrator-side identifier, e.g. the legacy POS or Shopify order ID).
+
+Sending both fields, or neither, is rejected with `422 unprocessable_entity`. `sale` operations must not set either.
 
 ### Sign convention
 
@@ -145,6 +152,36 @@ All amounts are negative: the customer is getting €12 back, goods are flowing 
 }
 ```
 
+### Return against an external sale
+
+Use `external_related_operation` when the original sale was rung up before the merchant moved onto OpenFiskal — typically a platform migration. The body is otherwise identical to a normal return; swap `related_operation_id` for the nested object.
+
+```json
+{
+  "register_id": "reg_01HXYZ",
+  "source": "POS",
+  "type": "return",
+  "currency": "EUR",
+  "external_related_operation": {
+    "description": "Return against legacy Shopify order #4711 (pre-OpenFiskal).",
+    "external_operation_id": "shopify-order-4711"
+  },
+  "pretax_amount": "-11.21",
+  "tax_amount": "-0.79",
+  "tip_amount": "0.00",
+  "total_amount": "-12.00",
+  "line_items": [
+    {
+      "title": "Menu (return)",
+      "quantity": 1,
+      "unit_price": "-12.00",
+      "total_amount": "-12.00",
+      "taxes": [{ "name": "MwSt. 7%", "rate": "0.07", "tax_amount": "-0.79" }]
+    }
+  ]
+}
+```
+
 ## Exchanges
 
 An exchange is a goods swap — the customer returns one or more items and receives replacements in the same transaction. OpenFiskal signs an exchange as a single fiscal event against the register.
@@ -161,7 +198,7 @@ Include both the returned and replacement items in the same `line_items` array. 
 
 The operation amounts must remain arithmetically consistent: `pretax_amount + tax_amount + tip_amount = total_amount`. When the net delta is negative, all three of `pretax_amount`, `tax_amount`, and `total_amount` are negative.
 
-`related_operation_id` is required and points at the original `sale` being exchanged against.
+An exchange must reference the original `sale`. Set `related_operation_id` when the prior sale lives in OpenFiskal, or `external_related_operation` when it lives in a legacy system (see [Return against an external sale](#return-against-an-external-sale)).
 
 ### Customer pays the difference
 
