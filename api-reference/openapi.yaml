@@ -1586,6 +1586,161 @@ paths:
       security: *a10
       summary: Void operation
       tags: *a11
+  /exports:
+    post:
+      description: "Enqueues an asynchronous export job and returns immediately with `202 Accepted` and `status: pending`. Poll `GET /exports/{exportId}` until `status` is `completed` (then `download_url` is set) or `failed`."
+      operationId: ExportsController_create
+      parameters:
+        - &a12
+          name: X-OpenFiskal-Merchant
+          in: header
+          description: Merchant identifier returned by the merchants resource.
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateExportDto"
+      responses:
+        "202":
+          description: Export job enqueued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Export"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: invalid_request
+                  value:
+                    code: invalid_request
+                    message: The request body is malformed.
+                    retryable: false
+        "401":
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: unauthorized
+                  value:
+                    code: unauthorized
+                    message: Authentication failed.
+                    retryable: false
+        "403":
+          description: Authenticated caller is not allowed to access the requested tenant, country, or merchant.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: forbidden
+                  value:
+                    code: forbidden
+                    message: The authenticated caller cannot access this resource.
+                    retryable: false
+        "404":
+          description: Register not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: not_found
+                  value:
+                    code: not_found
+                    message: The requested resource does not exist.
+                    retryable: false
+        "422":
+          description: Domain validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: regime_validation_failed
+                  value:
+                    code: regime_validation_failed
+                    message: The payload violates regime-specific validation rules.
+                    retryable: false
+      security: &a13
+        - BearerAuth: []
+      summary: Trigger an export
+      tags: &a14
+        - Exports
+  /exports/{exportId}:
+    get:
+      description: Returns the export job. When `status` is `completed`, `download_url` is a signed URL to fetch the artifact. When `status` is `failed`, `error.message` (and optional `error.details`) describe why.
+      operationId: ExportsController_get
+      parameters:
+        - *a12
+        - name: exportId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Export job returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Export"
+        "401":
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: unauthorized
+                  value:
+                    code: unauthorized
+                    message: Authentication failed.
+                    retryable: false
+        "403":
+          description: Authenticated caller is not allowed to access the requested tenant, country, or merchant.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: forbidden
+                  value:
+                    code: forbidden
+                    message: The authenticated caller cannot access this resource.
+                    retryable: false
+        "404":
+          description: Export not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: not_found
+                  value:
+                    code: not_found
+                    message: The requested resource does not exist.
+                    retryable: false
+      security: *a13
+      summary: Retrieve an export
+      tags: *a14
 info:
   title: OpenFiskal fiscalization API
   description: |-
@@ -2249,6 +2404,18 @@ components:
         - progressive_number
         - daily_closing_number
         - signature
+    ExternalRelatedOperation:
+      type: object
+      properties:
+        description:
+          type: string
+          description: Free-text description identifying the external sale being returned/exchanged against.
+        external_operation_id:
+          type: string
+          description: The integrator-side identifier of the original sale in the external system.
+      required:
+        - description
+        - external_operation_id
     LineItemTax:
       type: object
       properties:
@@ -2377,6 +2544,11 @@ components:
         related_operation_id:
           type: string
           nullable: true
+        external_related_operation:
+          nullable: true
+          description: Set when a return/exchange references a sale that lives outside OpenFiskal (e.g. legacy platform). Mutually exclusive with `related_operation_id`.
+          allOf:
+            - $ref: "#/components/schemas/ExternalRelatedOperation"
         note:
           type: string
           nullable: true
@@ -2444,6 +2616,20 @@ components:
         - payments
         - created_at
         - updated_at
+    ExternalRelatedOperationDto:
+      type: object
+      properties:
+        description:
+          type: string
+          example: Return against order from external platform.
+          description: Free-text description identifying the external sale being returned/exchanged against.
+        external_operation_id:
+          type: string
+          example: shopify-order-4711
+          description: The integrator-side identifier of the original sale in the external system.
+      required:
+        - description
+        - external_operation_id
     LineItemTaxDto:
       type: object
       properties:
@@ -2522,7 +2708,11 @@ components:
         related_operation_id:
           type: string
           example: op_abc123
-          description: "For returns/exchanges: the original sale operation ID"
+          description: "For returns/exchanges: the OpenFiskal operation ID of the original sale. Exactly one of `related_operation_id` or `external_related_operation` must be set."
+        external_related_operation:
+          description: For returns/exchanges of sales that were never ingested into OpenFiskal (typically during platform migration). Exactly one of `related_operation_id` or `external_related_operation` must be set.
+          allOf:
+            - $ref: "#/components/schemas/ExternalRelatedOperationDto"
         note:
           type: string
           example: Customer requested extra napkins
@@ -2642,3 +2832,90 @@ components:
           description: Reason for voiding the operation
       required:
         - reason
+    ExportType:
+      type: string
+      enum:
+        - dsfinvk
+      description: Country-specific fiscal export type.
+    CreateExportDto:
+      type: object
+      properties:
+        type:
+          example: dsfinvk
+          description: Country-specific fiscal export type.
+          allOf:
+            - $ref: "#/components/schemas/ExportType"
+        register_id:
+          type: string
+          example: reg_01HABC
+          description: Optional register to scope the export to. When omitted, the export covers all eligible registers for the merchant under the matching fiscal regime.
+        from:
+          type: string
+          format: date-time
+          example: 2026-03-01T00:00:00Z
+        to:
+          type: string
+          format: date-time
+          example: 2026-03-31T23:59:59Z
+      required:
+        - type
+        - from
+        - to
+    ExportError:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Human-readable failure description.
+        details:
+          type: object
+          nullable: true
+          description: Structured error payload (e.g. provider error response). Shape varies by export type.
+      required:
+        - message
+    Export:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          allOf:
+            - $ref: "#/components/schemas/ExportType"
+        status:
+          type: string
+          enum:
+            - pending
+            - completed
+            - failed
+        register_id:
+          type: string
+          nullable: true
+        from:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
+        download_url:
+          type: string
+          nullable: true
+          description: Signed URL to download the export artifact. Present only when status is `completed`.
+        error:
+          nullable: true
+          description: Failure information. Present only when status is `failed`.
+          allOf:
+            - $ref: "#/components/schemas/ExportError"
+        created_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - type
+        - status
+        - from
+        - to
+        - created_at
