@@ -1,4 +1,23 @@
 openapi: 3.0.0
+info:
+  title: OpenFiskal reporting API
+  description: |-
+    Country-specific fiscal export endpoints for compliance reporting.
+
+    Exports are asynchronous: create a job, poll until ready, then download
+    the artifact before the retention deadline.
+  version: 1.1.0
+  contact: {}
+  license:
+    name: Proprietary
+servers:
+  - url: https://api.openfiskal.com/v1
+    description: Production
+  - url: https://sandbox.api.openfiskal.com/v1
+    description: Sandbox
+tags:
+  - name: Exports
+    description: Create and inspect asynchronous fiscal export jobs.
 paths:
   /exports:
     post:
@@ -155,25 +174,6 @@ paths:
       security: *a2
       summary: Retrieve an export
       tags: *a3
-info:
-  title: OpenFiskal reporting API
-  description: |-
-    Country-specific fiscal export endpoints for compliance reporting.
-
-    Exports are asynchronous: create a job, poll until ready, then download
-    the artifact before the retention deadline.
-  version: 1.1.0
-  contact: {}
-  license:
-    name: Proprietary
-tags:
-  - name: Exports
-    description: Create and inspect asynchronous fiscal export jobs.
-servers:
-  - url: https://api.openfiskal.com/v1
-    description: Production
-  - url: https://sandbox.api.openfiskal.com/v1
-    description: Sandbox
 components:
   securitySchemes:
     BearerAuth:
