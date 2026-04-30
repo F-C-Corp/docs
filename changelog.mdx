@@ -4,6 +4,28 @@ description: "API contract updates to the OpenFiskal Fiscalization API."
 rss: true
 ---
 
+<Update label="April 30, 2026" description="Fiscalization API" tags={["Breaking", "Addition"]}>
+  **Register sessions: new operation types + session-bound POS operations**
+
+  Three new operation types model the cash-drawer shift on a fiscalized register:
+
+  - `session_open` — start a shift with a counted opening float
+  - `session_cash_adjustment` — record mid-shift cash movement (drop, pay-in, correction)
+  - `session_close` — end the shift with a merchant-counted closing balance
+
+  All three flow through `POST /operations` (no separate sessions endpoint) and carry the same `resource_version` / `ETag` mechanics as goods-movement operations. They are born `status: "completed"` — there is no `PATCH .../complete` step for session events.
+
+  **Breaking — POS goods-movement now requires an open session.** Sending `POST /operations` with `source: "POS"` on a register that has no open session is rejected with `409 no_open_session`. Open the register's session with `session_open` before posting POS sales, returns, or exchanges. At most one open session per register; opening a second while one is open returns `409 session_invalid_state`.
+
+  **New field — `session_id` on operation responses.** Every operation response now carries `session_id` on the envelope. For POS goods-movement, it's the session the operation was rung up during. For session-event variants, it's the session being opened/adjusted/closed. For `ONLINE` goods-movement (no register), it's `null`.
+
+  **Breaking — `GET /operations/{id}` is now a discriminated union on `type`.** Six variants: `SaleOperation`, `ReturnOperation`, `ExchangeOperation`, `SessionOpenOperation`, `SessionCashAdjustmentOperation`, `SessionCloseOperation`. Each variant carries only the fields meaningful to its type — `SESSION_*` responses no longer include zero-padded `pretax_amount` / `total_amount` / `line_items` / `payments` / `fiscal_information`, and goods-movement responses no longer include `null` `session_*_details` placeholders. `SALE` responses also drop the always-null `related_operation_id` and `external_related_operation`.
+
+  See [Sessions](/sessions) for the full walkthrough.
+
+  Update integrators that issue POS operations to bracket each shift with `session_open` / `session_close` before your next release.
+</Update>
+
 <Update label="April 30, 2026" description="Fiscalization API" tags={["Breaking"]}>
   **Merchant `tax_id` removed; Italian `fiscal_identity` reshaped**
 

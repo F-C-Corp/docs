@@ -49,7 +49,7 @@ curl -X POST https://api.openfiskal.com/v1/operations \
   }'
 ```
 
-The response carries the new `session_id`. Store it — every operation you send on this register until close must reference it.
+The response carries the new `session_id`. Store it — every operation you send on this register until close binds to it automatically.
 
 ```json
 {
@@ -57,11 +57,13 @@ The response carries the new `session_id`. Store it — every operation you send
   "type": "session_open",
   "register_id": "reg_abc123",
   "session_id": "ses_abc123",
-  "status": "open",
+  "status": "completed",
   "currency": "EUR",
   "resource_version": 1
 }
 ```
+
+The operation `status` is `completed` because session-event operations are final the moment OpenFiskal accepts them — there is no later `PATCH .../complete` step. Don't confuse it with the session's lifecycle state (the [`open` / `closed`](#session-states) flag tracked separately).
 
 ## Goods movements bind to the session
 
@@ -137,13 +139,15 @@ The scenario: a German bakery opens at 08:00 with a 50 EUR float, rings up two c
       "type": "session_open",
       "session_id": "ses_abc123",
       "register_id": "reg_abc123",
-      "status": "open"
+      "status": "completed"
     }
     ```
 
     Capture `ses_abc123` — every operation that follows on this register binds to it automatically.
   </Step>
   <Step title="Ring up the first sale (4.50 EUR)">
+    Open the sale:
+
     ```bash
     curl -X POST https://api.openfiskal.com/v1/operations \
       -H "Authorization: Bearer $API_KEY" \
@@ -162,18 +166,43 @@ The scenario: a German bakery opens at 08:00 with a 50 EUR float, rings up two c
         "total_amount": "4.50",
         "line_items": [
           {
-            "description": "Brötchen",
-            "quantity": "3",
-            "pretax_amount": "4.21",
-            "tax_amount": "0.29",
+            "title": "Brötchen",
+            "quantity": 3,
+            "unit_price": "1.50",
             "total_amount": "4.50",
-            "tax_rate": "7.00"
+            "taxes": [
+              { "name": "MwSt 7%", "rate": "0.07", "tax_amount": "0.29" }
+            ]
           }
         ]
       }'
     ```
 
-    The response includes `"session_id": "ses_abc123"` even though you did not send it.
+    The response carries `"session_id": "ses_abc123"` even though you did not send it, and the operation comes back with `"status": "open"`. Capture the returned `id` and `resource_version` for the complete step.
+
+    Complete the sale with a cash payment so it counts toward the session's expected closing balance:
+
+    ```bash
+    curl -X PATCH https://api.openfiskal.com/v1/operations/op_01_sale_4.50/complete \
+      -H "Authorization: Bearer $API_KEY" \
+      -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
+      -H "If-Match: \"1\"" \
+      -H "Idempotency-Key: order-1001-complete" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "payments": [
+          {
+            "payment_id": "pay_1001",
+            "method": "cash",
+            "amount": "4.50",
+            "currency": "EUR",
+            "status": "captured"
+          }
+        ]
+      }'
+    ```
+
+    The response is now `"status": "completed"` and (on a fiscalized German register) carries a TSE signature in `fiscal_information`.
   </Step>
   <Step title="Ring up the second sale (98.00 EUR)">
     ```bash
@@ -194,16 +223,19 @@ The scenario: a German bakery opens at 08:00 with a 50 EUR float, rings up two c
         "total_amount": "98.00",
         "line_items": [
           {
-            "description": "Catering tray",
-            "quantity": "1",
-            "pretax_amount": "91.59",
-            "tax_amount": "6.41",
+            "title": "Catering tray",
+            "quantity": 1,
+            "unit_price": "98.00",
             "total_amount": "98.00",
-            "tax_rate": "7.00"
+            "taxes": [
+              { "name": "MwSt 7%", "rate": "0.07", "tax_amount": "6.41" }
+            ]
           }
         ]
       }'
     ```
+
+    Complete the sale the same way the first one was completed (`PATCH /v1/operations/{id}/complete` with `If-Match: "1"` and a `payments` array). Both sales must be `completed` for their cash to count toward the expected closing balance below.
   </Step>
   <Step title="Drop 20 EUR to the safe at midday">
     ```bash
