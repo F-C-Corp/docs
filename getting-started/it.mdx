@@ -1,0 +1,235 @@
+---
+title: "Getting started · 🇮🇹 Italy"
+description: "Onboard an Italian merchant, fiscalize a register under RT, and complete a sale that emits a DCW-numbered receipt."
+---
+
+This guide walks the `v1` integration contract for Italy. You create an `ita` API key, onboard a merchant with an Italian `fiscal_identity` (Codice Fiscale + Partita IVA + Fisconline credentials), register a location and terminal, fiscalize the register under the RT regime, start an operation, and complete it with the typed payment contract.
+
+<Info>
+  Examples use `https://sandbox.api.openfiskal.com/v1`. Replace with `https://api.openfiskal.com/v1` when you go live.
+</Info>
+
+<Warning>
+  Register fiscalization on the public API today exercises the **DE / KassenSichV** regime. Italian RT fiscalization is rolling out — contact [support@openfiskal.com](mailto:support@openfiskal.com) for current IT enablement status before scheduling go-live. The merchant, location, and register data shapes shown here are stable and safe to integrate against now.
+</Warning>
+
+## Prerequisites
+
+- An OpenFiskal tenant
+- A tenant-scoped, country-scoped API key (`of_test_ita_…` or `of_live_ita_…`)
+- Active Fisconline credentials for the legal entity (delegated user, password, PIN)
+- `curl` or an HTTP client
+- A backend service / database to store your API key, entity IDs and ETags
+
+## Authentication model
+
+Use the standard bearer header on every request. The key encodes the environment and country — `of_test_ita_…` for the Italian sandbox, `of_live_ita_…` for Italian production. An `ita` key rejects payloads for any other country.
+
+```bash
+-H "Authorization: Bearer of_live_ita_abc123..."
+```
+
+Every merchant-scoped request must also include:
+
+```bash
+-H "X-OpenFiskal-Merchant: merchant_01HXYZ"
+```
+
+This header value is the merchant ID returned by `POST /merchants`, not your API key.
+
+## Create resources
+
+Create these resources in order. The register cannot fiscalize until the merchant has an `ITA` `fiscal_identity` with the Fisconline credentials populated.
+
+<Steps>
+  <Step title="Create your API key">
+    Start in the OpenFiskal tenant dashboard. Create an `ita` key. Store it in your secrets manager. Format: `of_{env}_ita_{random}`, e.g. `of_test_ita_abcdefgh12345678`.
+  </Step>
+  <Step title="Create a merchant">
+    `country_code` and every `address.country_code` must be `ITA` (ISO 3166-1 alpha-3). The Italian `fiscal_identity` requires:
+
+    - `legal_entity_type` — `COMPANY` or `INDIVIDUAL`
+    - `tax_number` — Codice Fiscale (11 numeric digits, or 16 alphanumeric characters)
+    - `vat_number` — Partita IVA (11 numeric digits)
+    - `fisconline_user` — Codice Fiscale (16 alphanumeric characters) of the person delegated to access the Agenzia delle Entrate portal on behalf of the entity
+    - `fisconline_password`
+    - `fisconline_pin`
+
+    <Warning>
+      Fisconline credentials are stored encrypted and used to register the cash register (Registratore Telematico) with the Agenzia delle Entrate. Store the source credentials in your own secrets manager too — OpenFiskal does not return them in plaintext.
+    </Warning>
+
+    ```bash
+    curl -X POST https://sandbox.api.openfiskal.com/v1/merchants \
+      -H "Authorization: Bearer of_test_ita_abc123..." \
+      -H "Content-Type: application/json" \
+      -d '{
+        "legal_name": "Trattoria del Corso S.r.l.",
+        "country_code": "ITA",
+        "address": {
+          "line1": "Via del Corso 120",
+          "city": "Roma",
+          "postal_code": "00186",
+          "country_code": "ITA"
+        },
+        "fiscal_identities": [
+          {
+            "country_code": "ITA",
+            "legal_entity_type": "COMPANY",
+            "tax_number": "12345678901",
+            "vat_number": "01234567890",
+            "fisconline_user": "RSSMRA85M01H501Z",
+            "fisconline_password": "••••••••",
+            "fisconline_pin": "••••••••"
+          }
+        ]
+      }'
+    ```
+
+    The returned `id` becomes the `X-OpenFiskal-Merchant` header on every merchant-scoped request that follows.
+  </Step>
+  <Step title="Create a location">
+    A location is a physical point of sale. `timezone` is a **required** IANA zone string — RT receipts embed local time.
+
+    ```bash
+    curl -X POST https://sandbox.api.openfiskal.com/v1/locations \
+      -H "Authorization: Bearer of_test_ita_abc123..." \
+      -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "name": "Roma Centro",
+        "address": {
+          "line1": "Via del Corso 120",
+          "city": "Roma",
+          "postal_code": "00186",
+          "country_code": "ITA"
+        },
+        "timezone": "Europe/Rome"
+      }'
+    ```
+  </Step>
+  <Step title="Create a register">
+    A register is the logical Registratore Telematico (RT) that creates operations.
+
+    ```bash
+    curl -X POST https://sandbox.api.openfiskal.com/v1/registers \
+      -H "Authorization: Bearer of_test_ita_abc123..." \
+      -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "location_id": "loc_01HXYZ",
+        "name": "Cassa 1",
+        "external_id": "pos-register-1"
+      }'
+    ```
+  </Step>
+  <Step title="Fiscalize the register (rolling out)">
+    Once enabled for IT, `POST /registers/{id}/fiscalize` registers the Registratore Telematico with the Agenzia delle Entrate using the merchant's Italian `fiscal_identity` and the location's country. The response is `202 Accepted`; poll `GET /registers/{id}` until `fiscalizedAt` is populated.
+
+    ```bash
+    curl -X POST https://sandbox.api.openfiskal.com/v1/registers/reg_01HXYZ/fiscalize \
+      -H "Authorization: Bearer of_test_ita_abc123..." \
+      -H "X-OpenFiskal-Merchant: merchant_01HXYZ"
+    ```
+  </Step>
+  <Step title="Verify your saved IDs">
+    Persist the returned merchant, location, and register IDs. You will use them for every later operation request.
+  </Step>
+</Steps>
+
+## Perform a fiscalized sale
+
+Once your register is fiscalized, you can create and complete sale operations. The request body is identical to other countries; the response's `fiscal_information` carries the RT-specific shape, including the **DCW number** that you must render onto the customer's receipt.
+
+<Steps>
+  <Step title="Start an operation">
+    `POST /operations` is a single-shot create. All monetary fields are decimal strings, not integers. `pretax_amount + tax_amount + tip_amount` must equal `total_amount`. `line_items` is required with at least one entry.
+
+    ```bash
+    curl -X POST https://sandbox.api.openfiskal.com/v1/operations \
+      -H "Authorization: Bearer of_test_ita_abc123..." \
+      -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
+      -H "Idempotency-Key: op-order-1001-start" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "register_id": "reg_01HXYZ",
+        "source": "POS",
+        "type": "sale",
+        "currency": "EUR",
+        "external_id": "order-1001",
+        "pretax_amount": "38.64",
+        "tax_amount": "3.86",
+        "tip_amount": "0.00",
+        "total_amount": "42.50",
+        "line_items": [
+          {
+            "title": "Pranzo del giorno",
+            "quantity": 1,
+            "unit_price": "42.50",
+            "total_amount": "42.50",
+            "taxes": [
+              { "name": "IVA 10%", "rate": "0.10", "tax_amount": "3.86" }
+            ]
+          }
+        ]
+      }'
+    ```
+
+    <Warning>
+      Always send `line_items[].taxes[]`. Italian RT receipts require the per-rate IVA breakdown (the IT rate codes — `4`, `5`, `10`, `22`, plus exempt/reverse-charge `N1–N7` — are derived from the per-line `rate` and the configured nature codes).
+    </Warning>
+  </Step>
+  <Step title="Complete the operation">
+    Completion includes typed payment legs. Use one entry per tender leg and include processor references where available. Send the latest `ETag` in `If-Match`.
+
+    ```bash
+    curl -X PATCH https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ/complete \
+      -H "Authorization: Bearer of_test_ita_abc123..." \
+      -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
+      -H "Idempotency-Key: op-order-1001-complete" \
+      -H 'If-Match: "1"' \
+      -H "Content-Type: application/json" \
+      -d '{
+        "payments": [
+          {
+            "payment_id": "pay_1001_card",
+            "method": "card",
+            "amount": "42.50",
+            "currency": "EUR",
+            "status": "captured",
+            "processor": "sumup",
+            "card_brand": "visa",
+            "processor_reference": "ch_123",
+            "processed_at": "2026-02-26T12:05:00Z"
+          }
+        ]
+      }'
+    ```
+
+    <Note>
+      The completed-operation response carries the RT regime's `fiscal_information`, including the DCW number you must render onto the customer's receipt. Schema reference: see the [Live OpenAPI spec](https://api.openfiskal.com/openapi-json) once IT is enabled on your tenant.
+    </Note>
+  </Step>
+</Steps>
+
+## Void an open operation
+
+If the sale is abandoned before completion, void the open operation:
+
+```bash
+curl -X PATCH https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ/void \
+  -H "Authorization: Bearer of_test_ita_abc123..." \
+  -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
+  -H "Idempotency-Key: op-order-1001-void" \
+  -H 'If-Match: "1"' \
+  -H "Content-Type: application/json" \
+  -d '{ "reason": "void_before_completion" }'
+```
+
+Completed operations cannot be voided — use a `return` operation instead. Under RT a `return` produces a separately-numbered reso.
+
+## Next steps
+
+- [Supported scope](/supported-scope)
+- [Transaction lifecycle](/pos-operation-ingestion) — operation lifecycle in detail
+- [Payment lifecycle](/payment-lifecycle) — split tender, asynchronous settlement
