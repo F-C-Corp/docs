@@ -1727,7 +1727,7 @@ info:
   title: OpenFiskal fiscalization API
   description: |-
     OpenFiskal exposes a server-to-server fiscalization API for merchant onboarding,
-    register setup, operation handling, and exports.
+    register setup, and operation handling.
 
     The `v1` contract uses server-issued resource versions and conditional
     writes through `If-Match` for safe concurrent mutation handling.

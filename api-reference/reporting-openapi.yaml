@@ -1,297 +1,2021 @@
-openapi: 3.1.0
-info:
-  title: OpenFiskal reporting API
-  version: 1.0.0
-  license:
-    name: Proprietary
-  description: |
-    Country-specific fiscal export endpoints for compliance reporting.
-
-    Exports are asynchronous: create a job, poll until ready, then download
-    the artifact before the retention deadline.
-servers:
-  - url: https://api.openfiskal.com/v1
-    description: Production
-  - url: https://sandbox.api.openfiskal.com/v1
-    description: Sandbox
-tags:
-  - name: Exports
-    description: Create and inspect asynchronous fiscal export jobs.
+openapi: 3.0.0
 paths:
   /exports:
-    parameters:
-      - $ref: "#/components/parameters/MerchantHeader"
-    get:
-      tags: [Exports]
-      summary: List export jobs
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: "#/components/parameters/Limit"
-        - $ref: "#/components/parameters/Cursor"
-      responses:
-        "200":
-          description: Export jobs returned
-          headers:
-            X-Request-Id:
-              $ref: "#/components/headers/XRequestId"
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/ExportJob"
-                  next_cursor:
-                    type: string
-                    nullable: true
-                    description: Pagination token for the next page. Pass as the `cursor` query parameter. Null when there are no more results.
     post:
-      tags: [Exports]
-      summary: Create export job
-      security:
-        - BearerAuth: []
+      description: "Enqueues an asynchronous export job and returns immediately with `202 Accepted` and `status: pending`. Poll `GET /exports/{exportId}` until `status` is `completed` (then `download_url` is set) or `failed`."
+      operationId: ExportsController_create
       parameters:
-        - $ref: "#/components/parameters/IdempotencyKey"
+        - &a1
+          name: X-OpenFiskal-Merchant
+          in: header
+          description: Merchant identifier returned by the merchants resource.
+          required: true
+          schema:
+            type: string
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ExportCreateRequest"
+              $ref: "#/components/schemas/CreateExportDto"
       responses:
         "202":
-          description: Export job created
-          headers:
-            X-Request-Id:
-              $ref: "#/components/headers/XRequestId"
+          description: Export job enqueued
           content:
             application/json:
               schema:
-                allOf:
-                  - $ref: "#/components/schemas/ExportJob"
-                  - type: object
-                    properties:
-                      status:
-                        type: string
-                        enum: [queued]
+                $ref: "#/components/schemas/Export"
         "400":
-          $ref: "#/components/responses/BadRequest"
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: invalid_request
+                  value:
+                    code: invalid_request
+                    message: The request body is malformed.
+                    retryable: false
         "401":
-          $ref: "#/components/responses/Unauthorized"
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: unauthorized
+                  value:
+                    code: unauthorized
+                    message: Authentication failed.
+                    retryable: false
         "403":
-          $ref: "#/components/responses/Forbidden"
-        "409":
-          $ref: "#/components/responses/IdempotencyConflict"
-
-  /exports/{exportId}:
-    parameters:
-      - $ref: "#/components/parameters/MerchantHeader"
-    get:
-      tags: [Exports]
-      summary: Get export job
-      security:
+          description: Authenticated caller is not allowed to access the requested tenant, country, or merchant.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: forbidden
+                  value:
+                    code: forbidden
+                    message: The authenticated caller cannot access this resource.
+                    retryable: false
+        "404":
+          description: Register not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: not_found
+                  value:
+                    code: not_found
+                    message: The requested resource does not exist.
+                    retryable: false
+        "422":
+          description: Domain validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: regime_validation_failed
+                  value:
+                    code: regime_validation_failed
+                    message: The payload violates regime-specific validation rules.
+                    retryable: false
+      security: &a2
         - BearerAuth: []
+      summary: Trigger an export
+      tags: &a3
+        - Exports
+  /exports/{exportId}:
+    get:
+      description: Returns the export job. When `status` is `completed`, `download_url` is a signed URL to fetch the artifact. When `status` is `failed`, `error.message` (and optional `error.details`) describe why.
+      operationId: ExportsController_get
       parameters:
-        - $ref: "#/components/parameters/ExportId"
+        - *a1
+        - name: exportId
+          required: true
+          in: path
+          schema:
+            type: string
       responses:
         "200":
           description: Export job returned
-          headers:
-            X-Request-Id:
-              $ref: "#/components/headers/XRequestId"
           content:
             application/json:
               schema:
-                allOf:
-                  - $ref: "#/components/schemas/ExportJob"
-                  - type: object
-                    properties:
-                      download_url:
-                        type: string
-                        nullable: true
-                        description: Signed URL to download the export artifact. Present when status is `ready`.
+                $ref: "#/components/schemas/Export"
         "401":
-          $ref: "#/components/responses/Unauthorized"
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: unauthorized
+                  value:
+                    code: unauthorized
+                    message: Authentication failed.
+                    retryable: false
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: Authenticated caller is not allowed to access the requested tenant, country, or merchant.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: forbidden
+                  value:
+                    code: forbidden
+                    message: The authenticated caller cannot access this resource.
+                    retryable: false
         "404":
-          $ref: "#/components/responses/NotFound"
+          description: Export not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: not_found
+                  value:
+                    code: not_found
+                    message: The requested resource does not exist.
+                    retryable: false
+      security: *a2
+      summary: Retrieve an export
+      tags: *a3
+info:
+  title: OpenFiskal reporting API
+  description: |-
+    Country-specific fiscal export endpoints for compliance reporting.
 
+    Exports are asynchronous: create a job, poll until ready, then download
+    the artifact before the retention deadline.
+  version: 1.1.0
+  contact: {}
+  license:
+    name: Proprietary
+tags:
+  - name: Exports
+    description: Create and inspect asynchronous fiscal export jobs.
+servers:
+  - url: https://api.openfiskal.com/v1
+    description: Production
+  - url: https://sandbox.api.openfiskal.com/v1
+    description: Sandbox
 components:
   securitySchemes:
     BearerAuth:
-      type: http
       scheme: bearer
       bearerFormat: API key
-  headers:
-    XRequestId:
-      description: Stable request trace identifier.
-      schema:
-        type: string
-        example: req_01JABCXYZ
-  parameters:
-    Limit:
-      name: limit
-      in: query
-      schema:
-        type: integer
-        minimum: 1
-        maximum: 100
-        default: 20
-    Cursor:
-      name: cursor
-      in: query
-      description: Opaque pagination token. Pass the `next_cursor` value from a previous response to fetch the next page. Omit on the first request.
-      schema:
-        type: string
-    MerchantHeader:
-      name: X-OpenFiskal-Merchant
-      in: header
-      required: true
-      schema:
-        type: string
-      description: Merchant identifier returned by the merchants resource.
-    IdempotencyKey:
-      name: Idempotency-Key
-      in: header
-      required: true
-      schema:
-        type: string
-      description: Unique key per endpoint, merchant, and tenant. Retained for at least 24 hours.
-    ExportId:
-      name: exportId
-      in: path
-      required: true
-      schema:
-        type: string
-  responses:
-    BadRequest:
-      description: Invalid request
-      headers:
-        X-Request-Id:
-          $ref: "#/components/headers/XRequestId"
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/Error"
-          example:
-            code: invalid_request
-            message: The request body is malformed.
-            retryable: false
-    Unauthorized:
-      description: Authentication failed
-      headers:
-        X-Request-Id:
-          $ref: "#/components/headers/XRequestId"
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/Error"
-          example:
-            code: unauthorized
-            message: Authentication failed.
-            retryable: false
-    Forbidden:
-      description: Authenticated caller is not allowed to access the requested tenant, country, or merchant.
-      headers:
-        X-Request-Id:
-          $ref: "#/components/headers/XRequestId"
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/Error"
-          example:
-            code: forbidden
-            message: The authenticated caller cannot access this resource.
-            retryable: false
-    NotFound:
-      description: Resource not found
-      headers:
-        X-Request-Id:
-          $ref: "#/components/headers/XRequestId"
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/Error"
-          example:
-            code: not_found
-            message: The requested resource does not exist.
-            retryable: false
-    IdempotencyConflict:
-      description: Idempotency key reused with a different payload
-      headers:
-        X-Request-Id:
-          $ref: "#/components/headers/XRequestId"
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/Error"
-          example:
-            code: idempotency_key_conflict
-            message: The idempotency key was already used with a different payload.
-            retryable: false
+      type: http
   schemas:
-    Error:
+    FiscalIdentityDeuDto:
+      type: object
+      properties:
+        country_code:
+          type: string
+          enum:
+            - DEU
+          example: DEU
+        tax_number:
+          type: string
+          example: 21/815/08150
+          description: Steuernummer
+        vat_id:
+          type: string
+          example: DE123456789
+          description: USt-IdNr
+      required:
+        - country_code
+        - tax_number
+        - vat_id
+    FiscalIdentityAutDto:
+      type: object
+      properties:
+        country_code:
+          type: string
+          enum:
+            - AUT
+          example: AUT
+        vat_id:
+          type: string
+          example: ATU12345678
+        tax_number:
+          type: string
+        legal_entity_id_type:
+          type: string
+          enum:
+            - VAT_ID
+            - TAX_ID
+            - GLN
+          example: VAT_ID
+        gln:
+          type: string
+          description: 13-digit Global Location Number, required when legal_entity_id_type is GLN
+      required:
+        - country_code
+        - legal_entity_id_type
+    FiscalIdentityItaDto:
+      type: object
+      properties:
+        country_code:
+          type: string
+          enum:
+            - ITA
+          example: ITA
+        tax_number:
+          type: string
+          example: "12345678901"
+          description: "Tax number (Codice Fiscale). 11 numeric digits or 16 alphanumeric characters. Example: 12345678901 or RSSMRA85T10A562S. For companies, this may be identical to the VAT number."
+        vat_number:
+          type: string
+          example: IT12345678901
+          description: VAT number (Partita IVA)
+        legal_entity_type:
+          type: string
+          enum:
+            - COMPANY
+            - INDIVIDUAL
+          example: COMPANY
+          description: Select whether your organization is a company (Societa) or an individual (Persona fisica).
+        fisconline_password:
+          type: string
+          description: Fisconline Password
+        fisconline_pin:
+          type: string
+          description: Fisconline PIN
+        fisconline_user:
+          type: string
+          description: Fisconline User - The Codice Fiscale of the person authorized to access the Agenzia delle Entrate portal on behalf of the business.
+      required:
+        - country_code
+        - tax_number
+        - vat_number
+        - legal_entity_type
+        - fisconline_password
+        - fisconline_pin
+        - fisconline_user
+    AddressResponse:
+      type: object
+      properties:
+        line1:
+          type: string
+        line2:
+          type: string
+          nullable: true
+        city:
+          type: string
+        postal_code:
+          type: string
+        country_code:
+          type: string
+          description: ISO 3166-1 alpha-3 country code.
+          minLength: 3
+          maxLength: 3
+          example: DEU
+      required:
+        - line1
+        - city
+        - postal_code
+        - country_code
+    Merchant:
+      type: object
+      properties:
+        id:
+          type: string
+        legal_name:
+          type: string
+        country_code:
+          type: string
+          description: ISO 3166-1 alpha-3 country code for the legal entity.
+          minLength: 3
+          maxLength: 3
+          example: DEU
+        status:
+          type: string
+          enum:
+            - active
+            - inactive
+        address:
+          $ref: "#/components/schemas/AddressResponse"
+        fiscal_identities:
+          type: array
+          description: Country-specific fiscal identities.
+          items:
+            oneOf:
+              - title: FiscalIdentityDEU
+                allOf:
+                  - $ref: "#/components/schemas/FiscalIdentityDeuDto"
+              - title: FiscalIdentityAUT
+                allOf:
+                  - $ref: "#/components/schemas/FiscalIdentityAutDto"
+              - title: FiscalIdentityITA
+                allOf:
+                  - $ref: "#/components/schemas/FiscalIdentityItaDto"
+            discriminator:
+              propertyName: country_code
+              mapping:
+                DEU: "#/components/schemas/FiscalIdentityDeuDto"
+                AUT: "#/components/schemas/FiscalIdentityAutDto"
+                ITA: "#/components/schemas/FiscalIdentityItaDto"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - legal_name
+        - country_code
+        - status
+        - address
+        - fiscal_identities
+        - created_at
+        - updated_at
+    MerchantListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Merchant"
+        next_cursor:
+          type: string
+          nullable: true
+      required:
+        - data
+    ErrorDto:
       type: object
       properties:
         code:
           type: string
+          description: Stable machine-readable error code.
+          example: invalid_request
         message:
           type: string
+          description: Human-readable explanation of the error.
         retryable:
           type: boolean
-      required: [code, message, retryable]
-    ExportJob:
+          description: Whether retrying the request is safe.
+        request_id:
+          type: string
+          description: Stable request trace identifier.
+        details:
+          type: object
+          description: Additional structured context for the error.
+          additionalProperties: true
+      required:
+        - code
+        - message
+        - retryable
+    AddressDto:
+      type: object
+      properties:
+        line1:
+          type: string
+          example: Musterstr. 1
+        line2:
+          type: string
+          example: Apt 4
+          nullable: true
+        city:
+          type: string
+          example: Berlin
+        postal_code:
+          type: string
+          example: "10115"
+        country_code:
+          type: string
+          example: DEU
+          minLength: 3
+          maxLength: 3
+          description: ISO 3166-1 alpha-3 (uppercase)
+      required:
+        - line1
+        - city
+        - postal_code
+        - country_code
+    CreateMerchantDto:
+      type: object
+      properties:
+        legal_name:
+          type: string
+          example: Test GmbH
+        country_code:
+          type: string
+          example: DEU
+          minLength: 3
+          maxLength: 3
+          description: ISO 3166-1 alpha-3 country code for the legal entity (uppercase)
+        address:
+          $ref: "#/components/schemas/AddressDto"
+        fiscal_identities:
+          type: array
+          description: Country-specific fiscal identities
+          items:
+            oneOf:
+              - title: FiscalIdentityDEU
+                allOf:
+                  - $ref: "#/components/schemas/FiscalIdentityDeuDto"
+              - title: FiscalIdentityAUT
+                allOf:
+                  - $ref: "#/components/schemas/FiscalIdentityAutDto"
+              - title: FiscalIdentityITA
+                allOf:
+                  - $ref: "#/components/schemas/FiscalIdentityItaDto"
+            discriminator:
+              propertyName: country_code
+              mapping:
+                DEU: "#/components/schemas/FiscalIdentityDeuDto"
+                AUT: "#/components/schemas/FiscalIdentityAutDto"
+                ITA: "#/components/schemas/FiscalIdentityItaDto"
+      required:
+        - legal_name
+        - country_code
+        - address
+    UpdateMerchantDto:
+      type: object
+      properties:
+        legal_name:
+          type: string
+          example: Updated GmbH
+        status:
+          type: string
+          enum:
+            - active
+            - inactive
+          example: inactive
+        address:
+          $ref: "#/components/schemas/AddressDto"
+        fiscal_identities:
+          type: array
+          description: Country-specific fiscal identities (merge by country key)
+          items:
+            oneOf:
+              - title: FiscalIdentityDEU
+                allOf:
+                  - $ref: "#/components/schemas/FiscalIdentityDeuDto"
+              - title: FiscalIdentityAUT
+                allOf:
+                  - $ref: "#/components/schemas/FiscalIdentityAutDto"
+              - title: FiscalIdentityITA
+                allOf:
+                  - $ref: "#/components/schemas/FiscalIdentityItaDto"
+            discriminator:
+              propertyName: country_code
+              mapping:
+                DEU: "#/components/schemas/FiscalIdentityDeuDto"
+                AUT: "#/components/schemas/FiscalIdentityAutDto"
+                ITA: "#/components/schemas/FiscalIdentityItaDto"
+    RegisterFiscalization:
+      type: object
+      properties:
+        regime:
+          type: string
+        fiscalized_at:
+          type: string
+          format: date-time
+          nullable: true
+        tse_serial:
+          type: string
+          nullable: true
+        client_id:
+          type: string
+          nullable: true
+      required:
+        - regime
+    Register:
+      type: object
+      properties:
+        id:
+          type: string
+        merchant_id:
+          type: string
+        location_id:
+          type: string
+        name:
+          type: string
+        external_id:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum:
+            - active
+            - inactive
+        fiscalization_status:
+          type: string
+          enum:
+            - not_fiscalized
+            - pending
+            - failed
+            - fiscalized
+            - decommissioned
+        fiscalization:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/RegisterFiscalization"
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - merchant_id
+        - location_id
+        - name
+        - status
+        - fiscalization_status
+        - created_at
+    RegisterListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Register"
+        next_cursor:
+          type: string
+          nullable: true
+      required:
+        - data
+    CreateRegisterDto:
+      type: object
+      properties:
+        location_id:
+          type: string
+          example: loc_abc123
+          description: ID of the location this register belongs to
+        name:
+          type: string
+          example: Register 1
+        external_id:
+          type: string
+          example: POS-001
+          description: Your own identifier for this register
+      required:
+        - location_id
+        - name
+    UpdateRegisterDto:
+      type: object
+      properties:
+        name:
+          type: string
+          example: Register 1
+        external_id:
+          type: string
+          example: POS-001
+          description: Your own identifier for this register
+        status:
+          type: string
+          enum:
+            - active
+            - inactive
+          example: active
+    Location:
+      type: object
+      properties:
+        id:
+          type: string
+        merchant_id:
+          type: string
+        name:
+          type: string
+        external_id:
+          type: string
+          nullable: true
+        timezone:
+          type: string
+          nullable: true
+        address:
+          $ref: "#/components/schemas/AddressResponse"
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - merchant_id
+        - name
+        - address
+        - created_at
+    LocationListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Location"
+        next_cursor:
+          type: string
+          nullable: true
+      required:
+        - data
+    CreateLocationDto:
+      type: object
+      properties:
+        name:
+          type: string
+          example: Main Store
+        external_id:
+          type: string
+          example: loc-001
+        address:
+          $ref: "#/components/schemas/AddressDto"
+        timezone:
+          type: string
+          example: Europe/Berlin
+      required:
+        - name
+        - address
+        - timezone
+    UpdateLocationDto:
+      type: object
+      properties:
+        name:
+          type: string
+          example: Updated Store Name
+        external_id:
+          type: string
+          example: loc-002
+        address:
+          $ref: "#/components/schemas/AddressDto"
+        timezone:
+          type: string
+          example: Europe/Vienna
+    ExternalRelatedOperationDto:
+      type: object
+      properties:
+        description:
+          type: string
+          example: Return against order from external platform.
+          description: Free-text description identifying the external sale being returned/exchanged against.
+        external_operation_id:
+          type: string
+          example: shopify-order-4711
+          description: The integrator-side identifier of the original sale in the external system.
+      required:
+        - description
+        - external_operation_id
+    LineItemTaxDto:
+      type: object
+      properties:
+        name:
+          type: string
+          example: State SUT
+          description: Tax name, e.g. "Municipal Tax" or "State Tax"
+        rate:
+          type: string
+          example: "0.105"
+          description: Tax rate as a decimal string, e.g. "0.105" for 10.5%
+        tax_amount:
+          type: string
+          example: "1.58"
+          description: Computed tax amount for this line item
+      required:
+        - name
+        - rate
+        - tax_amount
+    LineItemDto:
+      type: object
+      properties:
+        title:
+          type: string
+          example: Café Latte
+        quantity:
+          type: number
+          example: 2
+        unit_price:
+          type: string
+          example: "4.50"
+          description: Price per unit
+        total_amount:
+          type: string
+          example: "9.00"
+          description: Total amount for this line item (quantity * unit_price)
+        taxes:
+          description: One entry per VAT rate applied to this line. At least one entry required.
+          type: array
+          items:
+            $ref: "#/components/schemas/LineItemTaxDto"
+      required:
+        - title
+        - quantity
+        - unit_price
+        - total_amount
+        - taxes
+    CreateSaleOperationDto:
+      type: object
+      properties:
+        register_id:
+          type: string
+          example: reg_abc123
+          description: Required for POS, must be null for ONLINE.
+        source:
+          type: string
+          enum: &a4
+            - POS
+            - ONLINE
+          example: POS
+        currency:
+          type: string
+          example: USD
+          description: ISO 4217 currency code
+        external_id:
+          type: string
+          example: order-12345
+          description: Merchant or POS identifier for the upstream order.
+        related_operation_id:
+          type: string
+          example: op_abc123
+          description: "For returns/exchanges: the OpenFiskal operation ID of the original sale. Exactly one of `related_operation_id` or `external_related_operation` must be set."
+        external_related_operation:
+          description: For returns/exchanges of sales that were never ingested into OpenFiskal (typically during platform migration). Exactly one of `related_operation_id` or `external_related_operation` must be set.
+          allOf:
+            - $ref: "#/components/schemas/ExternalRelatedOperationDto"
+        note:
+          type: string
+          example: Customer requested extra napkins
+        pretax_amount:
+          type: string
+          example: "9.00"
+          description: Total before taxes
+        tax_amount:
+          type: string
+          example: "0.95"
+          description: Total tax amount
+        tip_amount:
+          type: string
+          example: "0.00"
+          description: Tip amount
+        total_amount:
+          type: string
+          example: "9.95"
+          description: Total amount (pretax + tax + tip)
+        line_items:
+          type: array
+          items:
+            $ref: "#/components/schemas/LineItemDto"
+        type:
+          type: string
+          enum:
+            - sale
+          example: sale
+      required:
+        - source
+        - currency
+        - pretax_amount
+        - tax_amount
+        - tip_amount
+        - total_amount
+        - line_items
+        - type
+    CreateReturnOperationDto:
+      type: object
+      properties:
+        register_id:
+          type: string
+          example: reg_abc123
+          description: Required for POS, must be null for ONLINE.
+        source:
+          type: string
+          enum: *a4
+          example: POS
+        currency:
+          type: string
+          example: USD
+          description: ISO 4217 currency code
+        external_id:
+          type: string
+          example: order-12345
+          description: Merchant or POS identifier for the upstream order.
+        related_operation_id:
+          type: string
+          example: op_abc123
+          description: "For returns/exchanges: the OpenFiskal operation ID of the original sale. Exactly one of `related_operation_id` or `external_related_operation` must be set."
+        external_related_operation:
+          description: For returns/exchanges of sales that were never ingested into OpenFiskal (typically during platform migration). Exactly one of `related_operation_id` or `external_related_operation` must be set.
+          allOf:
+            - $ref: "#/components/schemas/ExternalRelatedOperationDto"
+        note:
+          type: string
+          example: Customer requested extra napkins
+        pretax_amount:
+          type: string
+          example: "9.00"
+          description: Total before taxes
+        tax_amount:
+          type: string
+          example: "0.95"
+          description: Total tax amount
+        tip_amount:
+          type: string
+          example: "0.00"
+          description: Tip amount
+        total_amount:
+          type: string
+          example: "9.95"
+          description: Total amount (pretax + tax + tip)
+        line_items:
+          type: array
+          items:
+            $ref: "#/components/schemas/LineItemDto"
+        type:
+          type: string
+          enum:
+            - return
+          example: return
+      required:
+        - source
+        - currency
+        - pretax_amount
+        - tax_amount
+        - tip_amount
+        - total_amount
+        - line_items
+        - type
+    CreateExchangeOperationDto:
+      type: object
+      properties:
+        register_id:
+          type: string
+          example: reg_abc123
+          description: Required for POS, must be null for ONLINE.
+        source:
+          type: string
+          enum: *a4
+          example: POS
+        currency:
+          type: string
+          example: USD
+          description: ISO 4217 currency code
+        external_id:
+          type: string
+          example: order-12345
+          description: Merchant or POS identifier for the upstream order.
+        related_operation_id:
+          type: string
+          example: op_abc123
+          description: "For returns/exchanges: the OpenFiskal operation ID of the original sale. Exactly one of `related_operation_id` or `external_related_operation` must be set."
+        external_related_operation:
+          description: For returns/exchanges of sales that were never ingested into OpenFiskal (typically during platform migration). Exactly one of `related_operation_id` or `external_related_operation` must be set.
+          allOf:
+            - $ref: "#/components/schemas/ExternalRelatedOperationDto"
+        note:
+          type: string
+          example: Customer requested extra napkins
+        pretax_amount:
+          type: string
+          example: "9.00"
+          description: Total before taxes
+        tax_amount:
+          type: string
+          example: "0.95"
+          description: Total tax amount
+        tip_amount:
+          type: string
+          example: "0.00"
+          description: Tip amount
+        total_amount:
+          type: string
+          example: "9.95"
+          description: Total amount (pretax + tax + tip)
+        line_items:
+          type: array
+          items:
+            $ref: "#/components/schemas/LineItemDto"
+        type:
+          type: string
+          enum:
+            - exchange
+          example: exchange
+      required:
+        - source
+        - currency
+        - pretax_amount
+        - tax_amount
+        - tip_amount
+        - total_amount
+        - line_items
+        - type
+    CreateSessionOpenOperationDto:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+            - session_open
+          example: session_open
+        register_id:
+          type: string
+          example: reg_abc123
+          description: Register on which the session is being opened.
+        currency:
+          type: string
+          example: EUR
+          description: ISO 4217 currency code
+        opening_balance_amount:
+          type: string
+          example: "50.00"
+          description: Opening cash drawer balance as a decimal string. Must be ≥ 0.
+        opening_note:
+          type: string
+          example: Float supplied by office manager.
+      required:
+        - type
+        - register_id
+        - currency
+        - opening_balance_amount
+    CreateSessionCashAdjustmentOperationDto:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+            - session_cash_adjustment
+          example: session_cash_adjustment
+        register_id:
+          type: string
+          example: reg_abc123
+          description: Register that the adjustment applies to.
+        currency:
+          type: string
+          example: EUR
+          description: ISO 4217 currency code
+        cash_amount:
+          type: string
+          example: "-20.00"
+          description: Signed cash adjustment as a decimal string. Negative = cash out, positive = cash in.
+        note:
+          type: string
+          example: Cash drop to safe.
+      required:
+        - type
+        - register_id
+        - currency
+        - cash_amount
+    CreateSessionCloseOperationDto:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+            - session_close
+          example: session_close
+        register_id:
+          type: string
+          example: reg_abc123
+          description: Register whose session is being closed.
+        currency:
+          type: string
+          example: EUR
+          description: ISO 4217 currency code
+        counted_closing_amount:
+          type: string
+          example: "127.50"
+          description: Merchant-counted closing cash balance as a decimal string. Must be ≥ 0.
+        discrepancy_note:
+          type: string
+          example: Two coins from the day before were unaccounted for.
+      required:
+        - type
+        - register_id
+        - currency
+        - counted_closing_amount
+    FiscalInformationKassenSichVStartEvent:
+      type: object
+      properties:
+        signed_at:
+          type: string
+          format: date-time
+      required:
+        - signed_at
+    FiscalInformationKassenSichVEndEvent:
+      type: object
+      properties:
+        signed_at:
+          type: string
+          format: date-time
+        transaction_counter:
+          type: number
+        signature:
+          type: string
+        public_key:
+          type: string
+        process_type:
+          type: string
+        process_data:
+          type: string
+      required:
+        - signed_at
+        - transaction_counter
+        - signature
+        - public_key
+        - process_type
+        - process_data
+    FiscalInformationKassenSichVVerification:
+      type: object
+      properties:
+        qr_data:
+          type: string
+      required:
+        - qr_data
+    FiscalInformationKassenSichV:
+      type: object
+      properties:
+        regime:
+          type: string
+          enum:
+            - KassenSichV
+        document_number:
+          type: string
+        document_type:
+          type: string
+        tss_serial_number:
+          type: string
+        pos_client_serial_number:
+          type: string
+        signature_algorithm:
+          type: string
+        time_format:
+          type: string
+        start_event:
+          $ref: "#/components/schemas/FiscalInformationKassenSichVStartEvent"
+        end_event:
+          $ref: "#/components/schemas/FiscalInformationKassenSichVEndEvent"
+        verification:
+          $ref: "#/components/schemas/FiscalInformationKassenSichVVerification"
+      required:
+        - regime
+        - document_number
+        - document_type
+        - tss_serial_number
+        - pos_client_serial_number
+        - signature_algorithm
+        - time_format
+        - start_event
+        - end_event
+        - verification
+    FiscalInformationRKSVSignature:
+      type: object
+      properties:
+        signed_at:
+          type: string
+          format: date-time
+        transaction_counter:
+          type: number
+        turnover_counter:
+          type: string
+          description: Running turnover counter as a decimal string.
+        signature:
+          type: string
+        certificate_serial:
+          type: string
+      required:
+        - signed_at
+        - transaction_counter
+        - turnover_counter
+        - signature
+        - certificate_serial
+    FiscalInformationRKSVVerification:
+      type: object
+      properties:
+        qr_data:
+          type: string
+      required:
+        - qr_data
+    FiscalInformationRKSV:
+      type: object
+      properties:
+        regime:
+          type: string
+          enum:
+            - RKSV
+        document_number:
+          type: string
+        document_type:
+          type: string
+        transmitted_at:
+          type: string
+          format: date-time
+          nullable: true
+        cashbox_id:
+          type: string
+        certificate_serial:
+          type: string
+        signature:
+          $ref: "#/components/schemas/FiscalInformationRKSVSignature"
+        verification:
+          $ref: "#/components/schemas/FiscalInformationRKSVVerification"
+      required:
+        - regime
+        - document_number
+        - document_type
+        - cashbox_id
+        - signature
+        - verification
+    FiscalInformationRTSignature:
+      type: object
+      properties:
+        signed_at:
+          type: string
+          format: date-time
+        signature:
+          type: string
+      required:
+        - signed_at
+        - signature
+    FiscalInformationRT:
+      type: object
+      properties:
+        regime:
+          type: string
+          enum:
+            - RT
+        document_number:
+          type: string
+        document_type:
+          type: string
+        transmitted_at:
+          type: string
+          format: date-time
+          nullable: true
+        rt_serial:
+          type: string
+        rt_firmware:
+          type: string
+        progressive_number:
+          type: number
+        daily_closing_number:
+          type: number
+        lottery_code:
+          type: string
+          nullable: true
+        signature:
+          $ref: "#/components/schemas/FiscalInformationRTSignature"
+      required:
+        - regime
+        - document_number
+        - document_type
+        - rt_serial
+        - rt_firmware
+        - progressive_number
+        - daily_closing_number
+        - signature
+    LineItemTax:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        rate:
+          type: string
+          description: Tax rate as a decimal string (e.g. "0.19").
+        tax_amount:
+          type: string
+          description: Tax amount as a decimal string.
+      required:
+        - id
+        - name
+        - rate
+        - tax_amount
+    LineItem:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        quantity:
+          type: number
+        unit_price:
+          type: string
+        total_amount:
+          type: string
+        taxes:
+          type: array
+          items:
+            $ref: "#/components/schemas/LineItemTax"
+      required:
+        - id
+        - title
+        - quantity
+        - unit_price
+        - total_amount
+        - taxes
+    Payment:
+      type: object
+      properties:
+        id:
+          type: string
+        payment_id:
+          type: string
+          description: Merchant or PSP identifier for the payment.
+        method:
+          type: string
+        amount:
+          type: string
+        currency:
+          type: string
+        status:
+          type: string
+          enum:
+            - pending
+            - authorized
+            - captured
+            - failed
+            - voided
+            - refunded
+        processor:
+          type: string
+          nullable: true
+        card_brand:
+          type: string
+          nullable: true
+        processor_reference:
+          type: string
+          nullable: true
+        processed_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - payment_id
+        - method
+        - amount
+        - currency
+        - status
+    SaleOperation:
+      type: object
+      properties:
+        id:
+          type: string
+        merchant_id:
+          type: string
+        location_id:
+          type: string
+          nullable: true
+          description: "Only set for source: POS."
+        register_id:
+          type: string
+          nullable: true
+          description: "Only set for source: POS."
+        session_id:
+          type: string
+          nullable: true
+          description: The RegisterSession this Operation is bound to. Set on every POS Operation; null for ONLINE goods-movement (no register, hence no session). On session-event variants this is the session being opened, adjusted, or closed; on goods-movement variants it is the session the operation was rung up during.
+        source:
+          type: string
+          enum: &a5
+            - POS
+            - ONLINE
+        status:
+          type: string
+          enum: &a6
+            - open
+            - completed
+            - voided
+        currency:
+          type: string
+          description: ISO 4217 currency code.
+          example: EUR
+        external_id:
+          type: string
+          description: Merchant or POS identifier for the upstream order.
+          nullable: true
+        resource_version:
+          type: number
+          description: Current server-issued version for the operation, starting at 1. Returned as `ETag` header.
+        fiscal_information:
+          nullable: true
+          description: The Fiskaly signature attached to this Operation, when one exists. Null until the operation has been signed.
+          oneOf: &a7
+            - title: FiscalInformationKassenSichV
+              allOf:
+                - $ref: "#/components/schemas/FiscalInformationKassenSichV"
+            - title: FiscalInformationRKSV
+              allOf:
+                - $ref: "#/components/schemas/FiscalInformationRKSV"
+            - title: FiscalInformationRT
+              allOf:
+                - $ref: "#/components/schemas/FiscalInformationRT"
+          discriminator: &a8
+            propertyName: regime
+            mapping:
+              KassenSichV: "#/components/schemas/FiscalInformationKassenSichV"
+              RKSV: "#/components/schemas/FiscalInformationRKSV"
+              RT: "#/components/schemas/FiscalInformationRT"
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        voided_at:
+          type: string
+          format: date-time
+          nullable: true
+        void_reason:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        note:
+          type: string
+          nullable: true
+          description: Merchant free-text note for the goods-movement event.
+        pretax_amount:
+          type: string
+        tax_amount:
+          type: string
+        tip_amount:
+          type: string
+        total_amount:
+          type: string
+        line_items:
+          type: array
+          items:
+            $ref: "#/components/schemas/LineItem"
+        payments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Payment"
+        type:
+          type: string
+          enum:
+            - sale
+          example: sale
+      required:
+        - id
+        - merchant_id
+        - source
+        - status
+        - currency
+        - resource_version
+        - created_at
+        - updated_at
+        - pretax_amount
+        - tax_amount
+        - tip_amount
+        - total_amount
+        - line_items
+        - payments
+        - type
+    ExternalRelatedOperation:
+      type: object
+      properties:
+        description:
+          type: string
+          description: Free-text description identifying the external sale being returned/exchanged against.
+        external_operation_id:
+          type: string
+          description: The integrator-side identifier of the original sale in the external system.
+      required:
+        - description
+        - external_operation_id
+    ReturnOperation:
+      type: object
+      properties:
+        id:
+          type: string
+        merchant_id:
+          type: string
+        location_id:
+          type: string
+          nullable: true
+          description: "Only set for source: POS."
+        register_id:
+          type: string
+          nullable: true
+          description: "Only set for source: POS."
+        session_id:
+          type: string
+          nullable: true
+          description: The RegisterSession this Operation is bound to. Set on every POS Operation; null for ONLINE goods-movement (no register, hence no session). On session-event variants this is the session being opened, adjusted, or closed; on goods-movement variants it is the session the operation was rung up during.
+        source:
+          type: string
+          enum: *a5
+        status:
+          type: string
+          enum: *a6
+        currency:
+          type: string
+          description: ISO 4217 currency code.
+          example: EUR
+        external_id:
+          type: string
+          description: Merchant or POS identifier for the upstream order.
+          nullable: true
+        resource_version:
+          type: number
+          description: Current server-issued version for the operation, starting at 1. Returned as `ETag` header.
+        fiscal_information:
+          nullable: true
+          description: The Fiskaly signature attached to this Operation, when one exists. Null until the operation has been signed.
+          oneOf: *a7
+          discriminator: *a8
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        voided_at:
+          type: string
+          format: date-time
+          nullable: true
+        void_reason:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        note:
+          type: string
+          nullable: true
+          description: Merchant free-text note for the goods-movement event.
+        pretax_amount:
+          type: string
+        tax_amount:
+          type: string
+        tip_amount:
+          type: string
+        total_amount:
+          type: string
+        line_items:
+          type: array
+          items:
+            $ref: "#/components/schemas/LineItem"
+        payments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Payment"
+        type:
+          type: string
+          enum:
+            - return
+          example: return
+        related_operation_id:
+          type: string
+          nullable: true
+          description: Set when the return references an OpenFiskal operation.
+        external_related_operation:
+          nullable: true
+          description: Set when the return references a sale that lives outside OpenFiskal (e.g. legacy platform).
+          allOf:
+            - $ref: "#/components/schemas/ExternalRelatedOperation"
+      required:
+        - id
+        - merchant_id
+        - source
+        - status
+        - currency
+        - resource_version
+        - created_at
+        - updated_at
+        - pretax_amount
+        - tax_amount
+        - tip_amount
+        - total_amount
+        - line_items
+        - payments
+        - type
+    ExchangeOperation:
+      type: object
+      properties:
+        id:
+          type: string
+        merchant_id:
+          type: string
+        location_id:
+          type: string
+          nullable: true
+          description: "Only set for source: POS."
+        register_id:
+          type: string
+          nullable: true
+          description: "Only set for source: POS."
+        session_id:
+          type: string
+          nullable: true
+          description: The RegisterSession this Operation is bound to. Set on every POS Operation; null for ONLINE goods-movement (no register, hence no session). On session-event variants this is the session being opened, adjusted, or closed; on goods-movement variants it is the session the operation was rung up during.
+        source:
+          type: string
+          enum: *a5
+        status:
+          type: string
+          enum: *a6
+        currency:
+          type: string
+          description: ISO 4217 currency code.
+          example: EUR
+        external_id:
+          type: string
+          description: Merchant or POS identifier for the upstream order.
+          nullable: true
+        resource_version:
+          type: number
+          description: Current server-issued version for the operation, starting at 1. Returned as `ETag` header.
+        fiscal_information:
+          nullable: true
+          description: The Fiskaly signature attached to this Operation, when one exists. Null until the operation has been signed.
+          oneOf: *a7
+          discriminator: *a8
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        voided_at:
+          type: string
+          format: date-time
+          nullable: true
+        void_reason:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        note:
+          type: string
+          nullable: true
+          description: Merchant free-text note for the goods-movement event.
+        pretax_amount:
+          type: string
+        tax_amount:
+          type: string
+        tip_amount:
+          type: string
+        total_amount:
+          type: string
+        line_items:
+          type: array
+          items:
+            $ref: "#/components/schemas/LineItem"
+        payments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Payment"
+        type:
+          type: string
+          enum:
+            - exchange
+          example: exchange
+        related_operation_id:
+          type: string
+          nullable: true
+          description: Set when the exchange references an OpenFiskal operation.
+        external_related_operation:
+          nullable: true
+          description: Set when the exchange references a sale that lives outside OpenFiskal (e.g. legacy platform).
+          allOf:
+            - $ref: "#/components/schemas/ExternalRelatedOperation"
+      required:
+        - id
+        - merchant_id
+        - source
+        - status
+        - currency
+        - resource_version
+        - created_at
+        - updated_at
+        - pretax_amount
+        - tax_amount
+        - tip_amount
+        - total_amount
+        - line_items
+        - payments
+        - type
+    SessionOpenOperation:
+      type: object
+      properties:
+        id:
+          type: string
+        merchant_id:
+          type: string
+        location_id:
+          type: string
+          nullable: true
+          description: "Only set for source: POS."
+        register_id:
+          type: string
+          nullable: true
+          description: "Only set for source: POS."
+        session_id:
+          type: string
+          nullable: true
+          description: The RegisterSession this Operation is bound to. Set on every POS Operation; null for ONLINE goods-movement (no register, hence no session). On session-event variants this is the session being opened, adjusted, or closed; on goods-movement variants it is the session the operation was rung up during.
+        source:
+          type: string
+          enum: *a5
+        status:
+          type: string
+          enum: *a6
+        currency:
+          type: string
+          description: ISO 4217 currency code.
+          example: EUR
+        external_id:
+          type: string
+          description: Merchant or POS identifier for the upstream order.
+          nullable: true
+        resource_version:
+          type: number
+          description: Current server-issued version for the operation, starting at 1. Returned as `ETag` header.
+        fiscal_information:
+          nullable: true
+          description: The Fiskaly signature attached to this Operation, when one exists. Null until the operation has been signed.
+          oneOf: *a7
+          discriminator: *a8
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        voided_at:
+          type: string
+          format: date-time
+          nullable: true
+        void_reason:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        type:
+          type: string
+          enum:
+            - session_open
+          example: session_open
+        opening_balance_amount:
+          type: string
+          description: Opening cash balance as a decimal string.
+        opening_note:
+          type: string
+          nullable: true
+      required:
+        - id
+        - merchant_id
+        - source
+        - status
+        - currency
+        - resource_version
+        - created_at
+        - updated_at
+        - type
+        - opening_balance_amount
+    SessionCashAdjustmentOperation:
+      type: object
+      properties:
+        id:
+          type: string
+        merchant_id:
+          type: string
+        location_id:
+          type: string
+          nullable: true
+          description: "Only set for source: POS."
+        register_id:
+          type: string
+          nullable: true
+          description: "Only set for source: POS."
+        session_id:
+          type: string
+          nullable: true
+          description: The RegisterSession this Operation is bound to. Set on every POS Operation; null for ONLINE goods-movement (no register, hence no session). On session-event variants this is the session being opened, adjusted, or closed; on goods-movement variants it is the session the operation was rung up during.
+        source:
+          type: string
+          enum: *a5
+        status:
+          type: string
+          enum: *a6
+        currency:
+          type: string
+          description: ISO 4217 currency code.
+          example: EUR
+        external_id:
+          type: string
+          description: Merchant or POS identifier for the upstream order.
+          nullable: true
+        resource_version:
+          type: number
+          description: Current server-issued version for the operation, starting at 1. Returned as `ETag` header.
+        fiscal_information:
+          nullable: true
+          description: The Fiskaly signature attached to this Operation, when one exists. Null until the operation has been signed.
+          oneOf: *a7
+          discriminator: *a8
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        voided_at:
+          type: string
+          format: date-time
+          nullable: true
+        void_reason:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        type:
+          type: string
+          enum:
+            - session_cash_adjustment
+          example: session_cash_adjustment
+        cash_amount:
+          type: string
+          description: Signed cash adjustment as a decimal string. Negative = cash out.
+        note:
+          type: string
+          nullable: true
+          description: Merchant free-text note for the cash adjustment.
+      required:
+        - id
+        - merchant_id
+        - source
+        - status
+        - currency
+        - resource_version
+        - created_at
+        - updated_at
+        - type
+        - cash_amount
+    SessionCloseOperation:
+      type: object
+      properties:
+        id:
+          type: string
+        merchant_id:
+          type: string
+        location_id:
+          type: string
+          nullable: true
+          description: "Only set for source: POS."
+        register_id:
+          type: string
+          nullable: true
+          description: "Only set for source: POS."
+        session_id:
+          type: string
+          nullable: true
+          description: The RegisterSession this Operation is bound to. Set on every POS Operation; null for ONLINE goods-movement (no register, hence no session). On session-event variants this is the session being opened, adjusted, or closed; on goods-movement variants it is the session the operation was rung up during.
+        source:
+          type: string
+          enum: *a5
+        status:
+          type: string
+          enum: *a6
+        currency:
+          type: string
+          description: ISO 4217 currency code.
+          example: EUR
+        external_id:
+          type: string
+          description: Merchant or POS identifier for the upstream order.
+          nullable: true
+        resource_version:
+          type: number
+          description: Current server-issued version for the operation, starting at 1. Returned as `ETag` header.
+        fiscal_information:
+          nullable: true
+          description: The Fiskaly signature attached to this Operation, when one exists. Null until the operation has been signed.
+          oneOf: *a7
+          discriminator: *a8
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        voided_at:
+          type: string
+          format: date-time
+          nullable: true
+        void_reason:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        type:
+          type: string
+          enum:
+            - session_close
+          example: session_close
+        counted_closing_amount:
+          type: string
+          description: Merchant-counted closing cash balance as a decimal string.
+        discrepancy_note:
+          type: string
+          nullable: true
+      required:
+        - id
+        - merchant_id
+        - source
+        - status
+        - currency
+        - resource_version
+        - created_at
+        - updated_at
+        - type
+        - counted_closing_amount
+    PaymentDto:
+      type: object
+      properties:
+        payment_id:
+          type: string
+          example: pay_1001_card
+          description: Integrator payment ID
+        method:
+          type: string
+          enum:
+            - cash
+            - card
+            - voucher
+            - gift_card
+            - bank_transfer
+            - digital_wallet
+            - store_credit
+            - other
+          example: card
+        amount:
+          type: string
+          example: "47.50"
+          description: Payment amount as decimal string
+        currency:
+          type: string
+          example: EUR
+          description: ISO 4217 3-char currency code
+        status:
+          type: string
+          enum:
+            - pending
+            - authorized
+            - captured
+            - failed
+            - voided
+            - refunded
+          example: captured
+        processor:
+          type: string
+          example: sumup
+          description: Payment processor name
+        card_brand:
+          type: string
+          example: visa
+          description: Card brand if method is card
+        processor_reference:
+          type: string
+          example: ch_123
+          description: Processor reference ID
+        processed_at:
+          type: string
+          example: 2026-02-26T12:05:00Z
+          description: When the payment was processed (ISO 8601)
+      required:
+        - payment_id
+        - method
+        - amount
+        - currency
+        - status
+    CompleteOperationDto:
+      type: object
+      properties:
+        payments:
+          description: Payments tendered for this operation
+          type: array
+          items:
+            $ref: "#/components/schemas/PaymentDto"
+        completed_at:
+          type: string
+          example: 2026-02-26T12:05:00Z
+          description: Completion timestamp (ISO 8601), defaults to now
+      required:
+        - payments
+    VoidOperationDto:
+      type: object
+      properties:
+        reason:
+          type: string
+          enum:
+            - void_before_completion
+            - customer_abandoned_checkout
+            - operator_cancelled
+            - payment_failed
+          example: customer_abandoned_checkout
+          description: Reason for voiding the operation
+      required:
+        - reason
+    ExportType:
+      type: string
+      enum:
+        - dsfinvk
+      description: Country-specific fiscal export type.
+    CreateExportDto:
+      type: object
+      properties:
+        type:
+          example: dsfinvk
+          description: Country-specific fiscal export type.
+          allOf:
+            - $ref: "#/components/schemas/ExportType"
+        register_id:
+          type: string
+          example: reg_01HABC
+          description: Optional register to scope the export to. When omitted, the export covers all eligible registers for the merchant under the matching fiscal regime.
+        from:
+          type: string
+          format: date-time
+          example: 2026-03-01T00:00:00Z
+        to:
+          type: string
+          format: date-time
+          example: 2026-03-31T23:59:59Z
+      required:
+        - type
+        - from
+        - to
+    ExportError:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Human-readable failure description.
+        details:
+          type: object
+          nullable: true
+          description: Structured error payload (e.g. provider error response). Shape varies by export type.
+      required:
+        - message
+    Export:
       type: object
       properties:
         id:
           type: string
         type:
-          type: string
-          enum: [dsfinvk, tse_tar, dep7]
-          description: |
-            Country-specific fiscal export type.
-            `dsfinvk` and `tse_tar` for Germany (KassenSichV), `dep7` for Austria (RKSV).
+          allOf:
+            - $ref: "#/components/schemas/ExportType"
         status:
           type: string
-          enum: [queued, processing, ready, failed, expired]
-        schema_version:
-          type: string
+          enum:
+            - pending
+            - completed
+            - failed
         register_id:
           type: string
-          description: Register the export is scoped to.
+          nullable: true
         from:
           type: string
           format: date-time
         to:
           type: string
           format: date-time
-        retention_expires_at:
+        download_url:
           type: string
-          format: date-time
+          nullable: true
+          description: Signed URL to download the export artifact. Present only when status is `completed`.
+        error:
+          nullable: true
+          description: Failure information. Present only when status is `failed`.
+          allOf:
+            - $ref: "#/components/schemas/ExportError"
         created_at:
           type: string
           format: date-time
-      required: [id, type, status, schema_version, register_id, retention_expires_at, created_at]
-    ExportCreateRequest:
-      type: object
-      properties:
-        type:
-          type: string
-          enum: [dsfinvk, tse_tar, dep7]
-          description: |
-            Country-specific fiscal export type.
-            `dsfinvk` or `tse_tar` for Germany (KassenSichV), `dep7` for Austria (RKSV).
-        register_id:
-          type: string
-          description: Register to export fiscal data for.
-        from:
+        completed_at:
           type: string
           format: date-time
-        to:
-          type: string
-          format: date-time
-      required: [type, register_id, from, to]
+          nullable: true
+      required:
+        - id
+        - type
+        - status
+        - from
+        - to
+        - created_at
