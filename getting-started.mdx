@@ -7,13 +7,13 @@ OpenFiskal's `v1` integration contract is shared across countries, but the fisca
 
 <CardGroup cols={3}>
   <Card title="🇩🇪 Germany" href="/getting-started/de">
-    KassenSichV regime. TSS + POS client serials, signed start/end events, QR verification.
+    KassenSichV: Sign transactions and get a QR code with the signature.
   </Card>
   <Card title="🇦🇹 Austria" href="/getting-started/at">
-    RKSV regime. SCU-signed turnover counter, certificate serial, QR verification.
+    RKSV: Sign transactions and get a QR code with the signature.
   </Card>
   <Card title="🇮🇹 Italy" href="/getting-started/it">
-    RT regime. Codice Fiscale + Partita IVA identity, Fisconline credentials, DCW number on receipt.
+    Registratore Telematico: Transmit transactions to AdE and get DCW numbers.
   </Card>
 </CardGroup>
 
@@ -43,7 +43,7 @@ These mechanics are identical regardless of the country guide you follow:
 | --- | --- | --- | --- |
 | Regime | KassenSichV | RKSV | RT |
 | `country_code` | `DEU` | `AUT` | `ITA` |
-| Fiscal identity required fields | `tax_number`, `vat_id` | `legal_entity_id_type` | `legal_entity_type` |
+| Fiscal identity required fields | `tax_number`, `vat_id` | `legal_entity_id_type` (+ `gln` when type is `GLN`) | `tax_number`, `vat_number`, `legal_entity_type`, `fisconline_user`, `fisconline_password`, `fisconline_pin` |
 | Receipt obligation | Render all fiscal fields exactly | Preserve fiscal values + local format | Render the DCW number |
 
 ## Next steps
