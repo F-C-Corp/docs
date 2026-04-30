@@ -4,6 +4,22 @@ description: "API contract updates to the OpenFiskal Fiscalization API."
 rss: true
 ---
 
+<Update label="April 30, 2026" description="Fiscalization API" tags={["Breaking"]}>
+  **Merchant `tax_id` removed; Italian `fiscal_identity` reshaped**
+
+  The top-level `Merchant.tax_id` field has been removed from create, update, and response shapes. Tax identifiers now live exclusively on `fiscal_identity`, where they can vary by country.
+
+  The Italian `fiscal_identity` object (`country_code: "ITA"`) has been replaced:
+
+  - Removed (both optional): `vat_id`, `codice_fiscale`.
+  - Added (all required): `tax_number` (Codice Fiscale — 11 numeric digits or 16 alphanumeric characters), `vat_number` (Partita IVA — 11 numeric digits), `fisconline_user` (16 alphanumeric characters; the Codice Fiscale of the person delegated to access the Agenzia delle Entrate portal), `fisconline_password`, `fisconline_pin`.
+  - `legal_entity_type` (`COMPANY | INDIVIDUAL`) is unchanged.
+
+  The German (`DEU`) and Austrian (`AUT`) `fiscal_identity` shapes are unchanged.
+
+  Update integrator code that creates or updates Italian merchants, and stop sending the top-level `tax_id` field for all merchants, before your next release.
+</Update>
+
 <Update label="April 23, 2026" description="Fiscalization API" tags={["Breaking"]}>
   **Operation type `refund` renamed to `return`**
 

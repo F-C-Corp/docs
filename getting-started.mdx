@@ -1,321 +1,53 @@
 ---
 title: "Getting started"
-description: "Create your API key, onboard a merchant, fiscalize a register, and complete your first operation."
+description: "Pick the country you're integrating for. Each guide walks you through the country-specific fiscal contract end to end."
 ---
 
-This guide walks you through the current `v1` integration contract. You create an API key, onboard a merchant with fiscal identities, register a location and terminal, fiscalize the register, start an operation, and complete it with the typed payment contract.
+OpenFiskal's `v1` integration contract is shared across countries, but the fiscal regime, merchant identity shape, and signed receipt fields differ. Pick your country to follow the correct flow.
+
+<CardGroup cols={3}>
+  <Card title="🇩🇪 Germany" href="/getting-started/de">
+    KassenSichV regime. TSS + POS client serials, signed start/end events, QR verification.
+  </Card>
+  <Card title="🇦🇹 Austria" href="/getting-started/at">
+    RKSV regime. SCU-signed turnover counter, certificate serial, QR verification.
+  </Card>
+  <Card title="🇮🇹 Italy" href="/getting-started/it">
+    RT regime. Codice Fiscale + Partita IVA identity, Fisconline credentials, DCW number on receipt.
+  </Card>
+</CardGroup>
 
 <Info>
-  All examples use `https://sandbox.api.openfiskal.com/v1`. Replace with `https://api.openfiskal.com/v1` when you go live.
+  All three guides use `https://sandbox.api.openfiskal.com/v1`. Replace with `https://api.openfiskal.com/v1` when you go live.
 </Info>
 
 <Card title="Live OpenAPI spec" icon="file-code" href="https://api.openfiskal.com/openapi-json">
-  The current production spec is served at **`https://api.openfiskal.com/openapi-json`** (sandbox: **`https://sandbox.api.openfiskal.com/openapi-json`**). Import it into Postman, Insomnia, or an OpenAPI code generator to scaffold a client in minutes. 
+  The current production spec is served at **`https://api.openfiskal.com/openapi-json`** (sandbox: **`https://sandbox.api.openfiskal.com/openapi-json`**). Import it into Postman, Insomnia, or an OpenAPI code generator to scaffold a client in minutes.
 
-The OpenAPI spec always matches the live API implementation.
+  The OpenAPI spec always matches the live API implementation.
 </Card>
 
-## Prerequisites
+## What's the same across countries
 
-- An OpenFiskal tenant
-- A tenant-scoped, country-scoped API key created in your tenant dashboard
-- `curl` or an HTTP client
-- A backend service / database to store your API key, entity IDs and ETags
+These mechanics are identical regardless of the country guide you follow:
 
-## Authentication model
+- **API key format** — `of_{env}_{country}_{random}`, one key per country + environment.
+- **Request shape** — bearer auth on every request, `X-OpenFiskal-Merchant` on every merchant-scoped request, ETag + `If-Match` on mutating calls.
+- **Resource ordering** — merchant → location → register → fiscalize → operation → complete.
+- **Idempotency** — `Idempotency-Key` on `POST /operations` and `PATCH /operations/{id}/complete|void`.
+- **Money fields** — decimal strings, not integers. `pretax_amount + tax_amount + tip_amount = total_amount`.
 
-Use the standard bearer header on every request. The key encodes the environment and country — e.g. `of_test_deu_…` for the German sandbox, `of_live_deu_…` for German production.
+## What's different per country
 
-```bash
--H "Authorization: Bearer of_live_deu_abc123..."
-```
-
-Every merchant-scoped request must also include:
-
-```bash
--H "X-OpenFiskal-Merchant: merchant_01HXYZ"
-```
-
-This header value is the merchant ID returned by `POST /merchants`, not your API key.
-
-## Create resources
-
-Create these resources in order. The register cannot fiscalize until the merchant has `fiscal_identities` for the target country.
-
-<Steps>
-  <Step title="Create your API key">
-    Start in the OpenFiskal tenant dashboard. Create a key for the country you want to operate in (one key per country + environment). Store it in your secrets manager. Key format: `of_{env}_{country}_{random}`, e.g. `of_test_deu_abcdefgh12345678`.
-  </Step>
-  <Step title="Create a merchant">
-    A merchant represents the legal entity. `country_code` and every `address.country_code` must use **ISO 3166-1 alpha-3** codes (`DEU`, `AUT`, `ITA`) — not alpha-2. The key's embedded country must match; a `deu` key rejects an `AUT` payload.
-
-    ```bash
-    curl -X POST https://sandbox.api.openfiskal.com/v1/merchants \
-      -H "Authorization: Bearer of_test_deu_abc123..." \
-      -H "Content-Type: application/json" \
-      -d '{
-        "legal_name": "Mustermann GmbH",
-        "country_code": "DEU",
-        "tax_id": "DE123456789",
-        "address": {
-          "line1": "Friedrichstraße 42",
-          "city": "Berlin",
-          "postal_code": "10117",
-          "country_code": "DEU"
-        },
-        "fiscal_identities": [
-          {
-            "country": "DEU",
-            "tax_number": "21/815/08150",
-            "vat_id": "DE123456789"
-          }
-        ]
-      }'
-    ```
-
-    <Warning>
-      `fiscal_identities` is required on the merchant and must include one entry per country you intend to fiscalize in. Without a matching fiscal identity, `POST /registers/{id}/fiscalize` will fail. Fiscal identity shape varies by country — see the schema reference.
-    </Warning>
-
-    The returned `id` becomes the `X-OpenFiskal-Merchant` header on every merchant-scoped request that follows.
-  </Step>
-  <Step title="Create a location">
-    A location is a physical point of sale. `timezone` is a **required** IANA zone string — the fiscal regime is derived from the location's country and many regimes (e.g. KassenSichV, RKSV) embed local time into signed records.
-
-    ```bash
-    curl -X POST https://sandbox.api.openfiskal.com/v1/locations \
-      -H "Authorization: Bearer of_test_deu_abc123..." \
-      -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
-      -H "Content-Type: application/json" \
-      -d '{
-        "name": "Berlin Mitte",
-        "address": {
-          "line1": "Friedrichstraße 42",
-          "city": "Berlin",
-          "postal_code": "10117",
-          "country_code": "DEU"
-        },
-        "timezone": "Europe/Berlin"
-      }'
-    ```
-  </Step>
-  <Step title="Create a register">
-    A register is the logical checkout or terminal that creates operations.
-
-    ```bash
-    curl -X POST https://sandbox.api.openfiskal.com/v1/registers \
-      -H "Authorization: Bearer of_test_deu_abc123..." \
-      -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
-      -H "Content-Type: application/json" \
-      -d '{
-        "location_id": "loc_01HXYZ",
-        "name": "Register 1",
-        "external_id": "pos-register-1"
-      }'
-    ```
-  </Step>
-  <Step title="Fiscalize the register">
-    Before the register can accept operations, call `POST /registers/{id}/fiscalize`. This provisions the regime-specific fiscal components (TSS + client for KassenSichV, SCU + cash register for RKSV) using the merchant's `fiscal_identities` and the location's country. The response is `202 Accepted`; poll `GET /registers/{id}` until `fiscalizedAt` is populated.
-
-    ```bash
-    curl -X POST https://sandbox.api.openfiskal.com/v1/registers/reg_01HXYZ/fiscalize \
-      -H "Authorization: Bearer of_test_deu_abc123..." \
-      -H "X-OpenFiskal-Merchant: merchant_01HXYZ"
-    ```
-  </Step>
-  <Step title="Verify your saved IDs">
-    Persist the returned merchant, location, and register IDs. You will use them for every later operation request.
-  </Step>
-</Steps>
-
-## Perform a fiscalized sale
-
-Once your register is fiscalized, you can create and complete sale operations.
-
-<Steps>
-  <Step title="Start an operation">
-    `POST /operations` is a single-shot create. All monetary fields are decimal strings, not integers. `pretax_amount + tax_amount + tip_amount` must equal `total_amount`. `line_items` is required with at least one entry.
-
-    ```bash
-    curl -X POST https://sandbox.api.openfiskal.com/v1/operations \
-      -H "Authorization: Bearer of_test_deu_abc123..." \
-      -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
-      -H "Idempotency-Key: op-order-1001-start" \
-      -H "Content-Type: application/json" \
-      -d '{
-        "register_id": "reg_01HXYZ",
-        "source": "POS",
-        "type": "sale",
-        "currency": "EUR",
-        "external_id": "order-1001",
-        "pretax_amount": "39.72",
-        "tax_amount": "2.78",
-        "tip_amount": "0.00",
-        "total_amount": "42.50",
-        "line_items": [
-          {
-            "title": "Lunch menu",
-            "quantity": 1,
-            "unit_price": "42.50",
-            "total_amount": "42.50",
-            "taxes": [
-              { "name": "MwSt. 7%", "rate": "0.07", "tax_amount": "2.78" }
-            ]
-          }
-        ]
-      }'
-    ```
-
-    <Warning>
-      Always send `line_items[].taxes[]`. Omitting it prevents correct multi-VAT breakdown on the receipt and fiscal documents (DSFinV-K `vat.csv`, RKSV signatures). One tax entry per VAT rate on the line.
-    </Warning>
-
-    Response:
-
-    ```http
-    HTTP/1.1 201 Created
-    ETag: "1"
-    X-Request-Id: req_01JSTART
-    ```
-
-    ```json
-    {
-      "id": "op_01HXYZ",
-      "resource_version": 1,
-      "merchant_id": "merchant_01HXYZ",
-      "location_id": "loc_01HXYZ",
-      "register_id": "reg_01HXYZ",
-      "source": "POS",
-      "external_id": "order-1001",
-      "status": "open",
-      "type": "sale",
-      "currency": "EUR",
-      "pretax_amount": "39.72",
-      "tax_amount": "2.78",
-      "tip_amount": "0.00",
-      "total_amount": "42.50",
-      "line_items": [
-        {
-          "id": "li_01HXYZ",
-          "title": "Lunch menu",
-          "quantity": 1,
-          "unit_price": "42.50",
-          "total_amount": "42.50",
-          "taxes": [
-            { "id": "lit_01HXYZ", "name": "MwSt. 7%", "rate": "0.07", "tax_amount": "2.78" }
-          ]
-        }
-      ],
-      "payments": [],
-      "created_at": "2026-02-26T12:00:00Z",
-      "updated_at": "2026-02-26T12:00:00Z"
-    }
-    ```
-  </Step>
-  <Step title="Complete the operation">
-    Completion includes typed payment legs. Use one entry per tender leg and include processor references where available. Send the latest `ETag` in `If-Match`. The completed operation returns `fiscal_information` for regime-specific fiscal payloads.
-
-    <Note>
-      The current API has no generic `PATCH /operations/{id}` endpoint. Build the full line-item and amount set before calling `POST /operations`; you cannot amend the body after creation. Open operations only accept `/complete` and `/void`.
-    </Note>
-
-    ```bash
-    curl -X PATCH https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ/complete \
-      -H "Authorization: Bearer of_test_deu_abc123..." \
-      -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
-      -H "Idempotency-Key: op-order-1001-complete" \
-      -H 'If-Match: "1"' \
-      -H "Content-Type: application/json" \
-      -d '{
-        "payments": [
-          {
-            "payment_id": "pay_1001_card",
-            "method": "card",
-            "amount": "42.50",
-            "currency": "EUR",
-            "status": "captured",
-            "processor": "sumup",
-            "card_brand": "visa",
-            "processor_reference": "ch_123",
-            "processed_at": "2026-02-26T12:05:00Z"
-          }
-        ]
-      }'
-    ```
-
-    Response:
-
-    ```http
-    HTTP/1.1 200 OK
-    ETag: "2"
-    X-Request-Id: req_01JCOMPLETE
-    ```
-
-    ```json
-    {
-      "id": "op_01HXYZ",
-      "resource_version": 2,
-      "status": "completed",
-      "payments": [
-        {
-          "payment_id": "pay_1001_card",
-          "method": "card",
-          "amount": "42.50",
-          "currency": "EUR",
-          "status": "captured",
-          "processor": "sumup",
-          "processor_reference": "ch_123",
-          "card_brand": "visa",
-          "processed_at": "2026-02-26T12:05:00Z"
-        }
-      ],
-      "fiscal_information": {
-        "regime": "KassenSichV",
-        "document_number": "2026-000123",
-        "document_type": "Kassenbeleg",
-        "tse_serial": "TSE0123456789ABCDEF",
-        "client_id": "Kasse1",
-        "signature_algorithm": "ecdsa-plain-SHA384",
-        "time_format": "utcTime",
-        "start_event": {
-          "signed_at": "2026-02-25T19:02:11Z",
-          "transaction_counter": 4821,
-          "signature": "base64encodedStartSignature=="
-        },
-        "end_event": {
-          "signed_at": "2026-02-25T20:14:55Z",
-          "transaction_counter": 4822,
-          "signature": "base64encodedEndSignature==",
-          "process_type": "Kassenbeleg-V1",
-          "process_data": "Beleg^42.50_0.00_0.00_0.00_0.00^42.50:Bar"
-        },
-        "verification": {
-          "qr_data": "V0;Kasse1;ecdsa-plain-SHA384;2026-02-25T19:02:11;2026-02-25T20:14:55;42.50;4822;base64encodedEndSignature=="
-        }
-      }
-    }
-    ```
-  </Step>
-</Steps>
-
-## Void an open operation
-
-If the sale is abandoned before completion, void the open operation:
-
-```bash
-curl -X PATCH https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ/void \
-  -H "Authorization: Bearer of_test_deu_abc123..." \
-  -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
-  -H "Idempotency-Key: op-order-1001-void" \
-  -H 'If-Match: "1"' \
-  -H "Content-Type: application/json" \
-  -d '{ "reason": "void_before_completion" }'
-```
-
-Completed operations cannot be voided — use a `return` operation instead.
+| | 🇩🇪 Germany | 🇦🇹 Austria | 🇮🇹 Italy |
+| --- | --- | --- | --- |
+| Regime | KassenSichV | RKSV | RT |
+| `country_code` | `DEU` | `AUT` | `ITA` |
+| Fiscal identity required fields | `tax_number`, `vat_id` | `legal_entity_id_type` | `legal_entity_type` |
+| Receipt obligation | Render all fiscal fields exactly | Preserve fiscal values + local format | Render the DCW number |
 
 ## Next steps
 
-- [Supported scope](/supported-scope)
-- [Transaction lifecycle](/pos-operation-ingestion) — operation lifecycle in detail
-- [Payment lifecycle](/payment-lifecycle) — split tender, asynchronous settlement
+- [Supported scope](/supported-scope) — countries, regimes, and product scope
+- [Authentication](/auth) — bearer key + merchant header reference
+- [Integration topology](/integration-topology) — backend-to-backend architecture

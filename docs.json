@@ -17,7 +17,15 @@
             "group": "Overview",
             "pages": [
               "supported-scope",
-              "getting-started",
+              {
+                "group": "Getting started",
+                "pages": [
+                  "getting-started",
+                  "getting-started/de",
+                  "getting-started/at",
+                  "getting-started/it"
+                ]
+              },
               "integration-topology",
               "auth"
             ]
