@@ -43,7 +43,7 @@ These mechanics are identical regardless of the country guide you follow:
 | --- | --- | --- | --- |
 | Regime | KassenSichV | RKSV | RT |
 | `country_code` | `DEU` | `AUT` | `ITA` |
-| Fiscal identity required fields | `tax_number`, `vat_id` | `legal_entity_id_type` | `legal_entity_type` |
+| Fiscal identity required fields | `tax_number`, `vat_id` | `legal_entity_id_type` (+ `gln` when type is `GLN`) | `tax_number`, `vat_number`, `legal_entity_type`, `fisconline_user`, `fisconline_password`, `fisconline_pin` |
 | Receipt obligation | Render all fiscal fields exactly | Preserve fiscal values + local format | Render the DCW number |
 
 ## Next steps
