@@ -1145,12 +1145,24 @@ paths:
             application/json:
               schema:
                 oneOf:
-                  - $ref: "#/components/schemas/SaleOperation"
-                  - $ref: "#/components/schemas/ReturnOperation"
-                  - $ref: "#/components/schemas/ExchangeOperation"
-                  - $ref: "#/components/schemas/SessionOpenOperation"
-                  - $ref: "#/components/schemas/SessionCashAdjustmentOperation"
-                  - $ref: "#/components/schemas/SessionCloseOperation"
+                  - title: SaleOperation
+                    allOf:
+                      - $ref: "#/components/schemas/SaleOperation"
+                  - title: ReturnOperation
+                    allOf:
+                      - $ref: "#/components/schemas/ReturnOperation"
+                  - title: ExchangeOperation
+                    allOf:
+                      - $ref: "#/components/schemas/ExchangeOperation"
+                  - title: SessionOpenOperation
+                    allOf:
+                      - $ref: "#/components/schemas/SessionOpenOperation"
+                  - title: SessionCashAdjustmentOperation
+                    allOf:
+                      - $ref: "#/components/schemas/SessionCashAdjustmentOperation"
+                  - title: SessionCloseOperation
+                    allOf:
+                      - $ref: "#/components/schemas/SessionCloseOperation"
                 discriminator:
                   propertyName: type
                   mapping:
@@ -1223,12 +1235,24 @@ paths:
           application/json:
             schema:
               oneOf:
-                - $ref: "#/components/schemas/CreateSaleOperationDto"
-                - $ref: "#/components/schemas/CreateReturnOperationDto"
-                - $ref: "#/components/schemas/CreateExchangeOperationDto"
-                - $ref: "#/components/schemas/CreateSessionOpenOperationDto"
-                - $ref: "#/components/schemas/CreateSessionCashAdjustmentOperationDto"
-                - $ref: "#/components/schemas/CreateSessionCloseOperationDto"
+                - title: SaleOperation
+                  allOf:
+                    - $ref: "#/components/schemas/CreateSaleOperationDto"
+                - title: ReturnOperation
+                  allOf:
+                    - $ref: "#/components/schemas/CreateReturnOperationDto"
+                - title: ExchangeOperation
+                  allOf:
+                    - $ref: "#/components/schemas/CreateExchangeOperationDto"
+                - title: SessionOpenOperation
+                  allOf:
+                    - $ref: "#/components/schemas/CreateSessionOpenOperationDto"
+                - title: SessionCashAdjustmentOperation
+                  allOf:
+                    - $ref: "#/components/schemas/CreateSessionCashAdjustmentOperationDto"
+                - title: SessionCloseOperation
+                  allOf:
+                    - $ref: "#/components/schemas/CreateSessionCloseOperationDto"
               discriminator:
                 propertyName: type
                 mapping:
@@ -1245,12 +1269,24 @@ paths:
             application/json:
               schema:
                 oneOf:
-                  - $ref: "#/components/schemas/SaleOperation"
-                  - $ref: "#/components/schemas/ReturnOperation"
-                  - $ref: "#/components/schemas/ExchangeOperation"
-                  - $ref: "#/components/schemas/SessionOpenOperation"
-                  - $ref: "#/components/schemas/SessionCashAdjustmentOperation"
-                  - $ref: "#/components/schemas/SessionCloseOperation"
+                  - title: SaleOperation
+                    allOf:
+                      - $ref: "#/components/schemas/SaleOperation"
+                  - title: ReturnOperation
+                    allOf:
+                      - $ref: "#/components/schemas/ReturnOperation"
+                  - title: ExchangeOperation
+                    allOf:
+                      - $ref: "#/components/schemas/ExchangeOperation"
+                  - title: SessionOpenOperation
+                    allOf:
+                      - $ref: "#/components/schemas/SessionOpenOperation"
+                  - title: SessionCashAdjustmentOperation
+                    allOf:
+                      - $ref: "#/components/schemas/SessionCashAdjustmentOperation"
+                  - title: SessionCloseOperation
+                    allOf:
+                      - $ref: "#/components/schemas/SessionCloseOperation"
                 discriminator:
                   propertyName: type
                   mapping:
@@ -1377,12 +1413,24 @@ paths:
             application/json:
               schema:
                 oneOf:
-                  - $ref: "#/components/schemas/SaleOperation"
-                  - $ref: "#/components/schemas/ReturnOperation"
-                  - $ref: "#/components/schemas/ExchangeOperation"
-                  - $ref: "#/components/schemas/SessionOpenOperation"
-                  - $ref: "#/components/schemas/SessionCashAdjustmentOperation"
-                  - $ref: "#/components/schemas/SessionCloseOperation"
+                  - title: SaleOperation
+                    allOf:
+                      - $ref: "#/components/schemas/SaleOperation"
+                  - title: ReturnOperation
+                    allOf:
+                      - $ref: "#/components/schemas/ReturnOperation"
+                  - title: ExchangeOperation
+                    allOf:
+                      - $ref: "#/components/schemas/ExchangeOperation"
+                  - title: SessionOpenOperation
+                    allOf:
+                      - $ref: "#/components/schemas/SessionOpenOperation"
+                  - title: SessionCashAdjustmentOperation
+                    allOf:
+                      - $ref: "#/components/schemas/SessionCashAdjustmentOperation"
+                  - title: SessionCloseOperation
+                    allOf:
+                      - $ref: "#/components/schemas/SessionCloseOperation"
                 discriminator:
                   propertyName: type
                   mapping:
@@ -1538,12 +1586,24 @@ paths:
             application/json:
               schema:
                 oneOf:
-                  - $ref: "#/components/schemas/SaleOperation"
-                  - $ref: "#/components/schemas/ReturnOperation"
-                  - $ref: "#/components/schemas/ExchangeOperation"
-                  - $ref: "#/components/schemas/SessionOpenOperation"
-                  - $ref: "#/components/schemas/SessionCashAdjustmentOperation"
-                  - $ref: "#/components/schemas/SessionCloseOperation"
+                  - title: SaleOperation
+                    allOf:
+                      - $ref: "#/components/schemas/SaleOperation"
+                  - title: ReturnOperation
+                    allOf:
+                      - $ref: "#/components/schemas/ReturnOperation"
+                  - title: ExchangeOperation
+                    allOf:
+                      - $ref: "#/components/schemas/ExchangeOperation"
+                  - title: SessionOpenOperation
+                    allOf:
+                      - $ref: "#/components/schemas/SessionOpenOperation"
+                  - title: SessionCashAdjustmentOperation
+                    allOf:
+                      - $ref: "#/components/schemas/SessionCashAdjustmentOperation"
+                  - title: SessionCloseOperation
+                    allOf:
+                      - $ref: "#/components/schemas/SessionCloseOperation"
                 discriminator:
                   propertyName: type
                   mapping:
@@ -1985,9 +2045,15 @@ components:
           description: Country-specific fiscal identities.
           items:
             oneOf:
-              - $ref: "#/components/schemas/FiscalIdentityDeuDto"
-              - $ref: "#/components/schemas/FiscalIdentityAutDto"
-              - $ref: "#/components/schemas/FiscalIdentityItaDto"
+              - title: FiscalIdentityDEU
+                allOf:
+                  - $ref: "#/components/schemas/FiscalIdentityDeuDto"
+              - title: FiscalIdentityAUT
+                allOf:
+                  - $ref: "#/components/schemas/FiscalIdentityAutDto"
+              - title: FiscalIdentityITA
+                allOf:
+                  - $ref: "#/components/schemas/FiscalIdentityItaDto"
             discriminator:
               propertyName: country_code
               mapping:
@@ -2091,9 +2157,15 @@ components:
           description: Country-specific fiscal identities
           items:
             oneOf:
-              - $ref: "#/components/schemas/FiscalIdentityDeuDto"
-              - $ref: "#/components/schemas/FiscalIdentityAutDto"
-              - $ref: "#/components/schemas/FiscalIdentityItaDto"
+              - title: FiscalIdentityDEU
+                allOf:
+                  - $ref: "#/components/schemas/FiscalIdentityDeuDto"
+              - title: FiscalIdentityAUT
+                allOf:
+                  - $ref: "#/components/schemas/FiscalIdentityAutDto"
+              - title: FiscalIdentityITA
+                allOf:
+                  - $ref: "#/components/schemas/FiscalIdentityItaDto"
             discriminator:
               propertyName: country_code
               mapping:
@@ -2123,9 +2195,15 @@ components:
           description: Country-specific fiscal identities (merge by country key)
           items:
             oneOf:
-              - $ref: "#/components/schemas/FiscalIdentityDeuDto"
-              - $ref: "#/components/schemas/FiscalIdentityAutDto"
-              - $ref: "#/components/schemas/FiscalIdentityItaDto"
+              - title: FiscalIdentityDEU
+                allOf:
+                  - $ref: "#/components/schemas/FiscalIdentityDeuDto"
+              - title: FiscalIdentityAUT
+                allOf:
+                  - $ref: "#/components/schemas/FiscalIdentityAutDto"
+              - title: FiscalIdentityITA
+                allOf:
+                  - $ref: "#/components/schemas/FiscalIdentityItaDto"
             discriminator:
               propertyName: country_code
               mapping:
@@ -2953,11 +3031,17 @@ components:
           description: Current server-issued version for the operation, starting at 1. Returned as `ETag` header.
         fiscal_information:
           nullable: true
-          description: The Fiskaly signature attached to this Operation, when one exists. Null until the operation has been signed (WS7 — including SESSION_* signing).
+          description: The Fiskaly signature attached to this Operation, when one exists. Null until the operation has been signed.
           oneOf: &a18
-            - $ref: "#/components/schemas/FiscalInformationKassenSichV"
-            - $ref: "#/components/schemas/FiscalInformationRKSV"
-            - $ref: "#/components/schemas/FiscalInformationRT"
+            - title: FiscalInformationKassenSichV
+              allOf:
+                - $ref: "#/components/schemas/FiscalInformationKassenSichV"
+            - title: FiscalInformationRKSV
+              allOf:
+                - $ref: "#/components/schemas/FiscalInformationRKSV"
+            - title: FiscalInformationRT
+              allOf:
+                - $ref: "#/components/schemas/FiscalInformationRT"
           discriminator: &a19
             propertyName: regime
             mapping:
@@ -3072,7 +3156,7 @@ components:
           description: Current server-issued version for the operation, starting at 1. Returned as `ETag` header.
         fiscal_information:
           nullable: true
-          description: The Fiskaly signature attached to this Operation, when one exists. Null until the operation has been signed (WS7 — including SESSION_* signing).
+          description: The Fiskaly signature attached to this Operation, when one exists. Null until the operation has been signed.
           oneOf: *a18
           discriminator: *a19
         completed_at:
@@ -3180,7 +3264,7 @@ components:
           description: Current server-issued version for the operation, starting at 1. Returned as `ETag` header.
         fiscal_information:
           nullable: true
-          description: The Fiskaly signature attached to this Operation, when one exists. Null until the operation has been signed (WS7 — including SESSION_* signing).
+          description: The Fiskaly signature attached to this Operation, when one exists. Null until the operation has been signed.
           oneOf: *a18
           discriminator: *a19
         completed_at:
@@ -3288,7 +3372,7 @@ components:
           description: Current server-issued version for the operation, starting at 1. Returned as `ETag` header.
         fiscal_information:
           nullable: true
-          description: The Fiskaly signature attached to this Operation, when one exists. Null until the operation has been signed (WS7 — including SESSION_* signing).
+          description: The Fiskaly signature attached to this Operation, when one exists. Null until the operation has been signed.
           oneOf: *a18
           discriminator: *a19
         completed_at:
@@ -3368,7 +3452,7 @@ components:
           description: Current server-issued version for the operation, starting at 1. Returned as `ETag` header.
         fiscal_information:
           nullable: true
-          description: The Fiskaly signature attached to this Operation, when one exists. Null until the operation has been signed (WS7 — including SESSION_* signing).
+          description: The Fiskaly signature attached to this Operation, when one exists. Null until the operation has been signed.
           oneOf: *a18
           discriminator: *a19
         completed_at:
@@ -3449,7 +3533,7 @@ components:
           description: Current server-issued version for the operation, starting at 1. Returned as `ETag` header.
         fiscal_information:
           nullable: true
-          description: The Fiskaly signature attached to this Operation, when one exists. Null until the operation has been signed (WS7 — including SESSION_* signing).
+          description: The Fiskaly signature attached to this Operation, when one exists. Null until the operation has been signed.
           oneOf: *a18
           discriminator: *a19
         completed_at:
