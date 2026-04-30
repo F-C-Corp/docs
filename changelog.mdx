@@ -20,6 +20,89 @@ rss: true
   Update integrator code that creates or updates Italian merchants, and stop sending the top-level `tax_id` field for all merchants, before your next release.
 </Update>
 
+<Update label="April 29, 2026" description="Fiscalization API" tags={["Addition"]}>
+  **New endpoints: `POST /exports`, `GET /exports/{exportId}`**
+
+  Two new endpoints expose asynchronous fiscal export jobs.
+
+  `POST /exports` enqueues a job and returns `202 Accepted` with `{ id, type, status: "pending", register_id?, from, to, created_at }`. Required body fields: `type` (`dsfinvk` is the first available type), `from` and `to` (ISO 8601 date-times). Optional `register_id` scopes the export to a single register; when omitted, the export covers all eligible registers under the merchant for the matching fiscal regime.
+
+  `GET /exports/{exportId}` returns the job. Once `status` is `completed`, `download_url` is a signed URL to fetch the artifact. When `status` is `failed`, `error.message` (and optional `error.details`) describes why.
+
+  Both endpoints require the `X-OpenFiskal-Merchant` header.
+</Update>
+
+<Update label="April 29, 2026" description="Fiscalization API" tags={["Addition"]}>
+  **`external_related_operation` accepted on returns/exchanges**
+
+  `POST /operations` with `type: "return"` or `type: "exchange"` now accepts a new optional field, `external_related_operation`, for cases where the original sale was never ingested into OpenFiskal (typically during platform migration before backfill).
+
+  ```json
+  {
+    "type": "return",
+    "external_related_operation": {
+      "description": "Return against order from external platform.",
+      "external_operation_id": "shopify-order-4711"
+    }
+  }
+  ```
+
+  - Mutually exclusive with `related_operation_id` — exactly one must be set on a return or exchange.
+  - Both fields on the nested object are required strings.
+  - The same field is echoed on the operation response.
+
+  Use `related_operation_id` when the original sale exists in OpenFiskal; use `external_related_operation` otherwise.
+</Update>
+
+<Update label="April 23, 2026" description="Fiscalization API" tags={["Breaking"]}>
+  **Sign convention enforced on `total_amount` and `line_items[].total_amount`**
+
+  `POST /operations` now rejects payloads whose amount signs do not match `Operation.type`:
+
+  - `sale`: `total_amount` and every `line_items[].total_amount` must be `>= 0`.
+  - `return`: `total_amount` and every `line_items[].total_amount` must be `<= 0`.
+  - `exchange`: no sign constraint (an exchange may net positive, negative, or zero).
+
+  Zero is permitted on both `sale` (freebie) and `return` (zero-value return). Violations return `422 Unprocessable Entity`.
+
+  Sign is the only on-wire signal Fiskaly's TSE has to distinguish a sale from a return signature, so OpenFiskal enforces it before signing.
+
+  Update return flows that previously sent positive amounts on `type: "return"` to send non-positive amounts before your next release.
+</Update>
+
+<Update label="April 23, 2026" description="Fiscalization API" tags={["Breaking"]}>
+  **`fiscal_identities[].country` renamed to `country_code`; DE fields now required**
+
+  The discriminator field on every `fiscal_identity` entry has been renamed from `country` to `country_code`. This applies to all three country variants (`DEU`, `AUT`, `ITA`) on both the create/update payload and the merchant response. Payloads that send `country` will reject.
+
+  For `DEU` fiscal identities, `tax_number` (Steuernummer) and `vat_id` (USt-IdNr) are now both **required**. Previously both were optional. `AUT` and `ITA` requirements are unchanged.
+
+  Update integrator code that creates or parses merchant `fiscal_identities` before your next release.
+</Update>
+
+<Update label="April 23, 2026" description="Fiscalization API" tags={["Addition"]}>
+  **OpenAPI JSON now served at `/openapi-json`**
+
+  The current production OpenAPI spec is now served at:
+
+  - Production: `https://api.openfiskal.com/openapi-json`
+  - Sandbox: `https://sandbox.api.openfiskal.com/openapi-json`
+
+  The previous Swagger-default path `/docs-json` is preserved as a `301` redirect to the new path. Import the new URL into Postman, Insomnia, or an OpenAPI code generator to scaffold a client.
+
+  The OpenAPI spec always matches the live API implementation.
+</Update>
+
+<Update label="April 23, 2026" description="Fiscalization API" tags={["Breaking"]}>
+  **`Operation.status` enum corrected; `412` payload includes `expected_resource_version`**
+
+  The `Operation.status` enum has been corrected from `'open' | 'completed' | 'cancelled'` to `'open' | 'completed' | 'voided'`. Operations that you `PATCH /operations/{id}/void` resolve to `status: "voided"`, not `cancelled`. There were never any operations with `status: "cancelled"` in production — the OpenAPI value was wrong.
+
+  `412 Precondition Failed` error bodies now include `details.expected_resource_version` alongside `details.current_resource_version`. The `message` field is the literal string `"Resource version mismatch."` (previously `"The supplied If-Match value is stale."`).
+
+  Update `Operation.status` parsers to accept `voided`, and update any UI that surfaces the `precondition_failed` error message string.
+</Update>
+
 <Update label="April 23, 2026" description="Fiscalization API" tags={["Breaking"]}>
   **Operation type `refund` renamed to `return`**
 
@@ -48,4 +131,17 @@ rss: true
   **Country code casing**
 
   Clarified that the `country` field on `Address` and on the legal entity schema must be an ISO 3166-1 alpha-3 code in uppercase (for example, `DEU`). No behavior change; existing uppercase values continue to validate.
+</Update>
+
+<Update label="April 19, 2026" description="Fiscalization API" tags={["Addition"]}>
+  **New endpoint: `POST /registers/{registerId}/decommission`**
+
+  Permanently retires a fiscalized register. The endpoint calls the underlying TSE provider to decommission the register's fiscal components and returns the updated register with `decommissionedAt` populated. Currently `DE`/KassenSichV only; AT/IT will follow as those regimes ship publicly.
+
+  Conflicts return `409 decommission_conflict`:
+
+  - Register has not been fiscalized.
+  - Register has already been decommissioned.
+
+  A decommissioned register cannot be re-fiscalized — create a new register for that location instead.
 </Update>
