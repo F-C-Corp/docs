@@ -1,0 +1,249 @@
+---
+title: "Sessions"
+description: "How register sessions group POS operations into a cash-drawer shift, from open to close."
+---
+
+## Overview
+
+A register session is the cash-drawer shift on a fiscalized register. You open a session at the start of the shift, every POS goods-movement that follows binds to it, and you close the session at end of shift with a counted cash balance. Sessions exist only on POS — `ONLINE` operations have no register and therefore no session.
+
+Sessions are not created with their own endpoint. They are opened, adjusted, and closed by sending session-event operations through the same `POST /operations` endpoint that ingests sales, returns, and exchanges. Under many regimes a session open, cash adjustment, or close is itself a fiscal event that must be tracked, persisted, and signed alongside goods movements — routing them through `/operations` is what gives them the same lifecycle, idempotency, and signature surface as a sale.
+
+## Session states
+
+```
+[open] ──► [closed]
+```
+
+- `open` — the session accepts goods-movement operations and cash adjustments
+- `closed` — the session is final; new operations on the register need a new `session_open`
+
+A register has at most one open session at a time. Opening a second session while one is still open is rejected.
+
+## Session-event operation types
+
+| Type | Purpose |
+| --- | --- |
+| `session_open` | Start a new shift on a register with a counted opening float |
+| `session_cash_adjustment` | Record a mid-shift cash movement (drop, pay-in, till correction) |
+| `session_close` | End the shift with a merchant-counted closing balance |
+
+All three flow through `POST /operations`, return an operation resource, and carry the same `resource_version` / `ETag` mechanics as goods-movement operations.
+
+## Opening a session
+
+Send a `session_open` operation with the register, currency, and counted opening float.
+
+```bash
+curl -X POST https://api.openfiskal.com/v1/operations \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
+  -H "Idempotency-Key: ses-2026-04-30-reg_abc123-open" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "session_open",
+    "register_id": "reg_abc123",
+    "currency": "EUR",
+    "opening_balance_amount": "50.00",
+    "opening_note": "Float supplied by office manager."
+  }'
+```
+
+The response carries the new `session_id`. Store it — every operation you send on this register until close must reference it.
+
+```json
+{
+  "id": "op_ses_open_001",
+  "type": "session_open",
+  "register_id": "reg_abc123",
+  "session_id": "ses_abc123",
+  "status": "open",
+  "currency": "EUR",
+  "resource_version": 1
+}
+```
+
+## Goods movements bind to the session
+
+Every `sale`, `return`, and `exchange` you send on a POS register carries the `session_id` of the open session in the response. You do not set `session_id` on the request — OpenFiskal resolves it from the register's currently open session.
+
+If you call `POST /operations` with `source: POS` on a register that has no open session, the request is rejected.
+
+## Mid-shift cash adjustments
+
+Use `session_cash_adjustment` for any cash movement that is not a sale or return: cash drops to the safe, pay-ins, till corrections. The `cash_amount` is signed — negative for cash out, positive for cash in. Multiple adjustments per session are allowed.
+
+```bash
+curl -X POST https://api.openfiskal.com/v1/operations \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
+  -H "Idempotency-Key: ses_abc123-adj-001" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "session_cash_adjustment",
+    "register_id": "reg_abc123",
+    "currency": "EUR",
+    "cash_amount": "-20.00",
+    "note": "Cash drop to safe."
+  }'
+```
+
+## Closing a session
+
+Send `session_close` with the merchant-counted closing balance. OpenFiskal compares it against the expected balance (opening float + cash sales − cash returns + adjustments) and records any discrepancy.
+
+```bash
+curl -X POST https://api.openfiskal.com/v1/operations \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
+  -H "Idempotency-Key: ses_abc123-close" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "session_close",
+    "register_id": "reg_abc123",
+    "currency": "EUR",
+    "counted_closing_amount": "127.50",
+    "discrepancy_note": "Two coins from the day before were unaccounted for."
+  }'
+```
+
+Once the close is completed, the register has no open session. The next shift starts with a new `session_open` and a fresh `session_id`.
+
+## Walkthrough: a single shift
+
+The scenario: a German bakery opens at 08:00 with a 50 EUR float, rings up two cash sales, drops 20 EUR to the safe at midday, and closes the till at 17:00 with 127.50 EUR counted.
+
+<Steps>
+  <Step title="Open the session with a 50 EUR float">
+    ```bash
+    curl -X POST https://api.openfiskal.com/v1/operations \
+      -H "Authorization: Bearer $API_KEY" \
+      -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
+      -H "Idempotency-Key: ses-2026-04-30-reg_abc123-open" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "type": "session_open",
+        "register_id": "reg_abc123",
+        "currency": "EUR",
+        "opening_balance_amount": "50.00"
+      }'
+    ```
+
+    Response (abbreviated):
+
+    ```json
+    {
+      "id": "op_01_open",
+      "type": "session_open",
+      "session_id": "ses_abc123",
+      "register_id": "reg_abc123",
+      "status": "open"
+    }
+    ```
+
+    Capture `ses_abc123` — every operation that follows on this register binds to it automatically.
+  </Step>
+  <Step title="Ring up the first sale (4.50 EUR)">
+    ```bash
+    curl -X POST https://api.openfiskal.com/v1/operations \
+      -H "Authorization: Bearer $API_KEY" \
+      -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
+      -H "Idempotency-Key: order-1001-start" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "type": "sale",
+        "source": "POS",
+        "register_id": "reg_abc123",
+        "currency": "EUR",
+        "external_id": "order-1001",
+        "pretax_amount": "4.21",
+        "tax_amount": "0.29",
+        "tip_amount": "0.00",
+        "total_amount": "4.50",
+        "line_items": [
+          {
+            "description": "Brötchen",
+            "quantity": "3",
+            "pretax_amount": "4.21",
+            "tax_amount": "0.29",
+            "total_amount": "4.50",
+            "tax_rate": "7.00"
+          }
+        ]
+      }'
+    ```
+
+    The response includes `"session_id": "ses_abc123"` even though you did not send it.
+  </Step>
+  <Step title="Ring up the second sale (98.00 EUR)">
+    ```bash
+    curl -X POST https://api.openfiskal.com/v1/operations \
+      -H "Authorization: Bearer $API_KEY" \
+      -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
+      -H "Idempotency-Key: order-1002-start" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "type": "sale",
+        "source": "POS",
+        "register_id": "reg_abc123",
+        "currency": "EUR",
+        "external_id": "order-1002",
+        "pretax_amount": "91.59",
+        "tax_amount": "6.41",
+        "tip_amount": "0.00",
+        "total_amount": "98.00",
+        "line_items": [
+          {
+            "description": "Catering tray",
+            "quantity": "1",
+            "pretax_amount": "91.59",
+            "tax_amount": "6.41",
+            "total_amount": "98.00",
+            "tax_rate": "7.00"
+          }
+        ]
+      }'
+    ```
+  </Step>
+  <Step title="Drop 20 EUR to the safe at midday">
+    ```bash
+    curl -X POST https://api.openfiskal.com/v1/operations \
+      -H "Authorization: Bearer $API_KEY" \
+      -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
+      -H "Idempotency-Key: ses_abc123-drop-001" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "type": "session_cash_adjustment",
+        "register_id": "reg_abc123",
+        "currency": "EUR",
+        "cash_amount": "-20.00",
+        "note": "Cash drop to safe."
+      }'
+    ```
+
+    Expected balance now: `50.00 + 4.50 + 98.00 − 20.00 = 132.50 EUR`.
+  </Step>
+  <Step title="Close the session with a counted 127.50 EUR">
+    ```bash
+    curl -X POST https://api.openfiskal.com/v1/operations \
+      -H "Authorization: Bearer $API_KEY" \
+      -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
+      -H "Idempotency-Key: ses_abc123-close" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "type": "session_close",
+        "register_id": "reg_abc123",
+        "currency": "EUR",
+        "counted_closing_amount": "127.50",
+        "discrepancy_note": "Five euro short — investigating."
+      }'
+    ```
+
+    OpenFiskal records expected `132.50 EUR`, counted `127.50 EUR`, and a `−5.00 EUR` discrepancy. The session is now `closed`. The next shift on `reg_abc123` starts with a new `session_open` and a fresh `session_id`.
+  </Step>
+</Steps>
+
+## Next steps
+
+- [Register lifecycle](/register-lifecycle)
+- [Transaction lifecycle](/pos-operation-ingestion)
