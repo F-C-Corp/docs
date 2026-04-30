@@ -1723,166 +1723,11 @@ paths:
       security: *a10
       summary: Void operation
       tags: *a11
-  /exports:
-    post:
-      description: "Enqueues an asynchronous export job and returns immediately with `202 Accepted` and `status: pending`. Poll `GET /exports/{exportId}` until `status` is `completed` (then `download_url` is set) or `failed`."
-      operationId: ExportsController_create
-      parameters:
-        - &a12
-          name: X-OpenFiskal-Merchant
-          in: header
-          description: Merchant identifier returned by the merchants resource.
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateExportDto"
-      responses:
-        "202":
-          description: Export job enqueued
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Export"
-        "400":
-          description: Invalid request
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorDto"
-              examples:
-                default:
-                  summary: invalid_request
-                  value:
-                    code: invalid_request
-                    message: The request body is malformed.
-                    retryable: false
-        "401":
-          description: Authentication failed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorDto"
-              examples:
-                default:
-                  summary: unauthorized
-                  value:
-                    code: unauthorized
-                    message: Authentication failed.
-                    retryable: false
-        "403":
-          description: Authenticated caller is not allowed to access the requested tenant, country, or merchant.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorDto"
-              examples:
-                default:
-                  summary: forbidden
-                  value:
-                    code: forbidden
-                    message: The authenticated caller cannot access this resource.
-                    retryable: false
-        "404":
-          description: Register not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorDto"
-              examples:
-                default:
-                  summary: not_found
-                  value:
-                    code: not_found
-                    message: The requested resource does not exist.
-                    retryable: false
-        "422":
-          description: Domain validation failed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorDto"
-              examples:
-                default:
-                  summary: regime_validation_failed
-                  value:
-                    code: regime_validation_failed
-                    message: The payload violates regime-specific validation rules.
-                    retryable: false
-      security: &a13
-        - BearerAuth: []
-      summary: Trigger an export
-      tags: &a14
-        - Exports
-  /exports/{exportId}:
-    get:
-      description: Returns the export job. When `status` is `completed`, `download_url` is a signed URL to fetch the artifact. When `status` is `failed`, `error.message` (and optional `error.details`) describe why.
-      operationId: ExportsController_get
-      parameters:
-        - *a12
-        - name: exportId
-          required: true
-          in: path
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Export job returned
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Export"
-        "401":
-          description: Authentication failed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorDto"
-              examples:
-                default:
-                  summary: unauthorized
-                  value:
-                    code: unauthorized
-                    message: Authentication failed.
-                    retryable: false
-        "403":
-          description: Authenticated caller is not allowed to access the requested tenant, country, or merchant.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorDto"
-              examples:
-                default:
-                  summary: forbidden
-                  value:
-                    code: forbidden
-                    message: The authenticated caller cannot access this resource.
-                    retryable: false
-        "404":
-          description: Export not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorDto"
-              examples:
-                default:
-                  summary: not_found
-                  value:
-                    code: not_found
-                    message: The requested resource does not exist.
-                    retryable: false
-      security: *a13
-      summary: Retrieve an export
-      tags: *a14
 info:
   title: OpenFiskal fiscalization API
   description: |-
     OpenFiskal exposes a server-to-server fiscalization API for merchant onboarding,
-    register setup, operation handling, and exports.
+    register setup, and operation handling.
 
     The `v1` contract uses server-issued resource versions and conditional
     writes through `If-Match` for safe concurrent mutation handling.
@@ -2454,7 +2299,7 @@ components:
           description: Required for POS, must be null for ONLINE.
         source:
           type: string
-          enum: &a15
+          enum: &a12
             - POS
             - ONLINE
           example: POS
@@ -2520,7 +2365,7 @@ components:
           description: Required for POS, must be null for ONLINE.
         source:
           type: string
-          enum: *a15
+          enum: *a12
           example: POS
         currency:
           type: string
@@ -2584,7 +2429,7 @@ components:
           description: Required for POS, must be null for ONLINE.
         source:
           type: string
-          enum: *a15
+          enum: *a12
           example: POS
         currency:
           type: string
@@ -3009,12 +2854,12 @@ components:
           description: The RegisterSession this Operation is bound to. Set on every POS Operation; null for ONLINE goods-movement (no register, hence no session). On session-event variants this is the session being opened, adjusted, or closed; on goods-movement variants it is the session the operation was rung up during.
         source:
           type: string
-          enum: &a16
+          enum: &a13
             - POS
             - ONLINE
         status:
           type: string
-          enum: &a17
+          enum: &a14
             - open
             - completed
             - voided
@@ -3032,7 +2877,7 @@ components:
         fiscal_information:
           nullable: true
           description: The Fiskaly signature attached to this Operation, when one exists. Null until the operation has been signed.
-          oneOf: &a18
+          oneOf: &a15
             - title: FiscalInformationKassenSichV
               allOf:
                 - $ref: "#/components/schemas/FiscalInformationKassenSichV"
@@ -3042,7 +2887,7 @@ components:
             - title: FiscalInformationRT
               allOf:
                 - $ref: "#/components/schemas/FiscalInformationRT"
-          discriminator: &a19
+          discriminator: &a16
             propertyName: regime
             mapping:
               KassenSichV: "#/components/schemas/FiscalInformationKassenSichV"
@@ -3139,10 +2984,10 @@ components:
           description: The RegisterSession this Operation is bound to. Set on every POS Operation; null for ONLINE goods-movement (no register, hence no session). On session-event variants this is the session being opened, adjusted, or closed; on goods-movement variants it is the session the operation was rung up during.
         source:
           type: string
-          enum: *a16
+          enum: *a13
         status:
           type: string
-          enum: *a17
+          enum: *a14
         currency:
           type: string
           description: ISO 4217 currency code.
@@ -3157,8 +3002,8 @@ components:
         fiscal_information:
           nullable: true
           description: The Fiskaly signature attached to this Operation, when one exists. Null until the operation has been signed.
-          oneOf: *a18
-          discriminator: *a19
+          oneOf: *a15
+          discriminator: *a16
         completed_at:
           type: string
           format: date-time
@@ -3247,10 +3092,10 @@ components:
           description: The RegisterSession this Operation is bound to. Set on every POS Operation; null for ONLINE goods-movement (no register, hence no session). On session-event variants this is the session being opened, adjusted, or closed; on goods-movement variants it is the session the operation was rung up during.
         source:
           type: string
-          enum: *a16
+          enum: *a13
         status:
           type: string
-          enum: *a17
+          enum: *a14
         currency:
           type: string
           description: ISO 4217 currency code.
@@ -3265,8 +3110,8 @@ components:
         fiscal_information:
           nullable: true
           description: The Fiskaly signature attached to this Operation, when one exists. Null until the operation has been signed.
-          oneOf: *a18
-          discriminator: *a19
+          oneOf: *a15
+          discriminator: *a16
         completed_at:
           type: string
           format: date-time
@@ -3355,10 +3200,10 @@ components:
           description: The RegisterSession this Operation is bound to. Set on every POS Operation; null for ONLINE goods-movement (no register, hence no session). On session-event variants this is the session being opened, adjusted, or closed; on goods-movement variants it is the session the operation was rung up during.
         source:
           type: string
-          enum: *a16
+          enum: *a13
         status:
           type: string
-          enum: *a17
+          enum: *a14
         currency:
           type: string
           description: ISO 4217 currency code.
@@ -3373,8 +3218,8 @@ components:
         fiscal_information:
           nullable: true
           description: The Fiskaly signature attached to this Operation, when one exists. Null until the operation has been signed.
-          oneOf: *a18
-          discriminator: *a19
+          oneOf: *a15
+          discriminator: *a16
         completed_at:
           type: string
           format: date-time
@@ -3435,10 +3280,10 @@ components:
           description: The RegisterSession this Operation is bound to. Set on every POS Operation; null for ONLINE goods-movement (no register, hence no session). On session-event variants this is the session being opened, adjusted, or closed; on goods-movement variants it is the session the operation was rung up during.
         source:
           type: string
-          enum: *a16
+          enum: *a13
         status:
           type: string
-          enum: *a17
+          enum: *a14
         currency:
           type: string
           description: ISO 4217 currency code.
@@ -3453,8 +3298,8 @@ components:
         fiscal_information:
           nullable: true
           description: The Fiskaly signature attached to this Operation, when one exists. Null until the operation has been signed.
-          oneOf: *a18
-          discriminator: *a19
+          oneOf: *a15
+          discriminator: *a16
         completed_at:
           type: string
           format: date-time
@@ -3516,10 +3361,10 @@ components:
           description: The RegisterSession this Operation is bound to. Set on every POS Operation; null for ONLINE goods-movement (no register, hence no session). On session-event variants this is the session being opened, adjusted, or closed; on goods-movement variants it is the session the operation was rung up during.
         source:
           type: string
-          enum: *a16
+          enum: *a13
         status:
           type: string
-          enum: *a17
+          enum: *a14
         currency:
           type: string
           description: ISO 4217 currency code.
@@ -3534,8 +3379,8 @@ components:
         fiscal_information:
           nullable: true
           description: The Fiskaly signature attached to this Operation, when one exists. Null until the operation has been signed.
-          oneOf: *a18
-          discriminator: *a19
+          oneOf: *a15
+          discriminator: *a16
         completed_at:
           type: string
           format: date-time
