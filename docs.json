@@ -16,7 +16,6 @@
           {
             "group": "Overview",
             "pages": [
-              "supported-scope",
               {
                 "group": "Getting started",
                 "pages": [
@@ -94,7 +93,11 @@
   "redirects": [
     {
       "source": "/",
-      "destination": "/supported-scope"
+      "destination": "/getting-started"
+    },
+    {
+      "source": "/supported-scope",
+      "destination": "/getting-started"
     }
   ],
   "description": "OpenFiskal API docs.",
