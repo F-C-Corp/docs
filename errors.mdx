@@ -1,0 +1,128 @@
+---
+title: "Errors"
+description: "Complete catalog of error codes the API can emit, with HTTP status, retry guidance, and the conditions that trigger each one."
+---
+
+Every error response uses the same envelope. Switch on `code` (machine-readable, stable), not on `message` (human-readable, may change).
+
+## Response shape
+
+```json
+{
+  "code": "precondition_failed",
+  "message": "Resource version mismatch.",
+  "retryable": true,
+  "request_id": "req_01J9ZK4P2H8X4F2A3B6C7D8E9F",
+  "details": {
+    "expected_resource_version": 1,
+    "current_resource_version": 2
+  }
+}
+```
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `code` | string | Stable machine-readable identifier. See the catalog below. |
+| `message` | string | Short human-readable label. Safe to log, not locale-stable, not a stable contract. |
+| `retryable` | boolean | Whether retrying the same request can succeed. `5xx`, `429`, and `412` are retryable. |
+| `request_id` | string | Trace identifier. Mirrors the `X-Request-Id` response header. Include in support cases. |
+| `details` | object | Optional structured context. Read variable state from here, not from `message`. |
+
+## Retry guidance
+
+| Class | Retry? | How |
+| --- | --- | --- |
+| `5xx`, `rate_limit_exceeded`, `precondition_failed` | Yes | Reuse the same `Idempotency-Key`. For `precondition_failed`, re-read the resource to refresh `ETag` first. For `rate_limit_exceeded`, honor `Retry-After`. |
+| All other `4xx` | No | Fix the request and send with a **new** `Idempotency-Key`. |
+
+## Standard error codes
+
+These codes map directly to HTTP status codes and apply to every endpoint across the Fiscalization, Reporting, and Hosted Receipts APIs unless noted.
+
+| HTTP | `code` | Retryable | When |
+| --- | --- | --- | --- |
+| 400 | `invalid_request` | No | Request body, query, or path is malformed or fails schema validation. Includes missing required fields, wrong types, decimal vs. integer mismatches, invalid ISO 3166-1 alpha-3 country codes (`DEU` not `DE`), or unknown discriminator values (e.g. unknown operation `type`). |
+| 401 | `unauthorized` | No | Missing or malformed `Authorization` header, invalid API key, or API key environment mismatch (sandbox key against production or vice versa). |
+| 403 | `forbidden` | No | Authenticated caller is not allowed to access the requested tenant, country, or merchant. Most commonly: API key country does not match the merchant or location country. |
+| 404 | `not_found` | No | Resource does not exist or is not visible to the caller. |
+| 409 | `conflict` | No | Generic resource conflict. Specific 409 subtypes are listed below — `code` distinguishes the cause. |
+| 412 | `precondition_failed` | Yes | Stale `If-Match` on a mutation. `details` carries `expected_resource_version` and `current_resource_version`. Re-read the resource and retry with the current `ETag`. |
+| 422 | `validation_error` | No | Request shape is valid but a field value is semantically wrong (amount sign mismatch, missing register reference, invalid timestamp range, etc.). See the [422 errors](#validation-errors-422) section for the specific conditions. |
+| 422 | `regime_validation_failed` | No | Payload violates regime-specific rules (e.g. KassenSichV / RKSV / Fattura validation). Fix the onboarding or operation data before retrying. |
+| 428 | `precondition_required` | No | `If-Match` header is missing on a mutation that requires it (`/operations/{id}/complete`, `/operations/{id}/void`). |
+| 429 | `rate_limit_exceeded` | Yes | Per-API-key rate budget exceeded. Honor `Retry-After` and reduce concurrency. |
+| 500 | `internal_error` | Yes | Unhandled server error. Retry with the same `Idempotency-Key`; escalate with `X-Request-Id` if sustained. |
+
+## Conflict (`409`) variants
+
+All 409 responses share the envelope. The `code` field distinguishes the cause.
+
+| `code` | Where | When |
+| --- | --- | --- |
+| `idempotency_key_conflict` | All mutating endpoints | The same `Idempotency-Key` was reused with a different payload. Generate a new key. |
+| `location_has_registers` | `DELETE /locations/{id}` | Location still has registers attached. Delete or reassign the registers first. |
+| `register_has_dependencies` | `DELETE /registers/{id}` | Register has operations recorded against it, or the register is fiscalized. Decommission first if applicable; otherwise the register cannot be removed. |
+| `register_already_fiscalized` | `POST /registers/{id}/fiscalize` | Register is already fiscalized, or a fiscalization is in progress. |
+| `register_invalid_fiscal_state` | `POST /registers/{id}/decommission`, completion paths | Register is decommissioned, not yet fiscalized, or otherwise not in a state that supports the requested action. |
+| `register_no_open_session` | POS operation endpoints | Register has no open session. Open a session first via `POST /operations` with `type: SESSION_OPEN`. |
+| `session_invalid_state` | Session lifecycle endpoints | Session-level state violation: a session is already open on the register, session counts or amounts are invalid, or the session cannot be closed in its current state. |
+| `operation_invalid_state` | `PATCH /operations/{id}/complete`, `PATCH /operations/{id}/void` | Operation is not in `OPEN` state. You cannot complete an already-completed or voided operation, and you cannot void what is not open. |
+
+## Validation errors (`422`)
+
+422 responses use `code: "validation_error"` (or `code: "regime_validation_failed"` for regime-specific rules). The `message` field describes the specific violation.
+
+### Operation shape
+
+| Condition | Operation types |
+| --- | --- |
+| `ONLINE` operations must not specify a `register_id`. | `SALE`, `RETURN`, `EXCHANGE` |
+| `POS` operations must specify a `register_id`. | `SALE`, `RETURN`, `EXCHANGE` |
+| `SALE` operations must not specify `external_related_operation` or `related_operation_id`. | `SALE` |
+| `RETURN` and `EXCHANGE` operations must specify exactly one of `related_operation_id` or `external_related_operation`. | `RETURN`, `EXCHANGE` |
+
+### Amount and payment validation
+
+| Condition | Operation types |
+| --- | --- |
+| `SALE` `total_amount` must be ≥ 0; `RETURN` `total_amount` must be ≤ 0. | `SALE`, `RETURN` |
+| Each `line_items[].total_amount` must follow the same sign rule as the parent operation. | `SALE`, `RETURN` |
+| Each `payments[].amount` must follow the same sign rule as the parent operation. | All goods-movement types |
+| Sum of `payments[].amount` must match the operation `total_amount`. | All goods-movement types on `complete` |
+
+### Fiscalization preconditions
+
+| Condition | Endpoint |
+| --- | --- |
+| Register is not fiscalized. Complete fiscalization before completing operations. | `PATCH /operations/{id}/complete` |
+| Register is missing active TSS or Client. Re-fiscalize the register. | `PATCH /operations/{id}/complete` |
+| Operation has no goods-movement details; cannot complete. | `PATCH /operations/{id}/complete` |
+| `POS` operation is missing a register reference. | `PATCH /operations/{id}/complete` |
+| Merchant is missing a German fiscal identity (`DEU`). | `POST /registers/{id}/fiscalize` |
+| Fiscalization is only supported for locations in Germany (`DEU`). | `POST /registers/{id}/fiscalize` |
+| Decommission is only supported for KassenSichV registers. | `POST /registers/{id}/decommission` |
+| Register has no active TSS or client to decommission. | `POST /registers/{id}/decommission` |
+| Active TSS is missing an admin PIN; cannot authenticate to decommission. | `POST /registers/{id}/decommission` |
+| TSE signing failed (phase 1) — TSS unreachable or rejected the request before the operation reached the device. | `PATCH /operations/{id}/complete` |
+| TSE signing failed (phase 2) — TSS rejected the operation after start. The operation is left in a recoverable state. | `PATCH /operations/{id}/complete` |
+
+### Reporting API
+
+| Condition | Endpoint |
+| --- | --- |
+| `from` and `to` must be valid ISO-8601 timestamps. | Reporting export endpoints (returns `400 invalid_request`). |
+| `from` must be strictly before `to`. | Reporting export endpoints. |
+
+## Idempotency and concurrency
+
+Idempotency keys, retention windows, and concurrency rules ([`If-Match` / `ETag`](/errors-and-limits#concurrency-rules)) are documented on the [Limits](/errors-and-limits) page. The errors that those rules emit (`idempotency_key_conflict`, `precondition_required`, `precondition_failed`) are listed above.
+
+## Request tracing
+
+Every response includes an `X-Request-Id` header and the same value in `request_id` on error bodies. Persist it in your client logs and attach it to every support case — it is the fastest path to a root-cause answer.
+
+## Next steps
+
+- [Limits and platform guarantees](/errors-and-limits)
+- [Authentication](/auth)
+- [Transaction lifecycle](/pos-operation-ingestion)

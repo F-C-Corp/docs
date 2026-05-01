@@ -41,7 +41,7 @@
           },
           {
             "group": "Operations and delivery",
-            "pages": ["errors-and-limits", "sandbox-and-go-live"]
+            "pages": ["errors", "errors-and-limits", "sandbox-and-go-live"]
           },
           {
             "group": "Fiscalization API",

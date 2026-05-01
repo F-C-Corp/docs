@@ -1,7 +1,9 @@
 ---
-title: "Errors and limits"
-description: "Platform guarantees, rate limits, idempotency rules, and the stable API error catalog."
+title: "Limits and platform guarantees"
+description: "Availability targets, rate limits, idempotency, and concurrency rules. For the error catalog, see Errors."
 ---
+
+For the full error catalog and per-code retry guidance, see [Errors](/errors).
 
 ## Platform guarantees
 
@@ -14,29 +16,6 @@ OpenFiskal publishes these current platform targets for the fiscalization API:
 | Client timeout guidance | `10s` request timeout, `30s` total retry budget for synchronous calls |
 | Rate limiting | `500 requests/second` per API key |
 | `429` behavior | Returns `Retry-After` in seconds and a stable `rate_limit_exceeded` error code |
-
-## Error response shape
-
-Every error response uses the same envelope:
-
-```json
-{
-  "code": "precondition_failed",
-  "message": "Resource version mismatch.",
-  "retryable": true,
-  "details": {
-    "expected_resource_version": 1,
-    "current_resource_version": 2
-  }
-}
-```
-
-- `code` — stable machine-readable identifier (see catalog below); switch on this, not on `message`
-- `message` — short human-readable label, safe to log but not locale-stable
-- `retryable` — whether retrying the same request with the same idempotency key can succeed
-- `details` (optional) — endpoint-specific structured context (e.g. `expected_resource_version` / `current_resource_version` on `precondition_failed`). Read variable state from here, not from `message`.
-
-`5xx`, `429`, and `412` responses are retryable; all other errors are terminal unless the message says otherwise.
 
 ## Idempotency rules
 
@@ -55,47 +34,10 @@ Operation mutation endpoints (`/complete`, `/void`) require `If-Match` with the 
 
 ## Request tracing
 
-Every response includes `X-Request-Id`. Persist it in your logs and attach it to support cases.
-
-## Stable error catalog
-
-### Generic
-
-| HTTP | `code` | Retryable | When | Operator action |
-| --- | --- | --- | --- | --- |
-| 400 | `invalid_request` | No | Request body / query / path is malformed or fails schema validation | Fix the request. Check required fields, decimal strings vs integers, ISO 3166-1 alpha-3 country codes (`DEU` not `DE`) |
-| 401 | `unauthorized` | No | Missing, malformed, or revoked `Authorization` header | Check the `Bearer of_{env}_{country}_…` key |
-| 403 | `forbidden` | No | Valid key but not allowed for this tenant, country, or merchant | Use a key matching the merchant's country; verify `X-OpenFiskal-Merchant` |
-| 404 | `not_found` | No | Resource does not exist or is not visible to the caller | Confirm the ID and the merchant scope |
-| 412 | `precondition_failed` | Yes | Stale `If-Match` | Re-read the operation and retry with the current `ETag` |
-| 422 | `validation_error` | No | Request shape is valid but a field value is semantically wrong | Fix the value |
-| 422 | `regime_validation_failed` | No | Payload violates regime-specific rules (e.g. KassenSichV/RKSV) | Fix onboarding or operation data |
-| 428 | `precondition_required` | No | `If-Match` is missing on a mutation that requires it | Re-read and retry with the current `ETag` |
-| 429 | `rate_limit_exceeded` | Yes | Request budget exceeded | Respect `Retry-After` and reduce concurrency |
-| 500 | `internal_error` | Yes | Unhandled server error | Retry with the same idempotency key; escalate with `X-Request-Id` if sustained |
-
-### Conflict (`409`) variants
-
-All `409` responses use the envelope above, with `code` distinguishing the cause:
-
-| `code` | When |
-| --- | --- |
-| `idempotency_key_conflict` | The same `Idempotency-Key` was reused with a different payload |
-| `location_has_registers` | `DELETE /locations/{id}` blocked — delete or reassign registers first |
-| `register_delete_conflict` | `DELETE /registers/{id}` blocked — register has operations or is fiscalized |
-| `fiscalization_conflict` | `POST /registers/{id}/fiscalize` blocked — register already fiscalized or missing prerequisites (e.g. merchant `fiscal_identities`) |
-| `decommission_conflict` | `POST /registers/{id}/decommission` blocked — register not in a decommissionable state |
-| `operation_invalid_state` | `/complete` or `/void` called on an operation that is not `open` |
-| `resource_conflict` | Generic fallback for other 409 cases |
-
-### Retry matrix
-
-| Class | Retry? | How |
-| --- | --- | --- |
-| `5xx`, `rate_limit_exceeded`, `precondition_failed` | Yes | Reuse the same idempotency key. For `precondition_failed`, re-read to refresh `ETag` first. For `rate_limit_exceeded`, honor `Retry-After`. |
-| All other `4xx` | No | Fix the request and send with a **new** idempotency key |
+Every response includes `X-Request-Id`. Persist it in your logs and attach it to support cases. Error bodies also carry it as `request_id`.
 
 ## Next steps
 
+- [Errors](/errors)
 - [Authentication](/auth)
 - [Transaction lifecycle](/pos-operation-ingestion)
