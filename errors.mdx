@@ -12,7 +12,6 @@ Every error response uses the same envelope. Switch on `code` (machine-readable,
   "code": "precondition_failed",
   "message": "Resource version mismatch.",
   "retryable": true,
-  "request_id": "req_01J9ZK4P2H8X4F2A3B6C7D8E9F",
   "details": {
     "expected_resource_version": 1,
     "current_resource_version": 2
@@ -25,8 +24,9 @@ Every error response uses the same envelope. Switch on `code` (machine-readable,
 | `code` | string | Stable machine-readable identifier. See the catalog below. |
 | `message` | string | Short human-readable label. Safe to log, not locale-stable, not a stable contract. |
 | `retryable` | boolean | Whether retrying the same request can succeed. `5xx`, `429`, and `412` are retryable. |
-| `request_id` | string | Trace identifier. Mirrors the `X-Request-Id` response header. Include in support cases. |
 | `details` | object | Optional structured context. Read variable state from here, not from `message`. |
+
+The trace identifier is returned only in the `X-Request-Id` response header (e.g. `X-Request-Id: req_a1b2c3d4e5f60718293a`). It is not embedded in the error body. Persist it in your client logs and attach it to support cases.
 
 ## Retry guidance
 
@@ -119,7 +119,7 @@ Idempotency keys, retention windows, and concurrency rules ([`If-Match` / `ETag`
 
 ## Request tracing
 
-Every response includes an `X-Request-Id` header and the same value in `request_id` on error bodies. Persist it in your client logs and attach it to every support case — it is the fastest path to a root-cause answer.
+Every response includes an `X-Request-Id` header. Persist it in your client logs and attach it to every support case — it is the fastest path to a root-cause answer.
 
 ## Next steps
 
