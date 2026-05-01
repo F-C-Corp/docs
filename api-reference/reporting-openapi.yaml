@@ -352,9 +352,6 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Merchant"
-        next_cursor:
-          type: string
-          nullable: true
       required:
         - data
     ErrorDto:
@@ -546,9 +543,6 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Register"
-        next_cursor:
-          type: string
-          nullable: true
       required:
         - data
     CreateRegisterDto:
@@ -617,9 +611,6 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Location"
-        next_cursor:
-          type: string
-          nullable: true
       required:
         - data
     CreateLocationDto:
@@ -984,10 +975,18 @@ components:
         counted_closing_amount:
           type: string
           example: "127.50"
-          description: Merchant-counted closing cash balance as a decimal string. Must be ≥ 0.
+          description: "Merchant-counted closing cash balance as a decimal string. Must be ≥ 0. Captures the drawer state BEFORE any closing pull/add (the natural physical action: count first, then move cash)."
         discrepancy_note:
           type: string
           example: Two coins from the day before were unaccounted for.
+        closing_adjustment_amount:
+          type: string
+          example: "-50.00"
+          description: "Optional cash pulled (or added) at close, captured atomically with the count. Signed decimal string: negative = cash out (deposit, transport to bank); positive = cash in (e.g., next-shift float top-up). Omit if no cash was moved at close."
+        closing_adjustment_note:
+          type: string
+          example: Safe deposit at end of shift.
+          description: Optional explanation for the closing pull/add.
       required:
         - type
         - register_id
@@ -1830,10 +1829,19 @@ components:
           example: session_close
         counted_closing_amount:
           type: string
-          description: Merchant-counted closing cash balance as a decimal string.
+          description: Merchant-counted closing cash balance as a decimal string. Captured BEFORE any closing pull/add.
         discrepancy_note:
           type: string
           nullable: true
+        closing_adjustment_amount:
+          type: string
+          nullable: true
+          description: Optional signed cash adjustment performed at close (negative = pull, positive = add). Null if no cash was moved at close.
+          example: "-50.00"
+        closing_adjustment_note:
+          type: string
+          nullable: true
+          description: Optional explanation for the closing pull/add.
       required:
         - id
         - merchant_id
