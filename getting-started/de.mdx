@@ -69,7 +69,7 @@ Create these resources in order. The register cannot fiscalize until the merchan
     The returned `id` becomes the `X-OpenFiskal-Merchant` header on every merchant-scoped request that follows.
   </Step>
   <Step title="Create a location">
-    A location is a physical point of sale. `timezone` is a **required** IANA zone string — KassenSichV embeds local time into signed records.
+    A location is a physical point of sale. `timezone` is a **required** IANA zone string.
 
     ```bash
     curl -X POST https://sandbox.api.openfiskal.com/v1/locations \
@@ -156,7 +156,7 @@ Once your register is fiscalized, you can create and complete sale operations.
     ```
 
     <Warning>
-      Always send `line_items[].taxes[]`. Omitting it prevents correct multi-VAT breakdown on the receipt and on the DSFinV-K `vat.csv`. One tax entry per VAT rate on the line.
+      Sending `line_items[].taxes[]` is required.
     </Warning>
 
     Response:
@@ -299,9 +299,6 @@ curl -X PATCH https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ/void \
   -H "Content-Type: application/json" \
   -d '{ "reason": "void_before_completion" }'
 ```
-
-Completed operations cannot be voided — use a `return` operation instead.
-
 ## Next steps
 
 - [Transaction lifecycle](/pos-operation-ingestion) — operation lifecycle in detail

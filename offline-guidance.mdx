@@ -42,7 +42,7 @@ Each queued entry should include:
 
 ## Provisional receipts
 
-If you complete checkout in your POS before OpenFiskal is reachable again, treat any locally produced receipt as provisional. After the queued completion succeeds, the authoritative fiscal payload is the `fiscal_information` block on the completion response. Reprint or re-render using those verbatim fields — regime validation depends on them (TSE signature, QR data, document number).
+If you complete checkout in your POS before OpenFiskal is reachable again, treat any locally produced receipt as provisional with a "Signature unavailable" message. After the queued completion succeeds, the authoritative fiscal payload is the `fiscal_information` block on the completion response. 
 
 A dedicated [Hosted Receipts API](/hosted-receipts-api) is planned but not yet available; in the current release, integrators render receipts themselves from `fiscal_information`.
 

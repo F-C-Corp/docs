@@ -10,7 +10,7 @@ This guide walks the `v1` integration contract for Italy. You create an `ita` AP
 </Info>
 
 <Warning>
-  Register fiscalization on the public API today exercises the **DE / KassenSichV** regime. Italian RT fiscalization is rolling out — contact [support@openfiskal.com](mailto:support@openfiskal.com) for current IT enablement status before scheduling go-live. The merchant, location, and register data shapes shown here are stable and safe to integrate against now.
+  Register fiscalization on the public API today is only supported for **DE / KassenSichV** . Italian RT fiscalization is rolling out, contact [support@openfiskal.com](mailto:support@openfiskal.com) for current IT enablement status before scheduling go-live. The merchant, location, and register data shapes shown here are stable and safe to integrate against now.
 </Warning>
 
 ## Prerequisites
@@ -89,7 +89,7 @@ Create these resources in order. The register cannot fiscalize until the merchan
     The returned `id` becomes the `X-OpenFiskal-Merchant` header on every merchant-scoped request that follows.
   </Step>
   <Step title="Create a location">
-    A location is a physical point of sale. `timezone` is a **required** IANA zone string — RT receipts embed local time.
+    A location is a physical point of sale. `timezone` is a **required** IANA zone string.
 
     ```bash
     curl -X POST https://sandbox.api.openfiskal.com/v1/locations \
@@ -176,7 +176,7 @@ Once your register is fiscalized, you can create and complete sale operations. T
     ```
 
     <Warning>
-      Always send `line_items[].taxes[]`. Italian RT receipts require the per-rate IVA breakdown (the IT rate codes — `4`, `5`, `10`, `22`, plus exempt/reverse-charge `N1–N7` — are derived from the per-line `rate` and the configured nature codes).
+      Always send `line_items[].taxes[]`.
     </Warning>
   </Step>
   <Step title="Complete the operation">
@@ -225,8 +225,6 @@ curl -X PATCH https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ/void \
   -H "Content-Type: application/json" \
   -d '{ "reason": "void_before_completion" }'
 ```
-
-Completed operations cannot be voided — use a `return` operation instead. Under RT a `return` produces a separately-numbered reso.
 
 ## Next steps
 
