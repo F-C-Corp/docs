@@ -10,12 +10,8 @@ Every error response uses the same envelope. Switch on `code` (machine-readable,
 ```json
 {
   "code": "precondition_failed",
-  "message": "Resource version mismatch.",
-  "retryable": true,
-  "details": {
-    "expected_resource_version": 1,
-    "current_resource_version": 2
-  }
+  "message": "Resource version mismatch. Expected 1, current is 2.",
+  "retryable": true
 }
 ```
 
@@ -24,7 +20,7 @@ Every error response uses the same envelope. Switch on `code` (machine-readable,
 | `code` | string | Stable machine-readable identifier. See the catalog below. |
 | `message` | string | Short human-readable label. Safe to log, not locale-stable, not a stable contract. |
 | `retryable` | boolean | Whether retrying the same request can succeed. `5xx`, `429`, and `412` are retryable. |
-| `details` | object | Optional structured context. Read variable state from here, not from `message`. |
+| `details` | object | Reserved for structured context. Not currently populated by any handler — variable state (e.g. expected vs. current resource versions) is interpolated into `message` today. Treat the field as optional and absent in current responses. |
 
 The trace identifier is returned only in the `X-Request-Id` response header (e.g. `X-Request-Id: req_a1b2c3d4e5f60718293a`). It is not embedded in the error body. Persist it in your client logs and attach it to support cases.
 
@@ -32,8 +28,10 @@ The trace identifier is returned only in the `X-Request-Id` response header (e.g
 
 | Class | Retry? | How |
 | --- | --- | --- |
-| `5xx`, `rate_limit_exceeded`, `precondition_failed` | Yes | Reuse the same `Idempotency-Key`. For `precondition_failed`, re-read the resource to refresh `ETag` first. For `rate_limit_exceeded`, honor `Retry-After`. |
-| All other `4xx` | No | Fix the request and send with a **new** `Idempotency-Key`. |
+| `5xx`, `rate_limit_exceeded`, `precondition_failed` | Yes | Resend the request. For `precondition_failed`, re-read the resource to refresh `ETag` first. For `rate_limit_exceeded`, honor `Retry-After`. |
+| All other `4xx` | No | Fix the request before resending. |
+
+The `retryable` field on each response reflects this rule: it is `true` for any `5xx`, `429`, or `412`, and `false` otherwise.
 
 ## Standard error codes
 
@@ -41,17 +39,16 @@ These codes map directly to HTTP status codes and apply to every endpoint across
 
 | HTTP | `code` | Retryable | When |
 | --- | --- | --- | --- |
-| 400 | `invalid_request` | No | Request body, query, or path is malformed or fails schema validation. Includes missing required fields, wrong types, decimal vs. integer mismatches, invalid ISO 3166-1 alpha-3 country codes (`DEU` not `DE`), or unknown discriminator values (e.g. unknown operation `type`). |
+| 400 | `invalid_request` | No | Request body, query, or path is malformed or fails schema validation. Includes missing required fields, wrong types, decimal vs. integer mismatches, invalid ISO 3166-1 alpha-3 country codes (`DEU` not `DE`), unknown discriminator values (e.g. unknown operation `type`), and a malformed `If-Match` header value (must be a quoted positive integer, e.g. `"1"`). |
 | 401 | `unauthorized` | No | Missing or malformed `Authorization` header, invalid API key, or API key environment mismatch (sandbox key against production or vice versa). |
 | 403 | `forbidden` | No | Authenticated caller is not allowed to access the requested tenant, country, or merchant. Most commonly: API key country does not match the merchant or location country. |
 | 404 | `not_found` | No | Resource does not exist or is not visible to the caller. |
 | 409 | `conflict` | No | Generic resource conflict. Specific 409 subtypes are listed below — `code` distinguishes the cause. |
-| 412 | `precondition_failed` | Yes | Stale `If-Match` on a mutation. `details` carries `expected_resource_version` and `current_resource_version`. Re-read the resource and retry with the current `ETag`. |
-| 422 | `validation_error` | No | Request shape is valid but a field value is semantically wrong (amount sign mismatch, missing register reference, invalid timestamp range, etc.). See the [422 errors](#validation-errors-422) section for the specific conditions. |
-| 422 | `regime_validation_failed` | No | Payload violates regime-specific rules (e.g. KassenSichV / RKSV / Fattura validation). Fix the onboarding or operation data before retrying. |
-| 428 | `precondition_required` | No | `If-Match` header is missing on a mutation that requires it (`/operations/{id}/complete`, `/operations/{id}/void`). |
+| 412 | `precondition_failed` | Yes | Stale `If-Match` on a mutation. The expected and current resource versions appear in `message` (e.g. `"Resource version mismatch. Expected 1, current is 2."`). Re-read the resource and retry with the current `ETag`. |
+| 422 | `validation_error` | No | Request shape is valid but a field value is semantically wrong (amount sign mismatch, missing register reference, invalid timestamp range, etc.). See [Validation errors](#validation-errors-422) for the specific conditions. |
+| 428 | `precondition_required` | No | `If-Match` header is missing on a mutation that requires it (`PATCH /operations/{id}/complete`, `PATCH /operations/{id}/void`). |
 | 429 | `rate_limit_exceeded` | Yes | Per-API-key rate budget exceeded. Honor `Retry-After` and reduce concurrency. |
-| 500 | `internal_error` | Yes | Unhandled server error. Retry with the same `Idempotency-Key`; escalate with `X-Request-Id` if sustained. |
+| 500 | `internal_error` | Yes | Unhandled server error. Retry the request; escalate with `X-Request-Id` if sustained. Status-501 paths (see [Not-yet-implemented endpoints](#not-yet-implemented-endpoints)) currently surface with this `code` as well. |
 
 ## Conflict (`409`) variants
 
@@ -59,7 +56,6 @@ All 409 responses share the envelope. The `code` field distinguishes the cause.
 
 | `code` | Where | When |
 | --- | --- | --- |
-| `idempotency_key_conflict` | All mutating endpoints | The same `Idempotency-Key` was reused with a different payload. Generate a new key. |
 | `location_has_registers` | `DELETE /locations/{id}` | Location still has registers attached. Delete or reassign the registers first. |
 | `register_has_dependencies` | `DELETE /registers/{id}` | Register has operations recorded against it, or the register is fiscalized. Decommission first if applicable; otherwise the register cannot be removed. |
 | `register_already_fiscalized` | `POST /registers/{id}/fiscalize` | Register is already fiscalized, or a fiscalization is in progress. |
@@ -70,7 +66,7 @@ All 409 responses share the envelope. The `code` field distinguishes the cause.
 
 ## Validation errors (`422`)
 
-422 responses use `code: "validation_error"` (or `code: "regime_validation_failed"` for regime-specific rules). The `message` field describes the specific violation.
+422 responses currently emit `code: "validation_error"` for every case. The `message` field describes the specific violation.
 
 ### Operation shape
 
@@ -113,9 +109,29 @@ All 409 responses share the envelope. The `code` field distinguishes the cause.
 | `from` and `to` must be valid ISO-8601 timestamps. | Reporting export endpoints (returns `400 invalid_request`). |
 | `from` must be strictly before `to`. | Reporting export endpoints. |
 
+## Not-yet-implemented endpoints
+
+Two paths return HTTP `501 Not Implemented` today. The exception filter has no 501 mapping, so the body surfaces with `code: "internal_error"` and `retryable: true` even though the status itself signals the cause:
+
+| HTTP | Where | Why |
+| --- | --- | --- |
+| 501 | `POST /operations` with `type: SESSION_CASH_COUNT` | The session cash-count operation type is reserved in the schema but not yet handled. |
+| 501 | Reporting export endpoints with an unsupported export `type` | No exporter is registered for the requested type (e.g. DSFinV-K archive compilation). |
+
+Treat the 501 status — not the body `code` — as the signal here. This will tighten in a future filter update.
+
+## Reserved codes (not yet emitted)
+
+The OpenAPI contract advertises these codes on relevant endpoints, but the runtime does not emit them yet. They are kept here so client switch statements can include them ahead of enforcement landing.
+
+| `code` | HTTP | Status |
+| --- | --- | --- |
+| `idempotency_key_conflict` | 409 | Documented on every mutating operation endpoint. Idempotency-Key replay is not enforced server-side today; reusing a key currently re-runs the request. Treat the documented behavior as forward-looking. |
+| `regime_validation_failed` | 422 | Documented for regime-specific rule failures (KassenSichV / RKSV / Fattura). Current handlers throw `UnprocessableEntityException` without a custom `code`, so these responses surface as `validation_error`. |
+
 ## Idempotency and concurrency
 
-Idempotency keys, retention windows, and concurrency rules ([`If-Match` / `ETag`](/errors-and-limits#concurrency-rules)) are documented on the [Limits](/errors-and-limits) page. The errors that those rules emit (`idempotency_key_conflict`, `precondition_required`, `precondition_failed`) are listed above.
+Idempotency keys, retention windows, and concurrency rules ([`If-Match` / `ETag`](/errors-and-limits#concurrency-rules)) are documented on the [Limits](/errors-and-limits) page. The errors those rules emit (`precondition_required`, `precondition_failed`) are in the standard table above; `idempotency_key_conflict` is forward-looking — see [Reserved codes](#reserved-codes-not-yet-emitted).
 
 ## Request tracing
 
