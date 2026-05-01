@@ -1,4 +1,30 @@
 openapi: 3.0.0
+info:
+  title: OpenFiskal fiscalization API
+  description: |-
+    OpenFiskal exposes a server-to-server fiscalization API for merchant onboarding,
+    register setup, and operation handling.
+
+    The `v1` contract uses server-issued resource versions and conditional
+    writes through `If-Match` for safe concurrent mutation handling.
+  version: 1.1.0
+  contact: {}
+  license:
+    name: Proprietary
+servers:
+  - url: https://api.openfiskal.com/v1
+    description: Production
+  - url: https://sandbox.api.openfiskal.com/v1
+    description: Sandbox
+tags:
+  - name: Merchants
+    description: Create and manage merchant merchants.
+  - name: Locations
+    description: Create and manage merchant locations.
+  - name: Registers
+    description: Create and manage registers or terminals.
+  - name: Operations
+    description: Start, update, complete, cancel, list, and read operations.
 paths:
   /merchants:
     get:
@@ -1723,32 +1749,6 @@ paths:
       security: *a10
       summary: Void operation
       tags: *a11
-info:
-  title: OpenFiskal fiscalization API
-  description: |-
-    OpenFiskal exposes a server-to-server fiscalization API for merchant onboarding,
-    register setup, and operation handling.
-
-    The `v1` contract uses server-issued resource versions and conditional
-    writes through `If-Match` for safe concurrent mutation handling.
-  version: 1.1.0
-  contact: {}
-  license:
-    name: Proprietary
-tags:
-  - name: Merchants
-    description: Create and manage merchant merchants.
-  - name: Locations
-    description: Create and manage merchant locations.
-  - name: Registers
-    description: Create and manage registers or terminals.
-  - name: Operations
-    description: Start, update, complete, cancel, list, and read operations.
-servers:
-  - url: https://api.openfiskal.com/v1
-    description: Production
-  - url: https://sandbox.api.openfiskal.com/v1
-    description: Sandbox
 components:
   securitySchemes:
     BearerAuth:
