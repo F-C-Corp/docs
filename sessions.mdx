@@ -5,9 +5,9 @@ description: "How register sessions group POS operations into a cash-drawer shif
 
 ## Overview
 
-A register session is the cash-drawer shift on a fiscalized register. You open a session at the start of the shift, every POS goods-movement that follows binds to it, and you close the session at end of shift with a counted cash balance. Sessions exist only on POS — `ONLINE` operations have no register and therefore no session.
+A register session captures one shift on a fiscalized register. You open a session at the start of the shift, every Sale, Return, Exchange that follows binds to it, and you close the session at end of shift. Sessions exist only for POS. `ONLINE` operations have no register and therefore no session.
 
-Sessions are not created with their own endpoint. They are opened, adjusted, and closed by sending session-event operations through the same `POST /operations` endpoint that ingests sales, returns, and exchanges. Under many regimes a session open, cash adjustment, or close is itself a fiscal event that must be tracked, persisted, and signed alongside goods movements — routing them through `/operations` is what gives them the same lifecycle, idempotency, and signature surface as a sale.
+Sessions are opened, adjusted, and closed by sending session-event operations through the same `POST /operations` endpoint that ingests sales, returns, and exchanges. This was intentional since under many regimes a session open, cash adjustment, or close is itself a fiscal event that must be tracked, securely persisted, and signed.
 
 ## Session states
 
@@ -49,7 +49,7 @@ curl -X POST https://api.openfiskal.com/v1/operations \
   }'
 ```
 
-The response carries the new `session_id`. Store it — every operation you send on this register until close binds to it automatically.
+The response carries the new `session_id`. It is recommended to persist this.
 
 ```json
 {
@@ -63,17 +63,17 @@ The response carries the new `session_id`. Store it — every operation you send
 }
 ```
 
-The operation `status` is `completed` because session-event operations are final the moment OpenFiskal accepts them — there is no later `PATCH .../complete` step. Don't confuse it with the session's lifecycle state (the [`open` / `closed`](#session-states) flag tracked separately).
+The operation `status` is `completed` because session-event operations are final the moment OpenFiskal accepts them, i.e. there is no `PATCH .../complete` step. Don't confuse it with the session's lifecycle state (the [`open` / `closed`](#session-states) flag tracked separately).
 
 ## Goods movements bind to the session
 
-Every `sale`, `return`, and `exchange` you send on a POS register carries the `session_id` of the open session in the response. You do not set `session_id` on the request — OpenFiskal resolves it from the register's currently open session.
+Every `sale`, `return`, and `exchange` you send on a POS register carries the `session_id` of the open session in the response. You do not set `session_id` on the request - OpenFiskal resolves it from the register's currently open session.
 
 If you call `POST /operations` with `source: POS` on a register that has no open session, the request is rejected.
 
 ## Mid-shift cash adjustments
 
-Use `session_cash_adjustment` for any cash movement that is not a sale or return: cash drops to the safe, pay-ins, till corrections. The `cash_amount` is signed — negative for cash out, positive for cash in. Multiple adjustments per session are allowed.
+Use `session_cash_adjustment` for any cash movement that is not a sale or return: cash drops to the safe, pay-ins, till corrections. The `cash_amount` is signed: Negative for cash out, positive for cash in. Multiple adjustments per session are allowed.
 
 ```bash
 curl -X POST https://api.openfiskal.com/v1/operations \

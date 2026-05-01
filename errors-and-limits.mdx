@@ -21,14 +21,12 @@ OpenFiskal publishes these current platform targets for the fiscalization API:
 
 Send `Idempotency-Key` on every mutating operation request (`POST /operations`, `PATCH /operations/{id}/complete`, `PATCH /operations/{id}/void`).
 
-Forward-looking platform rules — these describe the contract clients should code against; server-side enforcement is not yet live (see [Reserved codes](/errors#reserved-codes-not-yet-emitted)):
+The following are **Forward-looking platform rules**. Clients should code against them, but server-side enforcement is not yet live (see [Reserved codes](/errors#reserved-codes-not-yet-emitted)):
 
 - retention window is at least 24 hours
 - uniqueness scope is endpoint plus merchant plus authenticated tenant
 - reusing a key with the same payload will return the original response
 - reusing a key with a different payload will return `409 idempotency_key_conflict`
-
-Until enforcement lands, sending an `Idempotency-Key` is safe and forward-compatible — the API accepts the header but does not currently dedupe on it.
 
 ## Concurrency rules
 

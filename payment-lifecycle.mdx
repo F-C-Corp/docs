@@ -57,7 +57,7 @@ Some payment methods settle after the operation is fiscally completed. In that c
 
 ## Returns on prior sales
 
-A return is a **new operation** with `type: return` referencing the original sale — via `related_operation_id` when the sale exists in OpenFiskal, or via `external_related_operation` for sales from a legacy platform. The return's `payments` array on completion describes the settlement legs that returned money to the customer.
+A return is a **new operation** with `type: return` referencing the original sale via `related_operation_id` when the sale exists in OpenFiskal, or via `external_related_operation` for sales from a legacy platform. The return's `payments` array on completion describes the settlement legs that returned money to the customer.
 
 ## Next steps
 
