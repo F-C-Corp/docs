@@ -27,6 +27,12 @@ OpenFiskal's `v1` integration contract is shared across countries, but the fisca
   The OpenAPI spec always matches the live API implementation.
 </Card>
 
+## Scope
+
+OpenFiskal is a server-to-server fiscalization API. Your backend calls the API on behalf of your POS devices — there's no direct device-to-API path today.
+
+The current public scope covers Germany, Austria, and Italy.
+
 ## What's the same across countries
 
 These mechanics are identical regardless of the country guide you follow:
@@ -46,8 +52,11 @@ These mechanics are identical regardless of the country guide you follow:
 | Fiscal identity required fields | `tax_number`, `vat_id` | `legal_entity_id_type` (+ `gln` when type is `GLN`) | `tax_number`, `vat_number`, `legal_entity_type`, `fisconline_user`, `fisconline_password`, `fisconline_pin` |
 | Receipt obligation | Render all fiscal fields exactly | Preserve fiscal values + local format | Render the DCW number |
 
+<Warning>
+  This matrix is a product scope guide, not legal advice. Your implementation owner should review the regime-specific onboarding checklist before go-live.
+</Warning>
+
 ## Next steps
 
-- [Supported scope](/supported-scope) — countries, regimes, and product scope
 - [Authentication](/auth) — bearer key + merchant header reference
 - [Integration topology](/integration-topology) — backend-to-backend architecture

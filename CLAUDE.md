@@ -21,7 +21,7 @@ Always run `mint broken-links` before committing changes.
 ## Architecture
 
 - **`docs.json`** — Site config: two-tab navigation (Fiscalization API, Hosted Receipts API), theme, redirects, integrations
-- **`*.mdx`** (root) — Guide pages (supported-scope, getting-started, auth, register-lifecycle, etc.)
+- **`*.mdx`** (root) — Guide pages (getting-started, auth, register-lifecycle, etc.)
 - **`api-reference/openapi.yaml`** — Fiscalization API spec (v1.1.0). Mintlify auto-generates endpoint pages from this
 - **`api-reference/hosted-receipts-openapi.yaml`** — Hosted Receipts API spec
 - **`api-reference/schemas/*.mdx`** — Schema definition pages using `openapi-schema:` frontmatter field
