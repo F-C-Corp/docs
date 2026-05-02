@@ -9,7 +9,7 @@ A register session captures one shift on a fiscalized register. You open a sessi
 
 Sessions are opened, adjusted, counted, and closed by sending session-event operations through the same `POST /operations` endpoint that ingests sales, returns, and exchanges. This was intentional since under many regimes a session open, cash adjustment, count, or close is itself a fiscal event that must be tracked, securely persisted, and signed.
 
-## Session states
+## Session lifecycle
 
 ```
 [open] ──► [counted] ──► [closed]
@@ -96,8 +96,8 @@ curl -X POST https://api.openfiskal.com/v1/operations \
 
 End-of-shift is two POSTs: first the merchant counts the drawer (`session_cash_count`), then they seal the session (`session_close`). The two events are split because they attest to different fiscal facts:
 
-- The **count** attests _what was actually in the drawer_ vs _what the system expected_. This is the variance attestation — the regulator's primary interest. Signed independently as `CASH_TRX_EXPECTED_ACTUAL_DIFFERENCE`.
-- The **close** records the optional cash movement at end of shift (cash pulled to the safe / float top-up for the next shift). When non-zero, signed as `CASH_TRX`.
+- The **count** attests _what was actually in the drawer_ vs _what the system expected_. This is the variance attestation — the regulator's primary interest. Fiscally signed as a standalone event.
+- The **close** records the optional cash movement at end of shift (cash pulled to the safe / float top-up for the next shift). When non-zero, fiscally signed as a cash-movement event.
 
 Send `session_cash_count` with the merchant-counted closing balance. OpenFiskal computes the expected balance (opening float + cash sales − cash returns + adjustments), returns the diff, and signs the variance.
 
@@ -156,7 +156,7 @@ curl -X POST https://api.openfiskal.com/v1/operations \
   }'
 ```
 
-When `closing_adjustment_amount` is non-zero, the close is signed as `CASH_TRX`. Omit the field (or pass `0`) for a clean close that doesn't move cash — those closes don't produce a `CASH_TRX` signature, only a state transition. The drawer state at end of shift is therefore: `counted_closing_amount + closing_adjustment_amount = amount left for the next shift`.
+When `closing_adjustment_amount` is non-zero, the close is fiscally signed (a cash movement at close is a fiscal event). Omit the field (or pass `0`) for a clean close that doesn't move cash — those closes don't produce a separate signature, only a state transition. The drawer state at end of shift is therefore: `counted_closing_amount + closing_adjustment_amount = amount left for the next shift`.
 
 Once the close is completed, the register has no in-progress session. The next shift starts with a new `session_open` and a fresh `session_id`.
 
@@ -353,9 +353,9 @@ The scenario: a German bakery opens at 08:00 with a 50 EUR float, rings up two c
       }'
     ```
 
-    The drawer is left with `127.50 − 100.00 = 27.50 EUR` for the next shift's float. The `closing_adjustment_amount` is signed as `CASH_TRX` (a non-zero pull is a fiscal cash event). The session is now `closed`. The next shift on `reg_abc123` starts with a new `session_open` and a fresh `session_id`.
+    The drawer is left with `127.50 − 100.00 = 27.50 EUR` for the next shift's float. The `closing_adjustment_amount` is fiscally signed (a non-zero pull is a fiscal cash event). The session is now `closed`. The next shift on `reg_abc123` starts with a new `session_open` and a fresh `session_id`.
 
-    Audit trail summary: two TSE signatures came out of this end-of-shift sequence — one for the count's `CASH_TRX_EXPECTED_ACTUAL_DIFFERENCE` (the −5.00 EUR variance), one for the close's `CASH_TRX` (the −100.00 EUR pull).
+    Audit trail summary: two TSE signatures came out of this end-of-shift sequence — one for the count's −5.00 EUR variance, one for the close's −100.00 EUR pull.
   </Step>
 </Steps>
 
