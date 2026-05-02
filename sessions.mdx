@@ -1,24 +1,25 @@
 ---
 title: "Sessions"
-description: "How register sessions group POS operations into a cash-drawer shift, from open to close."
+description: "How register sessions group POS operations into a cash-drawer shift, from open to count to close."
 ---
 
 ## Overview
 
-A register session captures one shift on a fiscalized register. You open a session at the start of the shift, every Sale, Return, Exchange that follows binds to it, and you close the session at end of shift. Sessions exist only for POS. `ONLINE` operations have no register and therefore no session.
+A register session captures one shift on a fiscalized register. You open a session at the start of the shift, every Sale, Return, Exchange that follows binds to it, the merchant counts the drawer at the end of the shift, then you close the session. Sessions exist only for POS. `ONLINE` operations have no register and therefore no session.
 
-Sessions are opened, adjusted, and closed by sending session-event operations through the same `POST /operations` endpoint that ingests sales, returns, and exchanges. This was intentional since under many regimes a session open, cash adjustment, or close is itself a fiscal event that must be tracked, securely persisted, and signed.
+Sessions are opened, adjusted, counted, and closed by sending session-event operations through the same `POST /operations` endpoint that ingests sales, returns, and exchanges. This was intentional since under many regimes a session open, cash adjustment, count, or close is itself a fiscal event that must be tracked, securely persisted, and signed.
 
 ## Session states
 
 ```
-[open] ──► [closed]
+[open] ──► [counted] ──► [closed]
 ```
 
 - `open` — the session accepts goods-movement operations and cash adjustments
+- `counted` — the merchant has counted the drawer and the system has signed the counted-vs-expected variance. The session is **frozen**: only `session_close` is accepted from here. No further sales / returns / exchanges / adjustments / repeat counts.
 - `closed` — the session is final; new operations on the register need a new `session_open`
 
-A register has at most one open session at a time. Opening a second session while one is still open is rejected.
+A register has at most one in-progress (open or counted) session at a time. Opening a second session while one is still in progress is rejected.
 
 ## Session-event operation types
 
@@ -26,9 +27,10 @@ A register has at most one open session at a time. Opening a second session whil
 | --- | --- |
 | `session_open` | Start a new shift on a register with a counted opening float |
 | `session_cash_adjustment` | Record a mid-shift cash movement (drop, pay-in, till correction) |
-| `session_close` | End the shift with a merchant-counted closing balance |
+| `session_cash_count` | Count the drawer at end of shift; produce the signed counted-vs-expected variance |
+| `session_close` | Seal the session, optionally moving cash out (closing pull) or in (next-shift float top-up) |
 
-All three flow through `POST /operations`, return an operation resource, and carry the same `resource_version` / `ETag` mechanics as goods-movement operations.
+All four flow through `POST /operations`, return an operation resource, and carry the same `resource_version` / `ETag` mechanics as goods-movement operations.
 
 ## Opening a session
 
@@ -63,17 +65,17 @@ The response carries the new `session_id`. It is recommended to persist this.
 }
 ```
 
-The operation `status` is `completed` because session-event operations are final the moment OpenFiskal accepts them, i.e. there is no `PATCH .../complete` step. Don't confuse it with the session's lifecycle state (the [`open` / `closed`](#session-states) flag tracked separately).
+The operation `status` is `completed` because session-event operations are final the moment OpenFiskal accepts them, i.e. there is no `PATCH .../complete` step. Don't confuse it with the session's lifecycle state (the [`open` / `counted` / `closed`](#session-states) flag tracked separately).
 
 ## Goods movements bind to the session
 
-Every `sale`, `return`, and `exchange` you send on a POS register carries the `session_id` of the open session in the response. You do not set `session_id` on the request - OpenFiskal resolves it from the register's currently open session.
+Every `sale`, `return`, and `exchange` you send on a POS register carries the `session_id` of the open session in the response. You do not set `session_id` on the request — OpenFiskal resolves it from the register's currently open session.
 
 If you call `POST /operations` with `source: POS` on a register that has no open session, the request is rejected.
 
 ## Mid-shift cash adjustments
 
-Use `session_cash_adjustment` for any cash movement that is not a sale or return: cash drops to the safe, pay-ins, till corrections. The `cash_amount` is signed: Negative for cash out, positive for cash in. Multiple adjustments per session are allowed.
+Use `session_cash_adjustment` for any cash movement that is not a sale or return: cash drops to the safe, pay-ins, till corrections. The `cash_amount` is signed: negative for cash out, positive for cash in. Multiple adjustments per session are allowed.
 
 ```bash
 curl -X POST https://api.openfiskal.com/v1/operations \
@@ -90,9 +92,54 @@ curl -X POST https://api.openfiskal.com/v1/operations \
   }'
 ```
 
+## Counting the drawer
+
+End-of-shift is two POSTs: first the merchant counts the drawer (`session_cash_count`), then they seal the session (`session_close`). The two events are split because they attest to different fiscal facts:
+
+- The **count** attests _what was actually in the drawer_ vs _what the system expected_. This is the variance attestation — the regulator's primary interest. Signed independently as `CASH_TRX_EXPECTED_ACTUAL_DIFFERENCE`.
+- The **close** records the optional cash movement at end of shift (cash pulled to the safe / float top-up for the next shift). When non-zero, signed as `CASH_TRX`.
+
+Send `session_cash_count` with the merchant-counted closing balance. OpenFiskal computes the expected balance (opening float + cash sales − cash returns + adjustments), returns the diff, and signs the variance.
+
+```bash
+curl -X POST https://api.openfiskal.com/v1/operations \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
+  -H "Idempotency-Key: ses_abc123-count" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "session_cash_count",
+    "register_id": "reg_abc123",
+    "currency": "EUR",
+    "counted_closing_amount": "127.50",
+    "discrepancy_note": "Two coins from the day before were unaccounted for."
+  }'
+```
+
+The response carries the system-calculated `expected_closing_amount` and the signed `closing_cashcount_diff`. The merchant UI typically displays "you're 5€ over" / "you're 5€ short" / "on the dot" using the diff value.
+
+```json
+{
+  "id": "op_ses_count_001",
+  "type": "session_cash_count",
+  "session_id": "ses_abc123",
+  "register_id": "reg_abc123",
+  "status": "completed",
+  "currency": "EUR",
+  "counted_closing_amount": "127.50",
+  "expected_closing_amount": "132.50",
+  "closing_cashcount_diff": "-5.00",
+  "discrepancy_note": "Two coins from the day before were unaccounted for."
+}
+```
+
+**One count per session.** A second `session_cash_count` POST against the same session returns `409 session_already_counted`. The integrator's UX should only fire the request once the merchant has confirmed their count.
+
+**The count freezes the session.** Once the count is accepted, the session is frozen against further sales / returns / exchanges / adjustments / repeat counts — anything other than `session_close` returns `409 session_already_counted`. The freeze is what makes the signed variance legally meaningful: `expected` cannot drift between count and close.
+
 ## Closing a session
 
-Send `session_close` with the merchant-counted closing balance. OpenFiskal compares it against the expected balance (opening float + cash sales − cash returns + adjustments) and records any discrepancy.
+Send `session_close` to seal the session. The body optionally carries `closing_adjustment_amount` (signed: negative = pull cash out, positive = add cash in) and `closing_adjustment_note`. Counting must have happened first — `session_close` on an un-counted session returns `409 session_not_counted`.
 
 ```bash
 curl -X POST https://api.openfiskal.com/v1/operations \
@@ -104,16 +151,18 @@ curl -X POST https://api.openfiskal.com/v1/operations \
     "type": "session_close",
     "register_id": "reg_abc123",
     "currency": "EUR",
-    "counted_closing_amount": "127.50",
-    "discrepancy_note": "Two coins from the day before were unaccounted for."
+    "closing_adjustment_amount": "-100.00",
+    "closing_adjustment_note": "Cash pulled to safe deposit."
   }'
 ```
 
-Once the close is completed, the register has no open session. The next shift starts with a new `session_open` and a fresh `session_id`.
+When `closing_adjustment_amount` is non-zero, the close is signed as `CASH_TRX`. Omit the field (or pass `0`) for a clean close that doesn't move cash — those closes don't produce a `CASH_TRX` signature, only a state transition. The drawer state at end of shift is therefore: `counted_closing_amount + closing_adjustment_amount = amount left for the next shift`.
+
+Once the close is completed, the register has no in-progress session. The next shift starts with a new `session_open` and a fresh `session_id`.
 
 ## Walkthrough: a single shift
 
-The scenario: a German bakery opens at 08:00 with a 50 EUR float, rings up two cash sales, drops 20 EUR to the safe at midday, and closes the till at 17:00 with 127.50 EUR counted.
+The scenario: a German bakery opens at 08:00 with a 50 EUR float, rings up two cash sales, drops 20 EUR to the safe at midday, counts the drawer at 17:00 finding 127.50 EUR, then pulls 100 EUR to the safe deposit before sealing the session.
 
 <Steps>
   <Step title="Open the session with a 50 EUR float">
@@ -255,7 +304,40 @@ The scenario: a German bakery opens at 08:00 with a 50 EUR float, rings up two c
 
     Expected balance now: `50.00 + 4.50 + 98.00 − 20.00 = 132.50 EUR`.
   </Step>
-  <Step title="Close the session with a counted 127.50 EUR">
+  <Step title="Count the drawer at 17:00 (counted 127.50 EUR)">
+    ```bash
+    curl -X POST https://api.openfiskal.com/v1/operations \
+      -H "Authorization: Bearer $API_KEY" \
+      -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
+      -H "Idempotency-Key: ses_abc123-count" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "type": "session_cash_count",
+        "register_id": "reg_abc123",
+        "currency": "EUR",
+        "counted_closing_amount": "127.50",
+        "discrepancy_note": "Five euro short — investigating."
+      }'
+    ```
+
+    Response:
+
+    ```json
+    {
+      "id": "op_05_count",
+      "type": "session_cash_count",
+      "session_id": "ses_abc123",
+      "status": "completed",
+      "counted_closing_amount": "127.50",
+      "expected_closing_amount": "132.50",
+      "closing_cashcount_diff": "-5.00",
+      "discrepancy_note": "Five euro short — investigating."
+    }
+    ```
+
+    The signed variance (`closing_cashcount_diff: -5.00`) is the regulator's primary attestation. The session is now `counted` and frozen — only `session_close` is accepted from here.
+  </Step>
+  <Step title="Pull 100 EUR to the safe and seal the session">
     ```bash
     curl -X POST https://api.openfiskal.com/v1/operations \
       -H "Authorization: Bearer $API_KEY" \
@@ -266,12 +348,14 @@ The scenario: a German bakery opens at 08:00 with a 50 EUR float, rings up two c
         "type": "session_close",
         "register_id": "reg_abc123",
         "currency": "EUR",
-        "counted_closing_amount": "127.50",
-        "discrepancy_note": "Five euro short — investigating."
+        "closing_adjustment_amount": "-100.00",
+        "closing_adjustment_note": "Cash pulled to safe deposit."
       }'
     ```
 
-    OpenFiskal records expected `132.50 EUR`, counted `127.50 EUR`, and a `−5.00 EUR` discrepancy. The session is now `closed`. The next shift on `reg_abc123` starts with a new `session_open` and a fresh `session_id`.
+    The drawer is left with `127.50 − 100.00 = 27.50 EUR` for the next shift's float. The `closing_adjustment_amount` is signed as `CASH_TRX` (a non-zero pull is a fiscal cash event). The session is now `closed`. The next shift on `reg_abc123` starts with a new `session_open` and a fresh `session_id`.
+
+    Audit trail summary: two TSE signatures came out of this end-of-shift sequence — one for the count's `CASH_TRX_EXPECTED_ACTUAL_DIFFERENCE` (the −5.00 EUR variance), one for the close's `CASH_TRX` (the −100.00 EUR pull).
   </Step>
 </Steps>
 
