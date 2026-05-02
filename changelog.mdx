@@ -4,6 +4,27 @@ description: "API contract updates to the OpenFiskal Fiscalization API."
 rss: true
 ---
 
+<Update label="May 2, 2026" description="Fiscalization API" tags={["Breaking", "Addition"]}>
+  **Session close split into count + close**
+
+  End-of-shift is now a two-step flow: the merchant counts the drawer first (`session_cash_count`), then seals the session (`session_close`). The two events attest to different fiscal facts and produce up to two TSE signatures from one end-of-shift sequence.
+
+  - `session_cash_count` — new operation type. Carries `counted_closing_amount` (and optional `discrepancy_note`). Server returns `expected_closing_amount` and signed `closing_cashcount_diff` (counted − expected). Signed as `CASH_TRX_EXPECTED_ACTUAL_DIFFERENCE` — the variance attestation.
+  - `session_close` — slimmed. Now carries only the optional closing pull/add (`closing_adjustment_amount` signed: negative = cash out, positive = cash in; plus `closing_adjustment_note`). Signed as `CASH_TRX` only when the pull is non-zero; null/zero is a state-transition close with no Fiskaly signature.
+
+  **Breaking — `session_close` no longer accepts `counted_closing_amount` or `discrepancy_note`.** Those fields moved to `session_cash_count`. Bodies that include them on a close return `400`.
+
+  **Breaking — `session_close` requires a preceding `session_cash_count`.** A close on an un-counted session returns `409 session_not_counted`.
+
+  **Breaking — once counted, the session is frozen.** Posting `sale` / `return` / `exchange` / `session_cash_adjustment` / a second `session_cash_count` against a counted session returns `409 session_already_counted`. Only `session_close` is accepted from the counted state.
+
+  **Breaking — `SessionCloseOperation` response shape narrowed.** `counted_closing_amount` and `discrepancy_note` are no longer on the close response (they're on the `SessionCashCountOperation` response).
+
+  **New session lifecycle state.** Sessions transition `open → counted → closed` (was `open → closed`). The `counted` state is short-lived in the happy path — most integrators will POST count then close back-to-back.
+
+  Update integrator end-of-shift flows to count first, then close, before your next release. See [Sessions](/sessions) for the walkthrough.
+</Update>
+
 <Update label="April 30, 2026" description="Fiscalization API" tags={["Breaking", "Addition"]}>
   **Register sessions: new operation types + session-bound POS operations**
 
