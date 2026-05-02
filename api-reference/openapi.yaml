@@ -1248,7 +1248,7 @@ paths:
         - Operations
   /operations:
     post:
-      description: "Starts a new operation. The body is a discriminated union on `type`: goods movement (sale / return / exchange) or session lifecycle (session_open / session_cash_adjustment / session_close)."
+      description: "Starts a new operation. The body is a discriminated union on `type`: goods movement (sale / return / exchange) or session lifecycle (session_open / session_cash_adjustment / session_cash_count / session_close)."
       operationId: OperationsController_create
       parameters:
         - *a9
@@ -1280,6 +1280,9 @@ paths:
                 - title: SessionCashAdjustmentOperation
                   allOf:
                     - $ref: "#/components/schemas/CreateSessionCashAdjustmentOperationDto"
+                - title: SessionCashCountOperation
+                  allOf:
+                    - $ref: "#/components/schemas/CreateSessionCashCountOperationDto"
                 - title: SessionCloseOperation
                   allOf:
                     - $ref: "#/components/schemas/CreateSessionCloseOperationDto"
@@ -1291,6 +1294,7 @@ paths:
                   exchange: "#/components/schemas/CreateExchangeOperationDto"
                   session_open: "#/components/schemas/CreateSessionOpenOperationDto"
                   session_cash_adjustment: "#/components/schemas/CreateSessionCashAdjustmentOperationDto"
+                  session_cash_count: "#/components/schemas/CreateSessionCashCountOperationDto"
                   session_close: "#/components/schemas/CreateSessionCloseOperationDto"
       responses:
         "201":
@@ -2547,6 +2551,34 @@ components:
         - register_id
         - currency
         - cash_amount
+    CreateSessionCashCountOperationDto:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+            - session_cash_count
+          example: session_cash_count
+        register_id:
+          type: string
+          example: reg_abc123
+          description: Register whose drawer is being counted.
+        currency:
+          type: string
+          example: EUR
+          description: ISO 4217 currency code
+        counted_closing_amount:
+          type: string
+          example: "127.50"
+          description: Merchant-counted closing cash balance as a decimal string. Must be ≥ 0. Captures the drawer state BEFORE any closing pull/add — count first, then move cash. Signed independently as `CASH_TRX_EXPECTED_ACTUAL_DIFFERENCE`. On write the session enters the COUNTED frozen state — only SESSION_CLOSE is accepted from there.
+        discrepancy_note:
+          type: string
+          example: Two coins from the day before were unaccounted for.
+      required:
+        - type
+        - register_id
+        - currency
+        - counted_closing_amount
     CreateSessionCloseOperationDto:
       type: object
       properties:
@@ -3347,6 +3379,94 @@ components:
         - updated_at
         - type
         - cash_amount
+    SessionCashCountOperation:
+      type: object
+      properties:
+        id:
+          type: string
+        merchant_id:
+          type: string
+        location_id:
+          type: string
+          nullable: true
+          description: "Only set for source: POS."
+        register_id:
+          type: string
+          nullable: true
+          description: "Only set for source: POS."
+        session_id:
+          type: string
+          nullable: true
+          description: The RegisterSession this Operation is bound to. Set on every POS Operation; null for ONLINE goods-movement (no register, hence no session). On session-event variants this is the session being opened, adjusted, or closed; on goods-movement variants it is the session the operation was rung up during.
+        source:
+          type: string
+          enum: *a13
+        status:
+          type: string
+          enum: *a14
+        currency:
+          type: string
+          description: ISO 4217 currency code.
+          example: EUR
+        external_id:
+          type: string
+          description: Merchant or POS identifier for the upstream order.
+          nullable: true
+        resource_version:
+          type: number
+          description: Current server-issued version for the operation, starting at 1. Returned as `ETag` header.
+        fiscal_information:
+          nullable: true
+          description: The Fiskaly signature attached to this Operation, when one exists. Null until the operation has been signed.
+          oneOf: *a15
+          discriminator: *a16
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        voided_at:
+          type: string
+          format: date-time
+          nullable: true
+        void_reason:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        type:
+          type: string
+          enum:
+            - session_cash_count
+          example: session_cash_count
+        counted_closing_amount:
+          type: string
+          description: Merchant-counted closing cash balance as a decimal string. Captured BEFORE any closing pull/add.
+        expected_closing_amount:
+          type: string
+          description: System-calculated expected drawer balance at count time, derived from the session opening balance plus cash payments and adjustments. Decimal string.
+        closing_cashcount_diff:
+          type: string
+          description: Signed difference between counted and expected (`counted - expected`). Positive = drawer over, negative = drawer short, zero = on the dot. Decimal string. This is the value that gets signed as `CASH_TRX_EXPECTED_ACTUAL_DIFFERENCE`.
+        discrepancy_note:
+          type: string
+          nullable: true
+      required:
+        - id
+        - merchant_id
+        - source
+        - status
+        - currency
+        - resource_version
+        - created_at
+        - updated_at
+        - type
+        - counted_closing_amount
+        - expected_closing_amount
+        - closing_cashcount_diff
     SessionCloseOperation:
       type: object
       properties:
