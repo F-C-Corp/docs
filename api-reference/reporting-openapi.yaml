@@ -352,9 +352,6 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Merchant"
-        next_cursor:
-          type: string
-          nullable: true
       required:
         - data
     ErrorDto:
@@ -546,9 +543,6 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Register"
-        next_cursor:
-          type: string
-          nullable: true
       required:
         - data
     CreateRegisterDto:
@@ -617,9 +611,6 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Location"
-        next_cursor:
-          type: string
-          nullable: true
       required:
         - data
     CreateLocationDto:
@@ -981,18 +972,18 @@ components:
           type: string
           example: EUR
           description: ISO 4217 currency code
-        counted_closing_amount:
+        closing_adjustment_amount:
           type: string
-          example: "127.50"
-          description: Merchant-counted closing cash balance as a decimal string. Must be ≥ 0.
-        discrepancy_note:
+          example: "-50.00"
+          description: "Optional cash pulled (or added) at close. Signed decimal string: negative = cash out (deposit, transport to bank); positive = cash in (e.g., next-shift float top-up). Omit if no cash was moved at close. The counted closing balance and discrepancy note live on the preceding SESSION_CASH_COUNT — SESSION_CLOSE only carries the optional pull."
+        closing_adjustment_note:
           type: string
-          example: Two coins from the day before were unaccounted for.
+          example: Safe deposit at end of shift.
+          description: Optional explanation for the closing pull/add.
       required:
         - type
         - register_id
         - currency
-        - counted_closing_amount
     FiscalInformationKassenSichVStartEvent:
       type: object
       properties:
@@ -1828,12 +1819,15 @@ components:
           enum:
             - session_close
           example: session_close
-        counted_closing_amount:
-          type: string
-          description: Merchant-counted closing cash balance as a decimal string.
-        discrepancy_note:
+        closing_adjustment_amount:
           type: string
           nullable: true
+          description: Optional signed cash adjustment performed at close (negative = pull, positive = add). Null if no cash was moved at close. The counted closing balance and discrepancy note live on the preceding SESSION_CASH_COUNT response — SESSION_CLOSE only carries the optional pull.
+          example: "-50.00"
+        closing_adjustment_note:
+          type: string
+          nullable: true
+          description: Optional explanation for the closing pull/add.
       required:
         - id
         - merchant_id
@@ -1844,7 +1838,6 @@ components:
         - created_at
         - updated_at
         - type
-        - counted_closing_amount
     PaymentDto:
       type: object
       properties:
