@@ -1962,9 +1962,6 @@ components:
         retryable:
           type: boolean
           description: Whether retrying the request is safe.
-        request_id:
-          type: string
-          description: Stable request trace identifier.
         details:
           type: object
           description: Additional structured context for the error.
@@ -2290,6 +2287,10 @@ components:
           type: string
           example: "9.00"
           description: Total amount for this line item (quantity * unit_price)
+        sku_identifier:
+          type: string
+          example: TSHIRT-BLUE-M
+          description: "Identifies a unique number used to maintain and manage the item, product, or merchandise category in the company's systems. Example: A Tshirt has one sku for each size + color combination."
         taxes:
           description: One entry per VAT rate applied to this line. At least one entry required.
           type: array
@@ -2300,6 +2301,7 @@ components:
         - quantity
         - unit_price
         - total_amount
+        - sku_identifier
         - taxes
     CreateSaleOperationDto:
       type: object
@@ -2570,7 +2572,7 @@ components:
         counted_closing_amount:
           type: string
           example: "127.50"
-          description: Merchant-counted closing cash balance as a decimal string. Must be ≥ 0. Captures the drawer state BEFORE any closing pull/add — count first, then move cash. Signed independently as `CASH_TRX_EXPECTED_ACTUAL_DIFFERENCE`. On write the session enters the COUNTED frozen state — only SESSION_CLOSE is accepted from there.
+          description: Merchant-counted closing cash balance as a decimal string. Must be ≥ 0. Captures the drawer state BEFORE any closing pull/add — count first, then move cash. The counted-vs-expected variance is fiscally attested. On write the session is frozen — only `session_close` is accepted from there.
         discrepancy_note:
           type: string
           example: Two coins from the day before were unaccounted for.
@@ -2818,6 +2820,10 @@ components:
           type: string
         total_amount:
           type: string
+        sku_identifier:
+          type: string
+          example: TSHIRT-BLUE-M
+          description: "Identifies a unique number used to maintain and manage the item, product, or merchandise category in the company's systems. Example: A Tshirt has one sku for each size + color combination."
         taxes:
           type: array
           items:
@@ -2828,6 +2834,7 @@ components:
         - quantity
         - unit_price
         - total_amount
+        - sku_identifier
         - taxes
     Payment:
       type: object
@@ -3450,7 +3457,7 @@ components:
           description: System-calculated expected drawer balance at count time, derived from the session opening balance plus cash payments and adjustments. Decimal string.
         closing_cashcount_diff:
           type: string
-          description: Signed difference between counted and expected (`counted - expected`). Positive = drawer over, negative = drawer short, zero = on the dot. Decimal string. This is the value that gets signed as `CASH_TRX_EXPECTED_ACTUAL_DIFFERENCE`.
+          description: Signed difference between counted and expected (`counted - expected`). Positive = drawer over, negative = drawer short, zero = on the dot. Decimal string. Fiscally attested.
         discrepancy_note:
           type: string
           nullable: true
