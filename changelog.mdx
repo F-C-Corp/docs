@@ -11,7 +11,7 @@ rss: true
 
   Identifies a unique number used to maintain and manage the item, product, or merchandise category in the company's systems. Example: A Tshirt has one sku for each size + color combination.
 
-  **Breaking — `sku_identifier` is mandatory.** German DSFinV-K cashpoint-closings require a non-empty `lines[i].item.number` per line — the auditor's join key into the merchant's product master. Operations posted without `sku_identifier` on every line item are rejected with `400`.
+  **Breaking — `sku_identifier` is mandatory, as it's required for regulatory exports** 
 
   If your catalogue genuinely has no SKU for a given variant, send a stable placeholder (e.g. `"-1"`) — but a real SKU is what fiscal auditors expect to see.
 
