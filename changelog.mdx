@@ -4,6 +4,19 @@ description: "API contract updates to the OpenFiskal Fiscalization API."
 rss: true
 ---
 
+<Update label="May 3, 2026" description="Fiscalization API" tags={["Breaking", "Addition"]}>
+  **Line items now require `sku_identifier`**
+
+  Each entry in `line_items[]` on `POST /operations` (for `sale`, `return`, `exchange`) now requires a `sku_identifier` field — the merchant's stable variant identifier (e.g. `"TSHIRT-BLUE-M"`).
+
+  Identifies a unique number used to maintain and manage the item, product, or merchandise category in the company's systems. Example: A Tshirt has one sku for each size + color combination.
+
+  **Breaking — `sku_identifier` is mandatory, as it's required for regulatory exports** 
+
+
+  The same field is returned on every line item in the operation response.
+</Update>
+
 <Update label="May 2, 2026" description="Fiscalization API" tags={["Breaking", "Addition"]}>
   **Session close split into count + close**
 
