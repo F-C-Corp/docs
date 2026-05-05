@@ -3,107 +3,110 @@ title: "Getting Started"
 description: "How to use export jobs and obtain country-specific fiscal exports."
 ---
 
-<Warning>
-  **Planned — not yet available.** The export endpoints described here are not implemented in sandbox or production. Calls to `POST /exports`, `GET /exports`, and `GET /exports/{id}` currently return `404 not_found`. This page documents the intended contract.
-</Warning>
-
 ## Overview
 
-Exports are asynchronous. You create an export job, poll it until the artifact is ready, then download the file before the retention deadline.
+Exports are asynchronous. You create an export job, poll it until the artifact is ready, then download the file before the signed URL expires.
 
-Every export response includes the schema version, retention deadline, and a download link once the status reaches `ready`.
+The only export type currently available is **DSFinV-K** (Germany, KassenSichV). Additional types for other regimes will be added as those regimes are enabled.
 
 ## Export types
 
 | Type | Description |
 | --- | --- |
-| `dsfinvk` | Germany (KassenSichV) — DSFinV-K archive containing 20 CSV files, `index.xml`, and GDPdU DTD |
-| `tse_tar` | Germany (KassenSichV) — Raw TSE transaction data |
-| `dep7` | Austria (RKSV) — DEP7 data export |
+| `dsfinvk` | Germany (KassenSichV) — DSFinV-K archive containing the CSV files, `index.xml`, and GDPdU DTD mandated by the German tax authority |
 
-Exports produce country-specific compliance artifacts required by local tax authorities. Each export is scoped to a single register.
+DSFinV-K exports are **per-register**: every request must specify `register_id`, and the register must be on the KassenSichV regime.
 
 ## Requesting an export
 
-Every export requires a `type`, `register_id`, and a time range.
+Every export requires a `type`, a time range (`from`, `to`), and — for DSFinV-K — a `register_id`.
 
-<Tabs>
-  <Tab title="Germany — DSFinV-K">
-    ```bash
-    curl -X POST https://sandbox.api.openfiskal.com/v1/exports \
-      -H "Authorization: Bearer of_test_deu_abc123..." \
-      -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
-      -H "Idempotency-Key: dsfinvk-2026-03" \
-      -H "Content-Type: application/json" \
-      -d '{
-        "type": "dsfinvk",
-        "register_id": "reg_01HABC",
-        "from": "2026-03-01T00:00:00Z",
-        "to": "2026-03-31T23:59:59Z"
-      }'
-    ```
+```bash
+curl -X POST https://sandbox.api.openfiskal.com/v1/exports \
+  -H "Authorization: Bearer of_test_deu_abc123..." \
+  -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
+  -H "Idempotency-Key: dsfinvk-2026-03" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "dsfinvk",
+    "register_id": "reg_01HABC",
+    "from": "2026-03-01T00:00:00Z",
+    "to": "2026-03-31T23:59:59Z"
+  }'
+```
 
-    The resulting TAR archive contains the full DSFinV-K dataset: `cashpointclosing.csv`, `transactions.csv`, `lines.csv`, `payment.csv`, `vat.csv`, and other mandated files alongside `index.xml` and the GDPdU DTD.
-  </Tab>
-  <Tab title="Germany — TSE data">
-    ```bash
-    curl -X POST https://sandbox.api.openfiskal.com/v1/exports \
-      -H "Authorization: Bearer of_test_deu_abc123..." \
-      -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
-      -H "Idempotency-Key: tse-2026-03" \
-      -H "Content-Type: application/json" \
-      -d '{
-        "type": "tse_tar",
-        "register_id": "reg_01HABC",
-        "from": "2026-03-01T00:00:00Z",
-        "to": "2026-03-31T23:59:59Z"
-      }'
-    ```
+The resulting TAR archive contains the full DSFinV-K dataset: `cashpointclosing.csv`, `transactions.csv`, `lines.csv`, `payment.csv`, `vat.csv`, and the other mandated files alongside `index.xml` and the GDPdU DTD.
 
-    Returns the raw TSE (Technical Security Equipment) transaction log for the register's signing unit.
-  </Tab>
-  <Tab title="Austria — DEP7">
-    ```bash
-    curl -X POST https://sandbox.api.openfiskal.com/v1/exports \
-      -H "Authorization: Bearer of_test_aut_abc123..." \
-      -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
-      -H "Idempotency-Key: dep7-2026-03" \
-      -H "Content-Type: application/json" \
-      -d '{
-        "type": "dep7",
-        "register_id": "reg_01HABC",
-        "from": "2026-03-01T00:00:00Z",
-        "to": "2026-03-31T23:59:59Z"
-      }'
-    ```
+### Synchronous validation at create time
 
-    Returns the DEP7 (Datenerfassungsprotokoll) export in JSON, as required by Austrian RKSV regulations.
-  </Tab>
-</Tabs>
+`POST /exports` validates the request before enqueuing the job. The window is silently clamped to the register's fiscalized lifetime (`max(from, fiscalized_at)` to `min(to, decommissioned_at ?? now)`) and the following checks run before the response is returned:
+
+| Status | Code | When |
+| --- | --- | --- |
+| `400 bad_request` | `register_id_required_for_dsfinvk` | `register_id` is missing |
+| `422 validation_error` | `validation_error` | Register is not on the KassenSichV regime |
+| `422 validation_error` | `export_dsfinvk_no_closed_sessions` | Clamped window contains no closed sessions on the register |
+| `422 validation_error` | `export_dsfinvk_build_pending` | A closed session in the window has no DSFinV-K cashpoint-closing yet — retry shortly |
+
+`export_dsfinvk_build_pending` is transient: the build pipeline runs asynchronously after `session_close`, so a fresh request can land before every closed session has been compiled. Retrying a few seconds later is the right response.
 
 ### Polling and download
 
-All export types follow the same async lifecycle:
-
-1. `POST /exports` returns the job with status `queued`
-2. Poll `GET /exports/{exportId}` until status reaches `ready`
-
-Create response:
+If validation passes, the job is enqueued and the response carries `status: "pending"`:
 
 ```json
 {
   "id": "exp_01JDEF",
   "type": "dsfinvk",
-  "status": "queued",
-  "schema_version": "1.0",
+  "status": "pending",
   "register_id": "reg_01HABC",
   "from": "2026-03-01T00:00:00Z",
   "to": "2026-03-31T23:59:59Z",
-  "retention_expires_at": "2026-04-07T00:00:00Z",
-  "created_at": "2026-03-31T12:00:00Z"
+  "download_url": null,
+  "error": null,
+  "created_at": "2026-03-31T12:00:00Z",
+  "completed_at": null
+}
+```
+
+Poll `GET /exports/{exportId}` until `status` reaches `completed`:
+
+```json
+{
+  "id": "exp_01JDEF",
+  "type": "dsfinvk",
+  "status": "completed",
+  "register_id": "reg_01HABC",
+  "from": "2026-03-01T00:00:00Z",
+  "to": "2026-03-31T23:59:59Z",
+  "download_url": "https://storage.googleapis.com/...",
+  "error": null,
+  "created_at": "2026-03-31T12:00:00Z",
+  "completed_at": "2026-03-31T12:00:42Z"
+}
+```
+
+If the job fails, `status` is `failed` and the response carries an `error` object:
+
+```json
+{
+  "id": "exp_01JDEF",
+  "type": "dsfinvk",
+  "status": "failed",
+  "error": {
+    "message": "Build pipeline failed for session ses_01HZ.",
+    "details": null
+  },
+  "completed_at": "2026-03-31T12:00:42Z"
 }
 ```
 
 ## Retention
 
-Export artifacts remain downloadable until the `retention_expires_at` timestamp. Copy each artifact to your own durable storage before that deadline.
+`download_url` is a signed URL that expires **7 days** after `completed_at`, matching the bucket lifecycle rule that deletes the artifact at the same point. Copy each artifact to your own durable storage before then. If the URL has expired, you can re-create the export for the same window.
+
+## Limitations today
+
+- DSFinV-K is the only export type currently available
+- There is no list endpoint; track the export IDs you create
+- AT (DEP7/RKSV) and IT (RT) export types will be added when those regimes ship

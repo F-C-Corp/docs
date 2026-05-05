@@ -49,8 +49,10 @@ These mechanics are identical regardless of the country guide you follow:
 | --- | --- | --- | --- |
 | Regime | KassenSichV | RKSV | RT |
 | `country_code` | `DEU` | `AUT` | `ITA` |
-| Fiscal identity required fields | `tax_number`, `vat_id` | `legal_entity_id_type` (+ `gln` when type is `GLN`) | `tax_number`, `vat_number`, `legal_entity_type`, `fisconline_user`, `fisconline_password`, `fisconline_pin` |
+| Fiscal identity required fields | `tax_number` (Steuernummer), `vat_id` (USt-IdNr) | `legal_entity_id_type` (`VAT_ID` \| `TAX_ID` \| `GLN`); `gln` (13 digits) when the type is `GLN`. `vat_id` and `tax_number` are optional. | `legal_entity_type` (`COMPANY` \| `INDIVIDUAL`), `tax_number` (Codice Fiscale: 11 digits or 16 alphanumeric), `vat_number` (Partita IVA: 11 digits), `fisconline_user` (16 alphanumeric), `fisconline_password`, `fisconline_pin` |
 | Receipt obligation | Render all fiscal fields exactly | Preserve fiscal values + local format | Render the DCW number |
+
+The format constraints in the table are enforced by the API. See the country-specific guides for full payload examples.
 
 <Warning>
   This matrix is a product scope guide, not legal advice. Your implementation owner should review the regime-specific onboarding checklist before go-live.

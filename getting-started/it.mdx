@@ -10,7 +10,7 @@ This guide walks the `v1` integration contract for Italy. You create an `ita` AP
 </Info>
 
 <Warning>
-  Register fiscalization on the public API today is only supported for **DE / KassenSichV** . Italian RT fiscalization is rolling out, contact [support@openfiskal.com](mailto:support@openfiskal.com) for current IT enablement status before scheduling go-live. The merchant, location, and register data shapes shown here are stable and safe to integrate against now.
+  Register fiscalization on the public API today is only supported for **DE / KassenSichV**. Calling `POST /registers/{id}/fiscalize` on an Italian location currently returns `422 validation_error`. Italian RT fiscalization is rolling out — contact [support@openfiskal.com](mailto:support@openfiskal.com) for current IT enablement status before scheduling go-live. The merchant, location, and register data shapes shown here are stable and safe to integrate against now; the fiscalize step and the RT `fiscal_information` payload are the parts that activate when IT is enabled for your tenant.
 </Warning>
 
 ## Prerequisites
@@ -124,7 +124,7 @@ Create these resources in order. The register cannot fiscalize until the merchan
     ```
   </Step>
   <Step title="Fiscalize the register (rolling out)">
-    Once enabled for IT, `POST /registers/{id}/fiscalize` registers the Registratore Telematico with the Agenzia delle Entrate using the merchant's Italian `fiscal_identity` and the location's country. The response is `202 Accepted`; poll `GET /registers/{id}` until `fiscalizedAt` is populated.
+    Once enabled for IT, `POST /registers/{id}/fiscalize` registers the Registratore Telematico with the Agenzia delle Entrate using the merchant's Italian `fiscal_identity` and the location's country. The response is `202 Accepted`; poll `GET /registers/{id}` until `fiscalization_status` is `"fiscalized"` (the timestamp is `fiscalization.fiscalized_at`). Until IT is enabled for your tenant this call returns `422 validation_error`.
 
     ```bash
     curl -X POST https://sandbox.api.openfiskal.com/v1/registers/reg_01HXYZ/fiscalize \
