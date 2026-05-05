@@ -98,6 +98,10 @@
     {
       "source": "/supported-scope",
       "destination": "/getting-started"
+    },
+    {
+      "source": "/reporting-api",
+      "destination": "/reporting-api-getting-started"
     }
   ],
   "description": "OpenFiskal API docs.",
