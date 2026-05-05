@@ -40,6 +40,12 @@ Each queued entry should include:
 4. Re-read the operation if replay receives `412 precondition_failed`.
 5. Stop on the first unresolved network or semantic error and resolve that item before continuing.
 
+## When OpenFiskal is up but the underlying signing service is down
+
+A separate failure mode is OpenFiskal being reachable while its upstream signing service (e.g. the Fiskaly TSS for KassenSichV registers) is unavailable. Most fiscal events are signed inline and a signing failure surfaces as `422 validation_error` on `POST /operations/{id}/complete` — your normal retry-after-recovery path applies.
+
+The exception is **`session_cash_count`**: signing the counted-vs-expected variance is best-effort. If the upstream signing service is unreachable at count time, the API still returns `2xx`, the session transitions to `counted`, and the variance is recomputed locally. The signature is filled in later when the signing service recovers. From the integrator's point of view this is invisible — the session's customer-facing Z-Bon flow is unaffected.
+
 ## Provisional receipts
 
 If you complete checkout in your POS before OpenFiskal is reachable again, treat any locally produced receipt as provisional with a "Signature unavailable" message. After the queued completion succeeds, the authoritative fiscal payload is the `fiscal_information` block on the completion response. 

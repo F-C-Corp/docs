@@ -41,7 +41,7 @@ Every `return` and `exchange` must reference the original sale. Set exactly one 
 - `related_operation_id` — when the original sale exists in OpenFiskal as an operation.
 - `external_related_operation` — when the original sale lives outside OpenFiskal (typical during platform migration). The object carries `description` (free-text identifying the upstream sale) and `external_operation_id` (the integrator-side identifier, e.g. the legacy POS or Shopify order ID).
 
-Sending both fields, or neither, is rejected with `422 unprocessable_entity`. `sale` operations must not set either.
+Sending both fields, or neither, on a `return` or `exchange` is rejected with `422 unprocessable_entity`. Setting either field on a `sale` is rejected with `400 bad_request` — the request body is whitelist-validated against the type's schema and unknown fields are refused.
 
 ### Sign convention
 

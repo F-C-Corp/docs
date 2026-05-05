@@ -18,7 +18,7 @@ All amounts are decimal strings (e.g. `"42.50"`), matching the operation's amoun
 
 ## Split tender
 
-Use one payment object per tender leg. The sum of `captured` and `authorized` amounts must match the operation's `total_amount`.
+Use one payment object per tender leg. The sum of every `payments[].amount` must equal the operation's `total_amount` — the check is on the full array, regardless of each leg's `status`. A `pending` or `failed` leg counts toward the sum like any other.
 
 ```json
 {

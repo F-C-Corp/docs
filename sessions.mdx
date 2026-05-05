@@ -139,7 +139,7 @@ The response carries the system-calculated `expected_closing_amount` and the sig
 
 ## Closing a session
 
-Send `session_close` to seal the session. The body optionally carries `closing_adjustment_amount` (signed: negative = pull cash out, positive = add cash in) and `closing_adjustment_note`. Counting must have happened first — `session_close` on an un-counted session returns `409 session_not_counted`.
+Send `session_close` to seal the session. The body requires `business_date` (the posting date in `YYYY-MM-DD` format) and optionally carries `closing_adjustment_amount` (signed: negative = pull cash out, positive = add cash in) and `closing_adjustment_note`. Counting must have happened first — `session_close` on an un-counted session returns `409 session_not_counted`.
 
 ```bash
 curl -X POST https://api.openfiskal.com/v1/operations \
@@ -151,10 +151,13 @@ curl -X POST https://api.openfiskal.com/v1/operations \
     "type": "session_close",
     "register_id": "reg_abc123",
     "currency": "EUR",
+    "business_date": "2026-04-30",
     "closing_adjustment_amount": "-100.00",
     "closing_adjustment_note": "Cash pulled to safe deposit."
   }'
 ```
+
+`business_date` is the date of posting for financial-accounting purposes. If the session opens and closes on the same calendar day, use that date. If the session crosses midnight (for example, a bar that closes after 02:00), pick the business day the merchant treats as the operating day; consult your tax advisor when in doubt.
 
 When `closing_adjustment_amount` is non-zero, the close is fiscally signed (a cash movement at close is a fiscal event). Omit the field (or pass `0`) for a clean close that doesn't move cash — those closes don't produce a separate signature, only a state transition. The drawer state at end of shift is therefore: `counted_closing_amount + closing_adjustment_amount = amount left for the next shift`.
 
@@ -350,6 +353,7 @@ The scenario: a German bakery opens at 08:00 with a 50 EUR float, rings up two c
         "type": "session_close",
         "register_id": "reg_abc123",
         "currency": "EUR",
+        "business_date": "2026-04-30",
         "closing_adjustment_amount": "-100.00",
         "closing_adjustment_note": "Cash pulled to safe deposit."
       }'

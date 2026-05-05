@@ -7,23 +7,33 @@ description: "How to create, fiscalize, update, and retire registers in the Open
 
 A register is the logical checkout or terminal that produces operations inside a location. In the current public API, a register stores identity, routing, and fiscal-provisioning metadata that you must keep stable over time.
 
+<Note>
+Today, fiscalization is supported only for locations in **Germany** (`country_code: "DEU"`, KassenSichV). Calls to `POST /registers/{id}/fiscalize` for AT or IT locations return `422 validation_error`. AT (RKSV) and IT (RT) support is in development — see the country-specific guides for the planned shape.
+</Note>
+
 ## Register states
 
+Two enums describe a register's lifecycle: `status` (`active | inactive`) and `fiscalization_status` (`not_fiscalized | pending | failed | fiscalized | decommissioned`).
+
 ```
-[created] ──► [fiscalized] ──► [decommissioned]
+[not_fiscalized] ──► [pending] ──► [fiscalized] ──► [decommissioned]
+                          │
+                          └──► [failed]
 ```
 
-- `created` — the register exists but cannot accept operations yet
-- `fiscalized` — the register has regime-specific fiscal components provisioned (TSS + client for KassenSichV, SCU + cash register for RKSV) and can accept operations
-- `decommissioned` — the register is retired; historical data is preserved but no new operations can be created
+- `not_fiscalized` — the register exists but has not been fiscalized; it cannot accept operations
+- `pending` — fiscalization has been enqueued and is running in the background
+- `failed` — fiscalization terminated with an error; you can retry by calling fiscalize again
+- `fiscalized` — fiscal components are provisioned (TSS + client for KassenSichV) and the register can accept operations
+- `decommissioned` — the register has been retired; historical data is preserved but no new operations can be created
 
-The fiscal regime is derived from the **location's country**, not the merchant's. A single merchant can operate registers across multiple regimes.
+The fiscal regime is derived from the **location's country**, not the merchant's. A single merchant can operate registers across multiple regimes (once non-DEU regimes are enabled).
 
 ## Commissioning a register
 
 ### 1. Prerequisite: merchant must have `fiscal_identities`
 
-Before fiscalizing a register, the parent merchant must have a `fiscal_identities[]` entry for the location's country. This is normally set at merchant creation (`POST /merchants`), but you can add it later:
+Before fiscalizing a register, the parent merchant must have a `fiscal_identities[]` entry for the location's country. A merchant is created with at least `legal_name`, `country_code`, and `address`; fiscal identities can be supplied at creation or added later.
 
 ```bash
 curl -X PATCH https://api.openfiskal.com/v1/merchants/merchant_01HXYZ \
@@ -32,7 +42,7 @@ curl -X PATCH https://api.openfiskal.com/v1/merchants/merchant_01HXYZ \
   -d '{
     "fiscal_identities": [
       {
-        "country": "DEU",
+        "country_code": "DEU",
         "tax_number": "21/815/08150",
         "vat_id": "DE123456789"
       }
@@ -40,7 +50,7 @@ curl -X PATCH https://api.openfiskal.com/v1/merchants/merchant_01HXYZ \
   }'
 ```
 
-Without a matching fiscal identity, `POST /registers/{id}/fiscalize` returns `409 fiscalization_conflict`. Fiscal identity shape varies by country (`DEU`, `AUT`, `ITA`) — see the schema reference.
+`country_code` is uppercase ISO 3166-1 alpha-3 (`DEU`, `AUT`, `ITA`). Without a matching fiscal identity for the location's country, `POST /registers/{id}/fiscalize` returns `422 validation_error`. Fiscal identity shape varies by country — see the schema reference.
 
 ### 2. Create the register
 
@@ -56,9 +66,11 @@ curl -X POST https://api.openfiskal.com/v1/registers \
   }'
 ```
 
+A new register is created with `fiscalization_status: "not_fiscalized"`.
+
 ### 3. Fiscalize the register
 
-Call `POST /registers/{id}/fiscalize`. This is an asynchronous operation — the endpoint returns `202 Accepted` and provisioning completes in the background.
+Call `POST /registers/{id}/fiscalize`. This is asynchronous — the endpoint returns `202 Accepted` and provisioning runs in the background.
 
 ```bash
 curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/fiscalize \
@@ -66,7 +78,11 @@ curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/fiscalize \
   -H "X-OpenFiskal-Merchant: merchant_01HXYZ"
 ```
 
-Poll `GET /registers/{id}` until `fiscalizedAt` is populated, then the register is ready to accept operations.
+Poll `GET /registers/{id}` until `fiscalization_status` is `fiscalized` before sending operations. The nested `fiscalization.fiscalized_at` timestamp is set at the same time. If `fiscalization_status` becomes `failed`, the response body includes an error message; you can call fiscalize again to retry.
+
+Errors:
+- `422 validation_error` — the location is not in DEU, or the merchant is missing a German fiscal identity
+- `409 register_already_fiscalized` — the register is already fiscalized, or a fiscalization is already in progress
 
 ## Updating a register
 
@@ -85,7 +101,7 @@ curl -X PATCH https://api.openfiskal.com/v1/registers/reg_01HXYZ \
 
 ## Decommissioning
 
-Use `POST /registers/{id}/decommission` to retire a fiscalized register. This tears down the regime-specific fiscal components and marks the register as `decommissioned`.
+Use `POST /registers/{id}/decommission` to retire a fiscalized register. This tears down the regime-specific fiscal components and sets `fiscalization_status` to `decommissioned`. Historical operations and signatures are preserved.
 
 ```bash
 curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/decommission \
@@ -93,7 +109,21 @@ curl -X POST https://api.openfiskal.com/v1/registers/reg_01HXYZ/decommission \
   -H "X-OpenFiskal-Merchant: merchant_01HXYZ"
 ```
 
-Registers with open operations cannot be decommissioned (`409 decommission_conflict`). Complete or void them first.
+Errors:
+- `409 register_invalid_fiscal_state` — the register is not fiscalized, or has already been decommissioned
+- `422 validation_error` — the register is not a KassenSichV register, or its TSS/client metadata is incomplete
+
+## Deleting a register
+
+`DELETE /registers/{id}` returns `204 No Content`. Deletion is permitted only for registers that have never been fiscalized and have no operations attached.
+
+```bash
+curl -X DELETE https://api.openfiskal.com/v1/registers/reg_01HXYZ \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "X-OpenFiskal-Merchant: merchant_01HXYZ"
+```
+
+`409 register_has_dependencies` is returned if the register has operations or has been fiscalized. Use **decommission** for any register that has been fiscalized — deletion is intended for registers created in error.
 
 ## Operational guidance
 

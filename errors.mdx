@@ -20,7 +20,7 @@ Every error response uses the same envelope. Switch on `code` (machine-readable,
 | `code` | string | Stable machine-readable identifier. See the catalog below. |
 | `message` | string | Short human-readable label. Safe to log, not locale-stable, not a stable contract. |
 | `retryable` | boolean | Whether retrying the same request can succeed. `5xx`, `429`, and `412` are retryable. |
-| `details` | object | Reserved for structured context. Not currently populated by any handler — variable state (e.g. expected vs. current resource versions) is interpolated into `message` today. Treat the field as optional and absent in current responses. |
+| `details` | object | Optional structured context. `precondition_failed` (`412`) responses include `expected_resource_version` and `current_resource_version` here so clients can react without parsing `message`. Other endpoints may add their own structured payload (for example, `export_dsfinvk_build_pending` returns `unbuilt_session_ids`). Always check whether the field is present before reading it. |
 
 The trace identifier is returned only in the `X-Request-Id` response header (e.g. `X-Request-Id: req_a1b2c3d4e5f60718293a`). It is not embedded in the error body. Persist it in your client logs and attach it to support cases.
 
@@ -44,11 +44,12 @@ These codes map directly to HTTP status codes and apply to every endpoint across
 | 403 | `forbidden` | No | Authenticated caller is not allowed to access the requested tenant, country, or merchant. Most commonly: API key country does not match the merchant or location country. |
 | 404 | `not_found` | No | Resource does not exist or is not visible to the caller. |
 | 409 | `conflict` | No | Generic resource conflict. Specific 409 subtypes are listed below — `code` distinguishes the cause. |
-| 412 | `precondition_failed` | Yes | Stale `If-Match` on a mutation. The expected and current resource versions appear in `message` (e.g. `"Resource version mismatch. Expected 1, current is 2."`). Re-read the resource and retry with the current `ETag`. |
+| 412 | `precondition_failed` | Yes | Stale `If-Match` on a mutation. Both the expected and current resource versions appear in `details` (`expected_resource_version`, `current_resource_version`) and in `message`. Re-read the resource and retry with the current `ETag`. |
 | 422 | `validation_error` | No | Request shape is valid but a field value is semantically wrong (amount sign mismatch, missing register reference, invalid timestamp range, etc.). See [Validation errors](#validation-errors-422) for the specific conditions. |
 | 428 | `precondition_required` | No | `If-Match` header is missing on a mutation that requires it (`POST /operations/{id}/complete`, `POST /operations/{id}/void`). |
 | 429 | `rate_limit_exceeded` | Yes | Per-API-key rate budget exceeded. Honor `Retry-After` and reduce concurrency. |
-| 500 | `internal_error` | Yes | Unhandled server error. Retry the request; escalate with `X-Request-Id` if sustained. Status-501 paths (see [Not-yet-implemented endpoints](#not-yet-implemented-endpoints)) currently surface with this `code` as well. |
+| 500 | `internal_error` | Yes | Unhandled server error. Retry the request; escalate with `X-Request-Id` if sustained. |
+| 501 | `not_implemented` | Yes | The requested capability is registered in the schema but no handler is wired up. Today this only happens if a request lands for an export `type` with no matching exporter. |
 
 ## Conflict (`409`) variants
 
@@ -59,7 +60,7 @@ All 409 responses share the envelope. The `code` field distinguishes the cause.
 | `location_has_registers` | `DELETE /locations/{id}` | Location still has registers attached. Delete or reassign the registers first. |
 | `register_has_dependencies` | `DELETE /registers/{id}` | Register has operations recorded against it, or the register is fiscalized. Decommission first if applicable; otherwise the register cannot be removed. |
 | `register_already_fiscalized` | `POST /registers/{id}/fiscalize` | Register is already fiscalized, or a fiscalization is in progress. |
-| `register_invalid_fiscal_state` | `POST /registers/{id}/decommission`, completion paths | Register is decommissioned, not yet fiscalized, or otherwise not in a state that supports the requested action. |
+| `register_invalid_fiscal_state` | `POST /registers/{id}/decommission` | Register is already decommissioned, or has not been fiscalized yet. Other decommission preconditions (non-KassenSichV regime, missing TSS/client metadata) surface as `validation_error` with `422`. |
 | `register_no_open_session` | POS operation endpoints | Register has no open session. Open a session first via `POST /operations` with `type: SESSION_OPEN`. |
 | `session_invalid_state` | Session lifecycle endpoints | Session-level state violation: a session is already open on the register, session counts or amounts are invalid, or the session cannot be closed in its current state. |
 | `operation_invalid_state` | `POST /operations/{id}/complete`, `POST /operations/{id}/void` | Operation is not in `OPEN` state. You cannot complete an already-completed or voided operation, and you cannot void what is not open. |
@@ -111,14 +112,7 @@ All 409 responses share the envelope. The `code` field distinguishes the cause.
 
 ## Not-yet-implemented endpoints
 
-Two paths return HTTP `501 Not Implemented` today. The exception filter has no 501 mapping, so the body surfaces with `code: "internal_error"` and `retryable: true` even though the status itself signals the cause:
-
-| HTTP | Where | Why |
-| --- | --- | --- |
-| 501 | `POST /operations` with `type: SESSION_CASH_COUNT` | The session cash-count operation type is reserved in the schema but not yet handled. |
-| 501 | Reporting export endpoints with an unsupported export `type` | No exporter is registered for the requested type (e.g. DSFinV-K archive compilation). |
-
-Treat the 501 status — not the body `code` — as the signal here. This will tighten in a future filter update.
+Today the only path that can return HTTP `501 Not Implemented` is the export endpoint, when a request lands for an export `type` that has no exporter registered. The body carries `code: "not_implemented"` and `retryable: true`. Because the public wire enum currently exposes only `dsfinvk`, this path is unreachable through normal use.
 
 ## Reserved codes (not yet emitted)
 
