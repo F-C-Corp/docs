@@ -46,7 +46,7 @@ These codes map directly to HTTP status codes and apply to every endpoint across
 | 409 | `conflict` | No | Generic resource conflict. Specific 409 subtypes are listed below — `code` distinguishes the cause. |
 | 412 | `precondition_failed` | Yes | Stale `If-Match` on a mutation. The expected and current resource versions appear in `message` (e.g. `"Resource version mismatch. Expected 1, current is 2."`). Re-read the resource and retry with the current `ETag`. |
 | 422 | `validation_error` | No | Request shape is valid but a field value is semantically wrong (amount sign mismatch, missing register reference, invalid timestamp range, etc.). See [Validation errors](#validation-errors-422) for the specific conditions. |
-| 428 | `precondition_required` | No | `If-Match` header is missing on a mutation that requires it (`PATCH /operations/{id}/complete`, `PATCH /operations/{id}/void`). |
+| 428 | `precondition_required` | No | `If-Match` header is missing on a mutation that requires it (`POST /operations/{id}/complete`, `POST /operations/{id}/void`). |
 | 429 | `rate_limit_exceeded` | Yes | Per-API-key rate budget exceeded. Honor `Retry-After` and reduce concurrency. |
 | 500 | `internal_error` | Yes | Unhandled server error. Retry the request; escalate with `X-Request-Id` if sustained. Status-501 paths (see [Not-yet-implemented endpoints](#not-yet-implemented-endpoints)) currently surface with this `code` as well. |
 
@@ -62,7 +62,7 @@ All 409 responses share the envelope. The `code` field distinguishes the cause.
 | `register_invalid_fiscal_state` | `POST /registers/{id}/decommission`, completion paths | Register is decommissioned, not yet fiscalized, or otherwise not in a state that supports the requested action. |
 | `register_no_open_session` | POS operation endpoints | Register has no open session. Open a session first via `POST /operations` with `type: SESSION_OPEN`. |
 | `session_invalid_state` | Session lifecycle endpoints | Session-level state violation: a session is already open on the register, session counts or amounts are invalid, or the session cannot be closed in its current state. |
-| `operation_invalid_state` | `PATCH /operations/{id}/complete`, `PATCH /operations/{id}/void` | Operation is not in `OPEN` state. You cannot complete an already-completed or voided operation, and you cannot void what is not open. |
+| `operation_invalid_state` | `POST /operations/{id}/complete`, `POST /operations/{id}/void` | Operation is not in `OPEN` state. You cannot complete an already-completed or voided operation, and you cannot void what is not open. |
 
 ## Validation errors (`422`)
 
@@ -90,17 +90,17 @@ All 409 responses share the envelope. The `code` field distinguishes the cause.
 
 | Condition | Endpoint |
 | --- | --- |
-| Register is not fiscalized. Complete fiscalization before completing operations. | `PATCH /operations/{id}/complete` |
-| Register is missing active TSS or Client. Re-fiscalize the register. | `PATCH /operations/{id}/complete` |
-| Operation has no goods-movement details; cannot complete. | `PATCH /operations/{id}/complete` |
-| `POS` operation is missing a register reference. | `PATCH /operations/{id}/complete` |
+| Register is not fiscalized. Complete fiscalization before completing operations. | `POST /operations/{id}/complete` |
+| Register is missing active TSS or Client. Re-fiscalize the register. | `POST /operations/{id}/complete` |
+| Operation has no goods-movement details; cannot complete. | `POST /operations/{id}/complete` |
+| `POS` operation is missing a register reference. | `POST /operations/{id}/complete` |
 | Merchant is missing a German fiscal identity (`DEU`). | `POST /registers/{id}/fiscalize` |
 | Fiscalization is only supported for locations in Germany (`DEU`). | `POST /registers/{id}/fiscalize` |
 | Decommission is only supported for KassenSichV registers. | `POST /registers/{id}/decommission` |
 | Register has no active TSS or client to decommission. | `POST /registers/{id}/decommission` |
 | Active TSS is missing an admin PIN; cannot authenticate to decommission. | `POST /registers/{id}/decommission` |
-| TSE signing failed (phase 1) — TSS unreachable or rejected the request before the operation reached the device. | `PATCH /operations/{id}/complete` |
-| TSE signing failed (phase 2) — TSS rejected the operation after start. The operation is left in a recoverable state. | `PATCH /operations/{id}/complete` |
+| TSE signing failed (phase 1) — TSS unreachable or rejected the request before the operation reached the device. | `POST /operations/{id}/complete` |
+| TSE signing failed (phase 2) — TSS rejected the operation after start. The operation is left in a recoverable state. | `POST /operations/{id}/complete` |
 
 ### Reporting API
 

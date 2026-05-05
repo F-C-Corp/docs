@@ -21,8 +21,8 @@ Offline handling is a compliance-controlled workflow. You should treat it as an 
 Queue the exact mutation requests you would have sent online:
 
 - `POST /operations`
-- `PATCH /operations/{operationId}/complete`
-- `PATCH /operations/{operationId}/void`
+- `POST /operations/{operationId}/complete`
+- `POST /operations/{operationId}/void`
 
 Each queued entry should include:
 

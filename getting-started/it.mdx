@@ -184,7 +184,7 @@ Once your register is fiscalized, you can create and complete sale operations. T
     Completion includes typed payment legs. Use one entry per tender leg and include processor references where available. Send the latest `ETag` in `If-Match`.
 
     ```bash
-    curl -X PATCH https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ/complete \
+    curl -X POST https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ/complete \
       -H "Authorization: Bearer of_test_ita_abc123..." \
       -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
       -H "Idempotency-Key: op-order-1001-complete" \
@@ -218,7 +218,7 @@ Once your register is fiscalized, you can create and complete sale operations. T
 If the sale is abandoned before completion, void the open operation:
 
 ```bash
-curl -X PATCH https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ/void \
+curl -X POST https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ/void \
   -H "Authorization: Bearer of_test_ita_abc123..." \
   -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
   -H "Idempotency-Key: op-order-1001-void" \

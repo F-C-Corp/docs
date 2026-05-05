@@ -22,10 +22,10 @@ stateDiagram-v2
 - `completed` — the fiscal event is final and immutable
 - `voided` — the operation was voided before completion
 
-OpenFiskal owns this lifecycle. Clients do not send operation `status` in request payloads. They complete operations through `PATCH /operations/{operationId}/complete` and void them through `PATCH /operations/{operationId}/void`.
+OpenFiskal owns this lifecycle. Clients do not send operation `status` in request payloads. They complete operations through `POST /operations/{operationId}/complete` and void them through `POST /operations/{operationId}/void`.
 
 <Warning>
-  The current API has **no generic `PATCH /operations/{id}`** endpoint. Operation bodies are immutable after `POST /operations`. Build the full line-item and amount set before creating the operation.
+  Operation bodies are immutable after `POST /operations` — there is no endpoint to amend an existing operation. The only follow-up calls are `POST .../complete` and `POST .../void`. Build the full line-item and amount set before creating the operation.
 </Warning>
 
 ## Operation types
@@ -72,7 +72,7 @@ curl -X POST https://api.openfiskal.com/v1/operations \
 
 ## Complete an operation
 
-Use `PATCH /operations/{operationId}/complete` when you want OpenFiskal to produce the final fiscal document and receipt state. Completion accepts a typed `payments` array and returns `fiscal_information` for regime-specific fiscal payloads. Send the latest `ETag` in `If-Match`.
+Use `POST /operations/{operationId}/complete` when you want OpenFiskal to produce the final fiscal document and receipt state. Completion accepts a typed `payments` array and returns `fiscal_information` for regime-specific fiscal payloads. Send the latest `ETag` in `If-Match`.
 
 Completion is a fiscal event. Use an idempotency key on every completion request.
 
@@ -317,10 +317,10 @@ For a zero-net exchange, send `total_amount: "0.00"` and a single payment with `
 
 ## Void an open operation
 
-Use `PATCH /operations/{operationId}/void` only while the operation is still `open`. The endpoint is named `/void`, not `/cancel`.
+Use `POST /operations/{operationId}/void` only while the operation is still `open`. The endpoint is named `/void`, not `/cancel`.
 
 ```bash
-curl -X PATCH https://api.openfiskal.com/v1/operations/op_01HXYZ/void \
+curl -X POST https://api.openfiskal.com/v1/operations/op_01HXYZ/void \
   -H "Authorization: Bearer $API_KEY" \
   -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
   -H "Idempotency-Key: op-order-1001-void" \

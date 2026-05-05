@@ -83,7 +83,7 @@ curl -X POST https://api.openfiskal.com/v1/operations \
   -d '{ "...": "..." }'
 ```
 
-Use idempotency keys on every `POST /operations`, `PATCH /operations/{id}/complete`, and `PATCH /operations/{id}/void` request.
+Use idempotency keys on every `POST /operations`, `POST /operations/{id}/complete`, and `POST /operations/{id}/void` request.
 
 The platform retains keys for at least 24 hours. Reusing the same key with a different payload returns `409 idempotency_key_conflict`.
 

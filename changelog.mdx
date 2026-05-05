@@ -47,7 +47,7 @@ rss: true
   - `session_cash_adjustment` — record mid-shift cash movement (drop, pay-in, correction)
   - `session_close` — end the shift with a merchant-counted closing balance
 
-  All three flow through `POST /operations` (no separate sessions endpoint) and carry the same `resource_version` / `ETag` mechanics as goods-movement operations. They are born `status: "completed"` — there is no `PATCH .../complete` step for session events.
+  All three flow through `POST /operations` (no separate sessions endpoint) and carry the same `resource_version` / `ETag` mechanics as goods-movement operations. They are born `status: "completed"` — there is no `POST .../complete` step for session events.
 
   **Breaking — POS goods-movement now requires an open session.** Sending `POST /operations` with `source: "POS"` on a register that has no open session is rejected with `409 no_open_session`. Open the register's session with `session_open` before posting POS sales, returns, or exchanges. At most one open session per register; opening a second while one is open returns `409 session_invalid_state`.
 
@@ -152,7 +152,7 @@ rss: true
 <Update label="April 23, 2026" description="Fiscalization API" tags={["Breaking"]}>
   **`Operation.status` enum corrected; `412` payload includes `expected_resource_version`**
 
-  The `Operation.status` enum has been corrected from `'open' | 'completed' | 'cancelled'` to `'open' | 'completed' | 'voided'`. Operations that you `PATCH /operations/{id}/void` resolve to `status: "voided"`, not `cancelled`. There were never any operations with `status: "cancelled"` in production — the OpenAPI value was wrong.
+  The `Operation.status` enum has been corrected from `'open' | 'completed' | 'cancelled'` to `'open' | 'completed' | 'voided'`. Operations that you `POST /operations/{id}/void` resolve to `status: "voided"`, not `cancelled`. There were never any operations with `status: "cancelled"` in production — the OpenAPI value was wrong.
 
   `412 Precondition Failed` error bodies now include `details.expected_resource_version` alongside `details.current_resource_version`. The `message` field is the literal string `"Resource version mismatch."` (previously `"The supplied If-Match value is stale."`).
 
