@@ -642,20 +642,6 @@ components:
         timezone:
           type: string
           example: Europe/Vienna
-    ExternalRelatedOperationDto:
-      type: object
-      properties:
-        description:
-          type: string
-          example: Return against order from external platform.
-          description: Free-text description identifying the external sale being returned/exchanged against.
-        external_operation_id:
-          type: string
-          example: shopify-order-4711
-          description: The integrator-side identifier of the original sale in the external system.
-      required:
-        - description
-        - external_operation_id
     LineItemTaxDto:
       type: object
       properties:
@@ -729,14 +715,6 @@ components:
           type: string
           example: order-12345
           description: Merchant or POS identifier for the upstream order.
-        related_operation_id:
-          type: string
-          example: op_abc123
-          description: "For returns/exchanges: the OpenFiskal operation ID of the original sale. Exactly one of `related_operation_id` or `external_related_operation` must be set."
-        external_related_operation:
-          description: For returns/exchanges of sales that were never ingested into OpenFiskal (typically during platform migration). Exactly one of `related_operation_id` or `external_related_operation` must be set.
-          allOf:
-            - $ref: "#/components/schemas/ExternalRelatedOperationDto"
         note:
           type: string
           example: Customer requested extra napkins
@@ -774,6 +752,20 @@ components:
         - total_amount
         - line_items
         - type
+    ExternalRelatedOperationDto:
+      type: object
+      properties:
+        description:
+          type: string
+          example: Return against order from external platform.
+          description: Free-text description identifying the external sale being returned/exchanged against.
+        external_operation_id:
+          type: string
+          example: shopify-order-4711
+          description: The integrator-side identifier of the original sale in the external system.
+      required:
+        - description
+        - external_operation_id
     CreateReturnOperationDto:
       type: object
       properties:
@@ -793,14 +785,6 @@ components:
           type: string
           example: order-12345
           description: Merchant or POS identifier for the upstream order.
-        related_operation_id:
-          type: string
-          example: op_abc123
-          description: "For returns/exchanges: the OpenFiskal operation ID of the original sale. Exactly one of `related_operation_id` or `external_related_operation` must be set."
-        external_related_operation:
-          description: For returns/exchanges of sales that were never ingested into OpenFiskal (typically during platform migration). Exactly one of `related_operation_id` or `external_related_operation` must be set.
-          allOf:
-            - $ref: "#/components/schemas/ExternalRelatedOperationDto"
         note:
           type: string
           example: Customer requested extra napkins
@@ -824,6 +808,14 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/LineItemDto"
+        related_operation_id:
+          type: string
+          example: op_abc123
+          description: "For returns/exchanges: the OpenFiskal operation ID of the original sale. Exactly one of `related_operation_id` or `external_related_operation` must be set."
+        external_related_operation:
+          description: For returns/exchanges of sales that were never ingested into OpenFiskal (typically during platform migration). Exactly one of `related_operation_id` or `external_related_operation` must be set.
+          allOf:
+            - $ref: "#/components/schemas/ExternalRelatedOperationDto"
         type:
           type: string
           enum:
@@ -857,14 +849,6 @@ components:
           type: string
           example: order-12345
           description: Merchant or POS identifier for the upstream order.
-        related_operation_id:
-          type: string
-          example: op_abc123
-          description: "For returns/exchanges: the OpenFiskal operation ID of the original sale. Exactly one of `related_operation_id` or `external_related_operation` must be set."
-        external_related_operation:
-          description: For returns/exchanges of sales that were never ingested into OpenFiskal (typically during platform migration). Exactly one of `related_operation_id` or `external_related_operation` must be set.
-          allOf:
-            - $ref: "#/components/schemas/ExternalRelatedOperationDto"
         note:
           type: string
           example: Customer requested extra napkins
@@ -888,6 +872,14 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/LineItemDto"
+        related_operation_id:
+          type: string
+          example: op_abc123
+          description: "For returns/exchanges: the OpenFiskal operation ID of the original sale. Exactly one of `related_operation_id` or `external_related_operation` must be set."
+        external_related_operation:
+          description: For returns/exchanges of sales that were never ingested into OpenFiskal (typically during platform migration). Exactly one of `related_operation_id` or `external_related_operation` must be set.
+          allOf:
+            - $ref: "#/components/schemas/ExternalRelatedOperationDto"
         type:
           type: string
           enum:
@@ -1002,6 +994,10 @@ components:
           type: string
           example: EUR
           description: ISO 4217 currency code
+        business_date:
+          type: string
+          example: 2026-05-04
+          description: Date of posting for financial accounting matters. If your session is opened and closed on the same day, then that date should be the business_date. If your session reaches across multiple calendar days (e.g. a bar that closes after midnight), you need to decide which date to use as business_date. If in doubt, consult your tax advisor.
         closing_adjustment_amount:
           type: string
           example: "-50.00"
@@ -1014,6 +1010,7 @@ components:
         - type
         - register_id
         - currency
+        - business_date
     FiscalInformationKassenSichVStartEvent:
       type: object
       properties:
