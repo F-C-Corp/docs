@@ -65,7 +65,7 @@ The response carries the new `session_id`. It is recommended to persist this.
 }
 ```
 
-The operation `status` is `completed` because session-event operations are final the moment OpenFiskal accepts them, i.e. there is no `PATCH .../complete` step. Don't confuse it with the session's lifecycle state (the [`open` / `counted` / `closed`](#session-states) flag tracked separately).
+The operation `status` is `completed` because session-event operations are final the moment OpenFiskal accepts them, i.e. there is no `POST .../complete` step. Don't confuse it with the session's lifecycle state (the [`open` / `counted` / `closed`](#session-states) flag tracked separately).
 
 ## Goods movements bind to the session
 
@@ -232,7 +232,7 @@ The scenario: a German bakery opens at 08:00 with a 50 EUR float, rings up two c
     Complete the sale with a cash payment so it counts toward the session's expected closing balance:
 
     ```bash
-    curl -X PATCH https://api.openfiskal.com/v1/operations/op_01_sale_4.50/complete \
+    curl -X POST https://api.openfiskal.com/v1/operations/op_01_sale_4.50/complete \
       -H "Authorization: Bearer $API_KEY" \
       -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
       -H "If-Match: \"1\"" \
@@ -284,7 +284,7 @@ The scenario: a German bakery opens at 08:00 with a 50 EUR float, rings up two c
       }'
     ```
 
-    Complete the sale the same way the first one was completed (`PATCH /v1/operations/{id}/complete` with `If-Match: "1"` and a `payments` array). Both sales must be `completed` for their cash to count toward the expected closing balance below.
+    Complete the sale the same way the first one was completed (`POST /v1/operations/{id}/complete` with `If-Match: "1"` and a `payments` array). Both sales must be `completed` for their cash to count toward the expected closing balance below.
   </Step>
   <Step title="Drop 20 EUR to the safe at midday">
     ```bash

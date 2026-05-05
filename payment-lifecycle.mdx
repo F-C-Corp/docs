@@ -5,7 +5,7 @@ description: "How to report payments, split tender, and asynchronous settlement 
 
 ## Overview
 
-Each payment entry represents one authorization, cash leg, voucher redemption, or return settlement leg. Payments are supplied on `PATCH /operations/{id}/complete`; they cannot be reported before completion.
+Each payment entry represents one authorization, cash leg, voucher redemption, or return settlement leg. Payments are supplied on `POST /operations/{id}/complete`; they cannot be reported before completion.
 
 ## Payment enums
 

@@ -205,11 +205,11 @@ Once your register is fiscalized, you can create and complete sale operations.
     Completion includes typed payment legs. Use one entry per tender leg and include processor references where available. Send the latest `ETag` in `If-Match`. The completed operation returns `fiscal_information` with the KassenSichV regime.
 
     <Note>
-      The current API has no generic `PATCH /operations/{id}` endpoint. Build the full line-item and amount set before calling `POST /operations`; you cannot amend the body after creation. Open operations only accept `/complete` and `/void`.
+      Operation bodies are immutable after creation — there is no endpoint to amend them. Build the full line-item and amount set before calling `POST /operations`. Open operations only accept `POST .../complete` and `POST .../void`.
     </Note>
 
     ```bash
-    curl -X PATCH https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ/complete \
+    curl -X POST https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ/complete \
       -H "Authorization: Bearer of_test_deu_abc123..." \
       -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
       -H "Idempotency-Key: op-order-1001-complete" \
@@ -291,7 +291,7 @@ Once your register is fiscalized, you can create and complete sale operations.
 If the sale is abandoned before completion, void the open operation:
 
 ```bash
-curl -X PATCH https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ/void \
+curl -X POST https://sandbox.api.openfiskal.com/v1/operations/op_01HXYZ/void \
   -H "Authorization: Bearer of_test_deu_abc123..." \
   -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
   -H "Idempotency-Key: op-order-1001-void" \
