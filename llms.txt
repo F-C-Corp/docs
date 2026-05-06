@@ -1,0 +1,54 @@
+# OpenFiskal API
+
+> Multi-country fiscalization API. Issue legally compliant receipts in Germany (KassenSichV/TSE), Austria (RKSV/SCU), and Italy (RT/DCW) through one HTTP contract. Reporting and Hosted Receipts APIs are separate surfaces under the same authentication.
+
+## How to use these docs
+
+**Start with the OpenAPI specs, not the guides.** The specs are the source of truth for endpoints, request/response schemas, discriminators, enums, error codes, and required headers. The guides explain *why* and *when* — the specs define *what*. If a guide and a spec disagree, trust the spec.
+
+Recommended order when answering an integration question:
+
+1. Fetch the relevant OpenAPI YAML below and load the endpoint, schemas, and referenced components. Operations are discriminated unions on `type` (`sale`, `return`, `exchange`, `session_open`, `session_cash_adjustment`, `session_cash_count`, `session_close`) — resolve the discriminator before reading field semantics.
+2. Read the topic guide for lifecycle, ordering, idempotency, and country-specific constraints the spec alone does not capture (offline windows, fiscal signing, sandbox vs. production differences).
+3. Cross-check the country getting-started guide if the question is country-specific (DE, AT, IT each have distinct fiscal contracts).
+4. Consult `errors.md` for the full error catalog with HTTP status, retry guidance, and trigger conditions.
+
+Authentication, idempotency keys, conditional writes, merchant scoping, and rate limits apply uniformly — see `auth.md` and `errors-and-limits.md` before constructing any request.
+
+## OpenAPI specs
+
+- [Fiscalization API spec](https://docs.openfiskal.com/api-reference/openapi.yaml): Primary API. Merchants, locations, registers, sessions, operations (sale/return/exchange and session lifecycle), payments, fiscal completion. Country behavior (DE/AT/IT) is selected via merchant + register configuration.
+- [Reporting API spec](https://docs.openfiskal.com/api-reference/reporting-openapi.yaml): Asynchronous export jobs for country-specific fiscal exports. Trigger an export, poll until `completed`, fetch the signed `download_url`.
+- [Hosted Receipts API spec](https://docs.openfiskal.com/api-reference/hosted-receipts-openapi.yaml): Retrieve, render (PDF), and deliver (email/SMS) hosted receipts for completed fiscalized operations.
+
+## Getting started
+
+- [Getting started](https://docs.openfiskal.com/getting-started.md): Country picker. Each country guide walks through the country-specific fiscal contract end to end.
+- [Getting started · Germany](https://docs.openfiskal.com/getting-started/de.md): Onboard a German merchant, fiscalize a register under KassenSichV, complete a sale with a TSS-signed receipt.
+- [Getting started · Austria](https://docs.openfiskal.com/getting-started/at.md): Onboard an Austrian merchant, fiscalize a register under RKSV, complete a sale with an SCU-signed receipt.
+- [Getting started · Italy](https://docs.openfiskal.com/getting-started/it.md): Onboard an Italian merchant, fiscalize a register under RT, complete a sale that emits a DCW-numbered receipt.
+- [Integration topology](https://docs.openfiskal.com/integration-topology.md): How to integrate OpenFiskal through your backend (server-to-server, no client-side keys).
+- [Authentication](https://docs.openfiskal.com/auth.md): API keys, merchant scoping, idempotency keys, conditional writes (`If-Match`).
+- [Sandbox and go-live](https://docs.openfiskal.com/sandbox-and-go-live.md): Test environments, fixture data, production cutover checklist.
+
+## Transaction processing (Fiscalization API)
+
+- [Register lifecycle](https://docs.openfiskal.com/register-lifecycle.md): Create, fiscalize, update, decommission registers. Fiscalization is asynchronous (202 Accepted).
+- [Sessions](https://docs.openfiskal.com/sessions.md): Cash-drawer shift grouping — open, cash adjustments, count, close.
+- [Transaction lifecycle](https://docs.openfiskal.com/pos-operation-ingestion.md): Create, complete, void, return operations. Operations are discriminated by `type`; resolve the discriminator before interpreting fields.
+- [Payment lifecycle](https://docs.openfiskal.com/payment-lifecycle.md): Reporting payments, split tender, asynchronous settlement under the v1 contract.
+- [Offline and recovery](https://docs.openfiskal.com/offline-guidance.md): Documented offline boundaries, provisional receipts, recovery after reconnect.
+
+## Operations and delivery
+
+- [Errors](https://docs.openfiskal.com/errors.md): Full error catalog — HTTP status, retry guidance, trigger conditions per code.
+- [Limits and platform guarantees](https://docs.openfiskal.com/errors-and-limits.md): Availability targets, rate limits, idempotency window, concurrency rules.
+- [Changelog](https://docs.openfiskal.com/changelog.md): API contract changes to the Fiscalization API.
+
+## Reporting API
+
+- [Reporting API getting started](https://docs.openfiskal.com/reporting-api-getting-started.md): Trigger an export job, poll status, download the artifact.
+
+## Hosted Receipts API
+
+- [Hosted Receipts API](https://docs.openfiskal.com/hosted-receipts-api.md): Retrieve a hosted receipt by receipt ID or by completed operation, render to PDF, send via email or SMS.
