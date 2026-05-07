@@ -668,8 +668,10 @@ components:
           type: string
           example: Café Latte
         quantity:
-          type: number
+          type: integer
+          minimum: 1
           example: 2
+          description: Positive integer count of units. A return of 2 tshirts also has quantity 2.
         unit_price:
           type: string
           example: "4.50"
@@ -681,7 +683,8 @@ components:
         sku_identifier:
           type: string
           example: TSHIRT-BLUE-M
-          description: "Identifies a unique number used to maintain and manage the item, product, or merchandise category in the company's systems. Example: A Tshirt has one sku for each size + color combination."
+          maxLength: 50
+          description: "Identifies a unique number used to maintain and manage the item, product, or merchandise category in the company's systems. Example: A Tshirt has one sku for each size + color combination. At most 50 characters long."
         taxes:
           description: One entry per VAT rate applied to this line. At least one entry required.
           type: array
@@ -996,8 +999,10 @@ components:
           description: ISO 4217 currency code
         business_date:
           type: string
+          format: date
+          pattern: ^\d{4}-\d{2}-\d{2}$
           example: 2026-05-04
-          description: Date of posting for financial accounting matters. If your session is opened and closed on the same day, then that date should be the business_date. If your session reaches across multiple calendar days (e.g. a bar that closes after midnight), you need to decide which date to use as business_date. If in doubt, consult your tax advisor.
+          description: Date of posting for financial accounting matters, formatted `YYYY-MM-DD`. If your session is opened and closed on the same day, then that date should be the business_date. If your session reaches across multiple calendar days (e.g. a bar that closes after midnight), you need to decide which date to use as business_date. If in doubt, consult your tax advisor.
         closing_adjustment_amount:
           type: string
           example: "-50.00"
