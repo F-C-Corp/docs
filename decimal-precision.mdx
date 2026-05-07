@@ -20,7 +20,7 @@ Comparison is strict at 8 decimal places: expected is rounded half-up to 8 dp an
 | `total_amount` | `rate` | Submit | Why |
 | --- | --- | --- | --- |
 | `"119.00"` | `"0.19"` | `"19.00"` | Math is exact (`19.00000000`); trailing zeros are equal. |
-| `"100.00"` | `"0.19"` | `"15.96638655"` | `100 × 0.19 / 1.19` half-up at 8 dp. `"15.97"` is rejected. |
+| `"7.00"` | `"0.19"` | `"1.11764706"` | `7 × 0.19 / 1.19 = 1.117647058…` half-up at 8 dp. Truncating to `"1.11764705"` is rejected. |
 | `"107.50"` | `"0.05"` + `"0.025"` stacked | `"5.00"` and `"2.50"` | `107.50 / (1 + 0.05 + 0.025) = 100` net, then `net × rate_i`. |
 
 The operation-level identity `pretax_amount + tax_amount + tip_amount = total_amount` is enforced separately and exactly.
