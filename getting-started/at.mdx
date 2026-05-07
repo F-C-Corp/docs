@@ -42,7 +42,7 @@ Create these resources in order. The register cannot fiscalize until the merchan
 
 <Steps>
   <Step title="Create your API key">
-    Start in the OpenFiskal tenant dashboard. Create an `aut` key. Store it in your secrets manager. Format: `of_{env}_aut_{random}`, e.g. `of_test_aut_abcdefgh12345678`.
+    Generate an `aut` key at [console.openfiskal.com](https://console.openfiskal.com). Store it in your secrets manager. Format: `of_{env}_aut_{random}`, e.g. `of_test_aut_abcdefgh12345678`.
   </Step>
   <Step title="Create a merchant">
     `country_code` and every `address.country_code` must be `AUT` (ISO 3166-1 alpha-3). The Austrian `fiscal_identity` requires `legal_entity_id_type` (one of `VAT_ID`, `TAX_ID`, `GLN`). Provide the corresponding identifier — `vat_id` (UID, e.g. `ATU12345678`), `tax_number` (Steuernummer), or `gln` (13-digit Global Location Number).

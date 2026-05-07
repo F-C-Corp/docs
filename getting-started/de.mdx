@@ -38,7 +38,7 @@ Create these resources in order. The register cannot fiscalize until the merchan
 
 <Steps>
   <Step title="Create your API key">
-    Start in the OpenFiskal tenant dashboard. Create a `deu` key. Store it in your secrets manager. Format: `of_{env}_deu_{random}`, e.g. `of_test_deu_abcdefgh12345678`.
+    Generate a `deu` key at [console.openfiskal.com](https://console.openfiskal.com). Store it in your secrets manager. Format: `of_{env}_deu_{random}`, e.g. `of_test_deu_abcdefgh12345678`.
   </Step>
   <Step title="Create a merchant">
     `country_code` and every `address.country_code` must be `DEU` (ISO 3166-1 alpha-3). The German `fiscal_identity` requires both `tax_number` (Steuernummer) and `vat_id` (USt-IdNr).
