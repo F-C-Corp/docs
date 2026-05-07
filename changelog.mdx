@@ -4,6 +4,18 @@ description: "API contract updates to the OpenFiskal Fiscalization API."
 rss: true
 ---
 
+<Update label="May 7, 2026" description="Fiscalization API" tags={["Addition"]}>
+  **Decimal precision validation on `tax_amount`**
+
+  Goods-movement operations (`sale`, `return`, `exchange`) now validate that each `line_items[].taxes[].tax_amount` is consistent with the same line's `total_amount` (gross) and tax `rate`, using the inclusive-tax formula `total_amount × rate / (1 + rate)`. Both the expected value and your submitted value are rounded half-up to the precision of the submitted `tax_amount` and compared for equality. Mismatches are rejected with `422 tax_amount_precision_invalid`.
+
+  Wire-level decimal precision is also now capped at **8 fractional digits** for every decimal-string field. Submitting a value with more digits returns `422 decimal_precision_exceeded`.
+
+  Multi-tax line items (e.g. US-style state + municipal stacking) are skipped at the per-tax check — the formula is jurisdiction-specific. Operation-level totals and country exporters continue to apply.
+
+  See the new [Decimal precision](/decimal-precision) page for worked examples and [Errors](/errors#decimal-precision) for the catalog entries.
+</Update>
+
 <Update label="May 3, 2026" description="Fiscalization API" tags={["Breaking", "Addition"]}>
   **Line items now require `sku_identifier`**
 

@@ -36,6 +36,7 @@
               "sessions",
               "pos-operation-ingestion",
               "payment-lifecycle",
+              "decimal-precision",
               "offline-guidance"
             ]
           },
