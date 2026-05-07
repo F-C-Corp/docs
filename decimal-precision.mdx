@@ -3,7 +3,7 @@ title: "Decimal precision"
 description: "How OpenFiskal validates monetary decimal values, the maximum precision accepted on the wire, and which derived fields are checked at request time."
 ---
 
-OpenFiskal stores and computes every monetary amount as an arbitrary-precision decimal — never as a `float`. Integrators send amounts as **decimal strings** (for example, `"100.00"`, `"-15.97"`, `"0.19"`) so values round-trip exactly across systems with different numeric representations.
+OpenFiskal stores and computes every monetary amount as an arbitrary-precision decimal — never as a `float`. Integrators send amounts as **decimal strings** (for example, `"100.00"`, `"-19.00"`, `"0.19"`) so values round-trip exactly across systems with different numeric representations.
 
 This page documents two boundaries you can rely on:
 
@@ -12,15 +12,13 @@ This page documents two boundaries you can rely on:
 
 ## Maximum precision: 8 fractional digits
 
-Every decimal-string field on the API contract is capped at **8 digits after the decimal point**. Submitting a value with more fractional digits is rejected with [`decimal_precision_exceeded`](/errors#validation-errors-422) (HTTP `422`). The cap applies regardless of whether the field would normally be expressed in cents (`"15.97"`), fractional cents (`"15.96638655"`), or as a tax rate (`"0.19"`).
+Every decimal-string field on the API contract is capped at **8 digits after the decimal point**. Submitting a value with more fractional digits is rejected with `decimal_precision_exceeded` (HTTP `422`). The cap applies regardless of whether the field would normally be expressed in cents (`"15.97"`), fractional cents (`"15.96638655"`), or as a tax rate (`"0.19"`).
 
-Why 8? It is more than enough to express any legally settled monetary amount in any of the currencies OpenFiskal supports, while still fitting comfortably in 64-bit fixed-point arithmetic on every implementation we interoperate with (databases, fiscal signing devices, downstream exports). Integrators that compute at higher precision must round before submitting; we round half-up to match the precision you provided when we run derived-field checks (below), so submitting a value at 2 decimal places does not penalise you against a more precise expected value.
-
-If you are choosing a precision for your own integration, send what you compute. There is no requirement that values be cent-rounded — `"15.96638655"` is just as valid as `"15.97"` for a tax amount, and we evaluate them at the precision you sent.
+Why 8? It is enough to express any legally settled monetary amount in any of the currencies OpenFiskal supports, while still fitting comfortably in fixed-point arithmetic on every implementation we interoperate with (databases, fiscal signing devices, downstream exports). Integrators that compute at higher precision must round before submitting.
 
 ## Derived-field checks
 
-When a field can be derived from other fields on the same payload (for example, `tax_amount` from `total_amount` and `rate`), OpenFiskal recomputes the expected value and rejects the request if your value does not match — at the precision you submitted.
+When a field can be derived from other fields on the same payload (for example, `tax_amount` from `total_amount` and `rate`), OpenFiskal recomputes the expected value and rejects the request if your value does not match.
 
 ### `line_items[].taxes[].tax_amount`
 
@@ -32,17 +30,20 @@ The expected value is computed using the inclusive-tax formula:
 expected_tax = total_amount × rate / (1 + rate)
 ```
 
-Both the expected value and the submitted value are then rounded **half-up** to the number of decimal places present in your `tax_amount` string, and compared for equality. If they differ, the request is rejected with [`tax_amount_precision_invalid`](/errors#validation-errors-422) (HTTP `422`).
+Comparison is **strict at 8 decimal places**. The expected value is rounded half-up to 8 dp, and your submitted `tax_amount` is taken at face value (a submission of `"15.97"` is `15.97000000` to the validator — it is **not** treated as a 2-dp rounding of some more precise underlying value). Cent-rounded submissions that don't equal the 8-dp expected value are rejected with `tax_amount_precision_invalid` (HTTP `422`).
+
+Practically, this means integrators must submit `tax_amount` at the precision the math actually produces. For a line whose gross and rate yield an exact value (for example, `total_amount: "119.00"`, `rate: "0.19"` → exactly `19.00`), submitting `"19.00"` is fine. For a line whose math produces a recurring decimal (for example, `total_amount: "100.00"`, `rate: "0.19"` → `15.96638655462184874...`), submit the value rounded to 8 dp (`"15.96638655"`) — not `"15.97"`.
 
 Examples:
 
-| `total_amount` | `rate` | Submitted `tax_amount` | Expected (HALF_UP at submitted dp) | Result |
+| `total_amount` | `rate` | Submitted `tax_amount` | Expected at 8 dp | Result |
 | --- | --- | --- | --- | --- |
-| `"100.00"` | `"0.19"` | `"15.97"` | `15.97` (2 dp) | ✅ accepted |
-| `"100.00"` | `"0.19"` | `"15.96638655"` | `15.96638655` (8 dp) | ✅ accepted |
-| `"100.00"` | `"0.19"` | `"19.00"` | `15.97` (2 dp) | ❌ rejected |
-| `"100.00"` | `"0.19"` | `"15.96638656"` | `15.96638655` (8 dp) | ❌ rejected (off by 1 ULP at 8 dp) |
-| `"-100.00"` | `"0.19"` | `"-15.97"` | `-15.97` (2 dp) | ✅ accepted (`RETURN` sign convention) |
+| `"119.00"` | `"0.19"` | `"19.00"` | `19.00000000` | ✅ accepted (math is exact) |
+| `"100.00"` | `"0.19"` | `"15.96638655"` | `15.96638655` | ✅ accepted |
+| `"100.00"` | `"0.19"` | `"15.97"` | `15.96638655` | ❌ rejected (face value `15.97000000` ≠ expected) |
+| `"100.00"` | `"0.19"` | `"19.00"` | `15.96638655` | ❌ rejected (exclusive-math result) |
+| `"100.00"` | `"0.19"` | `"15.96638656"` | `15.96638655` | ❌ rejected (off by 1 ULP at 8 dp) |
+| `"-100.00"` | `"0.19"` | `"-15.96638655"` | `-15.96638655` | ✅ accepted (`RETURN` sign convention) |
 
 #### Multi-tax line items
 
@@ -54,7 +55,9 @@ The operation-level totals are checked exactly: `pretax_amount + tax_amount + ti
 
 ## Sign conventions are independent
 
-Decimal precision validation does not change the sign rules. `RETURN` operations carry negative amounts, `SALE` operations carry non-negative amounts, and `EXCHANGE` operations may net positive or negative. The precision check applies symmetrically to negative values: `-100.00 × 0.19 / 1.19 = -15.96638...`, rounded half-up at 2 decimal places to `-15.97`. See [Transaction lifecycle](/pos-operation-ingestion) for the full sign rules.
+Decimal precision validation does not change the sign rules. `RETURN` operations carry negative amounts, `SALE` operations carry non-negative amounts, and `EXCHANGE` operations may net positive or negative. The precision check applies symmetrically to negative values: `-100.00 × 0.19 / 1.19 = -15.96638655462184874...`, rounded half-up at 8 dp to `-15.96638655`. See [Transaction lifecycle](/pos-operation-ingestion) for the full sign rules.
+
+Sign violations (for example, a negative `total_amount` on a `SALE`) are reported before the precision check fires, so the more fundamental error message surfaces first.
 
 ## Future expansions
 
