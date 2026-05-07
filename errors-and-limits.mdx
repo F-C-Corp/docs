@@ -19,14 +19,16 @@ OpenFiskal publishes these current platform targets for the fiscalization API:
 
 ## Idempotency rules
 
-Send `Idempotency-Key` on every mutating operation request (`POST /operations`, `POST /operations/{id}/complete`, `POST /operations/{id}/void`).
+Send `Idempotency-Key` on every mutating operation request (`POST /operations`, `POST /operations/{id}/complete`, `POST /operations/{id}/void`). The header is required — omitting it returns `400 idempotency_key_required`.
 
-The following are **Forward-looking platform rules**. Clients should code against them, but server-side enforcement is not yet live (see [Reserved codes](/errors#reserved-codes-not-yet-emitted)):
+Server-side enforcement is live for these endpoints:
 
 - retention window is at least 24 hours
 - uniqueness scope is endpoint plus merchant plus authenticated tenant
-- reusing a key with the same payload will return the original response
-- reusing a key with a different payload will return `409 idempotency_key_conflict`
+- reusing a key with the same payload returns the original response (the handler does not re-execute, no second TSE signature is minted)
+- reusing a key with a different payload returns `409 idempotency_key_conflict`
+- reusing a key while a prior request with that key is still in-flight returns `409 idempotency_key_in_progress` — retry once the original request finishes
+- if the original request errored, the claim is released so a retry with the same key can succeed
 
 ## Concurrency rules
 

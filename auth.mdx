@@ -83,9 +83,9 @@ curl -X POST https://api.openfiskal.com/v1/operations \
   -d '{ "...": "..." }'
 ```
 
-Use idempotency keys on every `POST /operations`, `POST /operations/{id}/complete`, and `POST /operations/{id}/void` request.
+Use idempotency keys on every `POST /operations`, `POST /operations/{id}/complete`, and `POST /operations/{id}/void` request. The header is required — omitting it returns `400 idempotency_key_required`.
 
-The platform retains keys for at least 24 hours. Reusing the same key with a different payload returns `409 idempotency_key_conflict`.
+The platform retains keys for at least 24 hours. Reusing the same key with the same payload returns the original response without re-executing the handler. Reusing the same key with a different payload returns `409 idempotency_key_conflict`. Reusing a key while the original request is still in-flight returns `409 idempotency_key_in_progress` — retry once the original finishes.
 
 ## Recommended handling
 

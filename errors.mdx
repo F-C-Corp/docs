@@ -64,6 +64,8 @@ All 409 responses share the envelope. The `code` field distinguishes the cause.
 | `register_no_open_session` | POS operation endpoints | Register has no open session. Open a session first via `POST /operations` with `type: SESSION_OPEN`. |
 | `session_invalid_state` | Session lifecycle endpoints | Session-level state violation: a session is already open on the register, session counts or amounts are invalid, or the session cannot be closed in its current state. |
 | `operation_invalid_state` | `POST /operations/{id}/complete`, `POST /operations/{id}/void` | Operation is not in `OPEN` state. You cannot complete an already-completed or voided operation, and you cannot void what is not open. |
+| `idempotency_key_conflict` | Mutating operation endpoints | The `Idempotency-Key` header was reused with a **different** request payload (body or path params). Pick a fresh key for the new request. |
+| `idempotency_key_in_progress` | Mutating operation endpoints | A prior request with this `Idempotency-Key` is still being processed. Wait for it to finish before retrying with the same key — the retry will return the cached response of the original. |
 
 ## Validation errors (`422`)
 
@@ -120,12 +122,11 @@ The OpenAPI contract advertises these codes on relevant endpoints, but the runti
 
 | `code` | HTTP | Status |
 | --- | --- | --- |
-| `idempotency_key_conflict` | 409 | Documented on every mutating operation endpoint. Idempotency-Key replay is not enforced server-side today; reusing a key currently re-runs the request. Treat the documented behavior as forward-looking. |
 | `regime_validation_failed` | 422 | Documented for regime-specific rule failures (KassenSichV / RKSV / Fattura). Current handlers throw `UnprocessableEntityException` without a custom `code`, so these responses surface as `validation_error`. |
 
 ## Idempotency and concurrency
 
-Idempotency keys, retention windows, and concurrency rules ([`If-Match` / `ETag`](/errors-and-limits#concurrency-rules)) are documented on the [Limits](/errors-and-limits) page. The errors those rules emit (`precondition_required`, `precondition_failed`) are in the standard table above; `idempotency_key_conflict` is forward-looking — see [Reserved codes](#reserved-codes-not-yet-emitted).
+Idempotency keys, retention windows, and concurrency rules ([`If-Match` / `ETag`](/errors-and-limits#concurrency-rules)) are documented on the [Limits](/errors-and-limits) page. The errors those rules emit are in the tables above: `precondition_required` and `precondition_failed` (concurrency), and `idempotency_key_conflict` and `idempotency_key_in_progress` (idempotency). Omitting `Idempotency-Key` on a mutating operation endpoint returns `400` with `code: "idempotency_key_required"`.
 
 ## Request tracing
 
