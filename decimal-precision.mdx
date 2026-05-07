@@ -10,11 +10,9 @@ This page documents two boundaries you can rely on:
 1. The **maximum precision** the API accepts for a decimal field, and
 2. The **derived-field checks** that run at request time so a payload with internally inconsistent amounts is rejected before it can be persisted or fiscalized.
 
-## Maximum precision: 8 fractional digits
+## Storage precision
 
-Every decimal-string field on the API contract is capped at **8 digits after the decimal point**. Submitting a value with more fractional digits is rejected with `decimal_precision_exceeded` (HTTP `422`). The cap applies regardless of whether the field would normally be expressed in cents (`"15.97"`), fractional cents (`"15.96638655"`), or as a tax rate (`"0.19"`).
-
-Why 8? It is enough to express any legally settled monetary amount in any of the currencies OpenFiskal supports, while still fitting comfortably in fixed-point arithmetic on every implementation we interoperate with (databases, fiscal signing devices, downstream exports). Integrators that compute at higher precision must round before submitting.
+All monetary fields are stored as Postgres `NUMERIC` (unbounded precision) — there is no per-column scale that silently rounds your submission. Submit values at whatever precision your integration computes; the value you send is the value we persist.
 
 ## Derived-field checks
 
@@ -32,9 +30,9 @@ expected_tax_i = total_amount × rate_i / (1 + Σ rate_j)
 
 The divisor is `1 + the sum of every rate on the line`. For a line with a single tax, that simplifies to `1 + rate`; for multi-tax stacking (US-style state + municipal, etc.) it covers all the rates so each tax row is checked against the full rate set on its line.
 
-Comparison is **strict at 8 decimal places**. The expected value is rounded half-up to 8 dp, and your submitted `tax_amount` is taken at face value (a submission of `"15.97"` is `15.97000000` to the validator — it is **not** treated as a 2-dp rounding of some more precise underlying value). Cent-rounded submissions that don't equal the 8-dp expected value are rejected with `tax_amount_precision_invalid` (HTTP `422`).
+Comparison is **strict at 8 decimal places**. The expected value is rounded half-up to 8 dp, and your submitted `tax_amount` is compared by numeric equality (so `"15.96638655000000"` is the same value as `"15.96638655"` and either passes; `"15.97"` is `15.97000000` and fails because that is not the same number as `15.96638655`). Cent-rounded submissions that don't equal the 8-dp expected value are rejected with `tax_amount_precision_invalid` (HTTP `422`).
 
-Practically, this means integrators must submit `tax_amount` at the precision the math actually produces. For a line whose gross and rate yield an exact value (for example, `total_amount: "119.00"`, single tax at `rate: "0.19"` → exactly `19.00`), submitting `"19.00"` is fine. For a line whose math produces a recurring decimal (for example, `total_amount: "100.00"`, `rate: "0.19"` → `15.96638655462184874...`), submit the value rounded to 8 dp (`"15.96638655"`) — not `"15.97"`.
+Practically, this means integrators must submit `tax_amount` at the precision the math actually produces. For a line whose gross and rate yield an exact value (for example, `total_amount: "119.00"`, single tax at `rate: "0.19"` → exactly `19.00`), submitting `"19.00"` is fine. For a line whose math produces a recurring decimal (for example, `total_amount: "100.00"`, `rate: "0.19"` → `15.96638655462184874...`), submit the value rounded to 8 dp (`"15.96638655"`) — not `"15.97"`, and not the full 17-dp expansion.
 
 Examples (single-tax line):
 
