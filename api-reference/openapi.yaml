@@ -1417,7 +1417,7 @@ paths:
       tags: *a11
   /operations/{operationId}/complete:
     post:
-      description: Finalizes an operation and attaches the typed payment contract used for fiscalization and reconciliation.
+      description: Finalizes a goods-movement operation (`sale` / `return` / `exchange`) and attaches the typed payment contract used for fiscalization and reconciliation. Session-lifecycle operations (`session_open`, `session_cash_adjustment`, `session_cash_count`, `session_close`) auto-complete on `POST /operations` and must not be sent here — they will return `409 operation_invalid_state` because they are never in OPEN status.
       operationId: OperationsController_complete
       parameters:
         - *a9
@@ -1460,28 +1460,12 @@ paths:
                   - title: ExchangeOperation
                     allOf:
                       - $ref: "#/components/schemas/ExchangeOperation"
-                  - title: SessionOpenOperation
-                    allOf:
-                      - $ref: "#/components/schemas/SessionOpenOperation"
-                  - title: SessionCashAdjustmentOperation
-                    allOf:
-                      - $ref: "#/components/schemas/SessionCashAdjustmentOperation"
-                  - title: SessionCashCountOperation
-                    allOf:
-                      - $ref: "#/components/schemas/SessionCashCountOperation"
-                  - title: SessionCloseOperation
-                    allOf:
-                      - $ref: "#/components/schemas/SessionCloseOperation"
                 discriminator:
                   propertyName: type
                   mapping:
                     sale: "#/components/schemas/SaleOperation"
                     return: "#/components/schemas/ReturnOperation"
                     exchange: "#/components/schemas/ExchangeOperation"
-                    session_open: "#/components/schemas/SessionOpenOperation"
-                    session_cash_adjustment: "#/components/schemas/SessionCashAdjustmentOperation"
-                    session_cash_count: "#/components/schemas/SessionCashCountOperation"
-                    session_close: "#/components/schemas/SessionCloseOperation"
         "400":
           description: Invalid request
           content:
@@ -1594,7 +1578,7 @@ paths:
       tags: *a11
   /operations/{operationId}/void:
     post:
-      description: Voids an open operation before completion. Use a return operation after completion.
+      description: Voids an open goods-movement operation (`sale` / `return` / `exchange`) before completion. Use a return operation after completion. Session-lifecycle operations auto-complete on create and cannot be voided — they will return `409 operation_invalid_state`.
       operationId: OperationsController_voidOperation
       parameters:
         - *a9
@@ -1637,28 +1621,12 @@ paths:
                   - title: ExchangeOperation
                     allOf:
                       - $ref: "#/components/schemas/ExchangeOperation"
-                  - title: SessionOpenOperation
-                    allOf:
-                      - $ref: "#/components/schemas/SessionOpenOperation"
-                  - title: SessionCashAdjustmentOperation
-                    allOf:
-                      - $ref: "#/components/schemas/SessionCashAdjustmentOperation"
-                  - title: SessionCashCountOperation
-                    allOf:
-                      - $ref: "#/components/schemas/SessionCashCountOperation"
-                  - title: SessionCloseOperation
-                    allOf:
-                      - $ref: "#/components/schemas/SessionCloseOperation"
                 discriminator:
                   propertyName: type
                   mapping:
                     sale: "#/components/schemas/SaleOperation"
                     return: "#/components/schemas/ReturnOperation"
                     exchange: "#/components/schemas/ExchangeOperation"
-                    session_open: "#/components/schemas/SessionOpenOperation"
-                    session_cash_adjustment: "#/components/schemas/SessionCashAdjustmentOperation"
-                    session_cash_count: "#/components/schemas/SessionCashCountOperation"
-                    session_close: "#/components/schemas/SessionCloseOperation"
         "400":
           description: Invalid request
           content:
@@ -2263,8 +2231,10 @@ components:
           type: string
           example: Café Latte
         quantity:
-          type: number
+          type: integer
+          minimum: 1
           example: 2
+          description: Positive integer count of units. A return of 2 tshirts also has quantity 2.
         unit_price:
           type: string
           example: "4.50"
@@ -2276,7 +2246,8 @@ components:
         sku_identifier:
           type: string
           example: TSHIRT-BLUE-M
-          description: "Identifies a unique number used to maintain and manage the item, product, or merchandise category in the company's systems. Example: A Tshirt has one sku for each size + color combination."
+          maxLength: 50
+          description: "Identifies a unique number used to maintain and manage the item, product, or merchandise category in the company's systems. Example: A Tshirt has one sku for each size + color combination. At most 50 characters long."
         taxes:
           description: One entry per VAT rate applied to this line. At least one entry required.
           type: array
@@ -2591,8 +2562,10 @@ components:
           description: ISO 4217 currency code
         business_date:
           type: string
+          format: date
+          pattern: ^\d{4}-\d{2}-\d{2}$
           example: 2026-05-04
-          description: Date of posting for financial accounting matters. If your session is opened and closed on the same day, then that date should be the business_date. If your session reaches across multiple calendar days (e.g. a bar that closes after midnight), you need to decide which date to use as business_date. If in doubt, consult your tax advisor.
+          description: Date of posting for financial accounting matters, formatted `YYYY-MM-DD`. If your session is opened and closed on the same day, then that date should be the business_date. If your session reaches across multiple calendar days (e.g. a bar that closes after midnight), you need to decide which date to use as business_date. If in doubt, consult your tax advisor.
         closing_adjustment_amount:
           type: string
           example: "-50.00"
