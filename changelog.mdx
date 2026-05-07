@@ -4,6 +4,12 @@ description: "API contract updates to the OpenFiskal Fiscalization API."
 rss: true
 ---
 
+<Update label="May 7, 2026" description="Fiscalization API" tags={["Addition"]}>
+  **`tax_amount` consistency check**
+
+  Each `line_items[].taxes[].tax_amount` is now checked against `total_amount × rate_i / (1 + Σ rate_j)` at 8 dp; mismatches return `422 tax_amount_precision_invalid`. Submit `tax_amount` rounded to 8 dp. See [Decimal precision](/decimal-precision).
+</Update>
+
 <Update label="May 3, 2026" description="Fiscalization API" tags={["Breaking", "Addition"]}>
   **Line items now require `sku_identifier`**
 

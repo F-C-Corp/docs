@@ -87,6 +87,12 @@ All 409 responses share the envelope. The `code` field distinguishes the cause.
 | Each `payments[].amount` must follow the same sign rule as the parent operation. | All goods-movement types |
 | Sum of `payments[].amount` must match the operation `total_amount`. | All goods-movement types on `complete` |
 
+### Decimal precision
+
+| HTTP | `code` | When |
+| --- | --- | --- |
+| 422 | `tax_amount_precision_invalid` | A `line_items[].taxes[].tax_amount` doesn't match `total_amount × rate_i / (1 + Σ rate_j)` at 8 dp. See [Decimal precision](/decimal-precision). |
+
 ### Fiscalization preconditions
 
 | Condition | Endpoint |

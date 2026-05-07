@@ -37,6 +37,7 @@ Authentication, idempotency keys, conditional writes, merchant scoping, and rate
 - [Sessions](https://docs.openfiskal.com/sessions.md): Cash-drawer shift grouping — open, cash adjustments, count, close.
 - [Transaction lifecycle](https://docs.openfiskal.com/pos-operation-ingestion.md): Create, complete, void, return operations. Operations are discriminated by `type`; resolve the discriminator before interpreting fields.
 - [Payment lifecycle](https://docs.openfiskal.com/payment-lifecycle.md): Reporting payments, split tender, asynchronous settlement under the v1 contract.
+- [Decimal precision](https://docs.openfiskal.com/decimal-precision.md): `tax_amount` consistency check at 8 dp vs `total_amount × rate_i / (1 + Σ rate_j)`; `tax_amount_precision_invalid` error code.
 - [Offline and recovery](https://docs.openfiskal.com/offline-guidance.md): Documented offline boundaries, provisional receipts, recovery after reconnect.
 
 ## Operations and delivery

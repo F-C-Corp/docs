@@ -1,0 +1,26 @@
+---
+title: "Decimal precision"
+description: "Submit decimal amounts as strings; tax_amount is checked at 8 decimal places against the inclusive-tax formula."
+---
+
+Send every monetary amount as a **decimal string** (`"100.00"`, `"-19.00"`, `"0.19"`). There is no wire-level cap on fractional digits.
+
+## `tax_amount` consistency
+
+For each `line_items[].taxes[]` on a `sale` / `return` / `exchange`, OpenFiskal recomputes the expected `tax_amount` from the line's `total_amount` (gross) and the rates on the same line, and rejects with `422 tax_amount_precision_invalid` if it disagrees.
+
+```
+expected_tax_i = total_amount × rate_i / (1 + Σ rate_j)
+```
+
+The divisor sums every rate on the line. Single-tax lines collapse to `gross × rate / (1 + rate)`; multi-tax stacking (e.g. US state + municipal) checks every row against the full rate set.
+
+Comparison is strict at 8 decimal places: expected is rounded half-up to 8 dp and compared by numeric equality. **Submit `tax_amount` rounded to 8 dp.**
+
+| `total_amount` | `rate` | Submit | Why |
+| --- | --- | --- | --- |
+| `"119.00"` | `"0.19"` | `"19.00"` | Math is exact (`19.00000000`); trailing zeros are equal. |
+| `"100.00"` | `"0.19"` | `"15.96638655"` | `100 × 0.19 / 1.19` half-up at 8 dp. `"15.97"` is rejected. |
+| `"107.50"` | `"0.05"` + `"0.025"` stacked | `"5.00"` and `"2.50"` | `107.50 / (1 + 0.05 + 0.025) = 100` net, then `net × rate_i`. |
+
+The operation-level identity `pretax_amount + tax_amount + tip_amount = total_amount` is enforced separately and exactly.
