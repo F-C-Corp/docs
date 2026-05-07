@@ -7,13 +7,11 @@ rss: true
 <Update label="May 7, 2026" description="Fiscalization API" tags={["Addition"]}>
   **Decimal precision validation on `tax_amount`**
 
-  Goods-movement operations (`sale`, `return`, `exchange`) now validate that each `line_items[].taxes[].tax_amount` is consistent with the same line's `total_amount` (gross) and tax `rate`, using the inclusive-tax formula `total_amount × rate / (1 + rate)`. Both the expected value and your submitted value are rounded half-up to the precision of the submitted `tax_amount` and compared for equality. Mismatches are rejected with `422 tax_amount_precision_invalid`.
+  Goods-movement operations (`sale`, `return`, `exchange`) now validate that each `line_items[].taxes[].tax_amount` is consistent with the same line's `total_amount` (gross) and tax `rate`, using the inclusive-tax formula `total_amount × rate_i / (1 + Σ rate_j)`. The divisor sums every rate on the line, so multi-tax stacking (e.g. US-style state + municipal sales tax on the same item) is checked correctly — the same formula collapses to `total_amount × rate / (1 + rate)` for the single-tax case. Comparison is strict at 8 decimal places: the expected value is rounded half-up to 8 dp and compared by numeric equality, so submit `tax_amount` at the precision the math actually produces (e.g. `"15.96638655"` for `total_amount: "100.00"` with `rate: "0.19"`, not `"15.97"`). Mismatches are rejected with `422 tax_amount_precision_invalid`.
 
-  Wire-level decimal precision is also now capped at **8 fractional digits** for every decimal-string field. Submitting a value with more digits returns `422 decimal_precision_exceeded`.
+  There is no wire-level cap on the number of fractional digits you can send on any decimal-string field. Trailing zeros (`"15.96638655000000"`) and high-precision inputs that are numerically equal to the 8 dp expected value still pass; only inputs whose value differs from the 8 dp expected are rejected.
 
-  Multi-tax line items (e.g. US-style state + municipal stacking) are skipped at the per-tax check — the formula is jurisdiction-specific. Operation-level totals and country exporters continue to apply.
-
-  See the new [Decimal precision](/decimal-precision) page for worked examples and [Errors](/errors#decimal-precision) for the catalog entries.
+  See the new [Decimal precision](/decimal-precision) page for worked examples (including the multi-tax stacking case).
 </Update>
 
 <Update label="May 3, 2026" description="Fiscalization API" tags={["Breaking", "Addition"]}>
