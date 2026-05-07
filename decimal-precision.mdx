@@ -27,14 +27,16 @@ For every `taxes` entry on a goods-movement line item (`SALE`, `RETURN`, `EXCHAN
 The expected value is computed using the inclusive-tax formula:
 
 ```
-expected_tax = total_amount × rate / (1 + rate)
+expected_tax_i = total_amount × rate_i / (1 + Σ rate_j)
 ```
+
+The divisor is `1 + the sum of every rate on the line`. For a line with a single tax, that simplifies to `1 + rate`; for multi-tax stacking (US-style state + municipal, etc.) it covers all the rates so each tax row is checked against the full rate set on its line.
 
 Comparison is **strict at 8 decimal places**. The expected value is rounded half-up to 8 dp, and your submitted `tax_amount` is taken at face value (a submission of `"15.97"` is `15.97000000` to the validator — it is **not** treated as a 2-dp rounding of some more precise underlying value). Cent-rounded submissions that don't equal the 8-dp expected value are rejected with `tax_amount_precision_invalid` (HTTP `422`).
 
-Practically, this means integrators must submit `tax_amount` at the precision the math actually produces. For a line whose gross and rate yield an exact value (for example, `total_amount: "119.00"`, `rate: "0.19"` → exactly `19.00`), submitting `"19.00"` is fine. For a line whose math produces a recurring decimal (for example, `total_amount: "100.00"`, `rate: "0.19"` → `15.96638655462184874...`), submit the value rounded to 8 dp (`"15.96638655"`) — not `"15.97"`.
+Practically, this means integrators must submit `tax_amount` at the precision the math actually produces. For a line whose gross and rate yield an exact value (for example, `total_amount: "119.00"`, single tax at `rate: "0.19"` → exactly `19.00`), submitting `"19.00"` is fine. For a line whose math produces a recurring decimal (for example, `total_amount: "100.00"`, `rate: "0.19"` → `15.96638655462184874...`), submit the value rounded to 8 dp (`"15.96638655"`) — not `"15.97"`.
 
-Examples:
+Examples (single-tax line):
 
 | `total_amount` | `rate` | Submitted `tax_amount` | Expected at 8 dp | Result |
 | --- | --- | --- | --- | --- |
@@ -47,7 +49,17 @@ Examples:
 
 #### Multi-tax line items
 
-A line item that carries more than one tax entry (for example, US-style state + municipal stacking) is **not** subject to the per-tax precision check at this layer — the formula relating each individual `tax_amount` to the line's gross is jurisdiction-specific. The operation-level identity (`pretax_amount + tax_amount + tip_amount = total_amount`) and the country-specific exporter rules continue to apply. Today OpenFiskal's fiscal exporters (KassenSichV, RKSV, RT) require single-VAT-per-line-item, so multi-tax lines are rejected later in the pipeline if they reach a regime that disallows them.
+When a line carries more than one tax entry (e.g. a US sale with state + municipal sales tax stacked on the same item), every tax row is validated against the same gross using the stacking divisor `1 + Σ rates`. A naive submission that computes each tax against `(1 + its own rate)` will be rejected.
+
+Worked example. `total_amount: "107.50"` with two stacked taxes (5% state, 2.5% municipal). The divisor is `1 + 0.05 + 0.025 = 1.075`, so `net = 107.50 / 1.075 = 100.00`:
+
+| Tax row | `rate` | Expected at 8 dp | Submitted `tax_amount` | Result |
+| --- | --- | --- | --- | --- |
+| State | `"0.05"` | `5.00000000` (= `107.50 × 0.05 / 1.075`) | `"5.00"` | ✅ accepted |
+| Municipal | `"0.025"` | `2.50000000` (= `107.50 × 0.025 / 1.075`) | `"2.50"` | ✅ accepted |
+| State (naive divisor) | `"0.05"` | `5.00000000` | `"5.11904762"` (= `107.50 × 0.05 / 1.05`) | ❌ rejected |
+
+OpenFiskal's fiscal exporters (KassenSichV, RKSV, RT) require single-VAT-per-line-item, so multi-tax lines are still rejected later in the pipeline if they reach a regime that disallows them — but the precision check at the API boundary fires first regardless of regime.
 
 ### Operation totals identity
 
