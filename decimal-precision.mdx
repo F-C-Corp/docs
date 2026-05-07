@@ -1,67 +1,26 @@
 ---
 title: "Decimal precision"
-description: "How OpenFiskal handles monetary decimal values, with details on the derived-field checks (tax_amount vs total_amount and rates) that run at request time."
+description: "Submit decimal amounts as strings; tax_amount is checked at 8 decimal places against the inclusive-tax formula."
 ---
 
-Every monetary amount on the wire is a **decimal string** (for example, `"100.00"`, `"-19.00"`, `"0.19"`) so values round-trip exactly across systems with different numeric representations. There is no wire-level cap on the number of fractional digits you can send — submit values at whatever precision your integration computes.
+Send every monetary amount as a **decimal string** (`"100.00"`, `"-19.00"`, `"0.19"`). There is no wire-level cap on fractional digits.
 
-The one exception is the derived-field check on `tax_amount` below, which compares at a fixed 8 decimal places. For fields it covers, round to 8 dp before submitting.
+## `tax_amount` consistency
 
-## Derived-field checks
-
-When a field can be derived from other fields on the same payload (for example, `tax_amount` from `total_amount` and `rate`), OpenFiskal recomputes the expected value and rejects the request if your value does not match.
-
-### `line_items[].taxes[].tax_amount`
-
-For every `taxes` entry on a goods-movement line item (`SALE`, `RETURN`, `EXCHANGE`), we validate that the submitted `tax_amount` is consistent with the line's `total_amount` (gross, tax-inclusive) and the `rate` on the same tax row.
-
-The expected value is computed using the inclusive-tax formula:
+For each `line_items[].taxes[]` on a `sale` / `return` / `exchange`, OpenFiskal recomputes the expected `tax_amount` from the line's `total_amount` (gross) and the rates on the same line, and rejects with `422 tax_amount_precision_invalid` if it disagrees.
 
 ```
 expected_tax_i = total_amount × rate_i / (1 + Σ rate_j)
 ```
 
-The divisor is `1 + the sum of every rate on the line`. For a line with a single tax, that simplifies to `1 + rate`; for multi-tax stacking (US-style state + municipal, etc.) it covers all the rates so each tax row is checked against the full rate set on its line.
+The divisor sums every rate on the line. Single-tax lines collapse to `gross × rate / (1 + rate)`; multi-tax stacking (e.g. US state + municipal) checks every row against the full rate set.
 
-Comparison is **strict at 8 decimal places**. The expected value is rounded half-up to 8 dp, and your submitted `tax_amount` is compared by numeric equality (so `"15.96638655000000"` is the same value as `"15.96638655"` and either passes; `"15.97"` is `15.97000000` and fails because that is not the same number as `15.96638655`). Cent-rounded submissions that don't equal the 8-dp expected value are rejected with `tax_amount_precision_invalid` (HTTP `422`).
+Comparison is strict at 8 decimal places: expected is rounded half-up to 8 dp and compared by numeric equality. **Submit `tax_amount` rounded to 8 dp.**
 
-Practically, this means integrators must submit `tax_amount` at the precision the math actually produces. For a line whose gross and rate yield an exact value (for example, `total_amount: "119.00"`, single tax at `rate: "0.19"` → exactly `19.00`), submitting `"19.00"` is fine. For a line whose math produces a recurring decimal (for example, `total_amount: "100.00"`, `rate: "0.19"` → `15.96638655462184874...`), submit the value rounded to 8 dp (`"15.96638655"`) — not `"15.97"`, and not the full 17-dp expansion.
+| `total_amount` | `rate` | Submit | Why |
+| --- | --- | --- | --- |
+| `"119.00"` | `"0.19"` | `"19.00"` | Math is exact (`19.00000000`); trailing zeros are equal. |
+| `"100.00"` | `"0.19"` | `"15.96638655"` | `100 × 0.19 / 1.19` half-up at 8 dp. `"15.97"` is rejected. |
+| `"107.50"` | `"0.05"` + `"0.025"` stacked | `"5.00"` and `"2.50"` | `107.50 / (1 + 0.05 + 0.025) = 100` net, then `net × rate_i`. |
 
-Examples (single-tax line):
-
-| `total_amount` | `rate` | Submitted `tax_amount` | Expected at 8 dp | Result |
-| --- | --- | --- | --- | --- |
-| `"119.00"` | `"0.19"` | `"19.00"` | `19.00000000` | ✅ accepted (math is exact) |
-| `"100.00"` | `"0.19"` | `"15.96638655"` | `15.96638655` | ✅ accepted |
-| `"100.00"` | `"0.19"` | `"15.97"` | `15.96638655` | ❌ rejected (face value `15.97000000` ≠ expected) |
-| `"100.00"` | `"0.19"` | `"19.00"` | `15.96638655` | ❌ rejected (exclusive-math result) |
-| `"100.00"` | `"0.19"` | `"15.96638656"` | `15.96638655` | ❌ rejected (off by 1 ULP at 8 dp) |
-| `"-100.00"` | `"0.19"` | `"-15.96638655"` | `-15.96638655` | ✅ accepted (`RETURN` sign convention) |
-
-#### Multi-tax line items
-
-When a line carries more than one tax entry (e.g. a US sale with state + municipal sales tax stacked on the same item), every tax row is validated against the same gross using the stacking divisor `1 + Σ rates`. A naive submission that computes each tax against `(1 + its own rate)` will be rejected.
-
-Worked example. `total_amount: "107.50"` with two stacked taxes (5% state, 2.5% municipal). The divisor is `1 + 0.05 + 0.025 = 1.075`, so `net = 107.50 / 1.075 = 100.00`:
-
-| Tax row | `rate` | Expected at 8 dp | Submitted `tax_amount` | Result |
-| --- | --- | --- | --- | --- |
-| State | `"0.05"` | `5.00000000` (= `107.50 × 0.05 / 1.075`) | `"5.00"` | ✅ accepted |
-| Municipal | `"0.025"` | `2.50000000` (= `107.50 × 0.025 / 1.075`) | `"2.50"` | ✅ accepted |
-| State (naive divisor) | `"0.05"` | `5.00000000` | `"5.11904762"` (= `107.50 × 0.05 / 1.05`) | ❌ rejected |
-
-OpenFiskal's fiscal exporters (KassenSichV, RKSV, RT) require single-VAT-per-line-item, so multi-tax lines are still rejected later in the pipeline if they reach a regime that disallows them — but the precision check at the API boundary fires first regardless of regime.
-
-### Operation totals identity
-
-The operation-level totals are checked exactly: `pretax_amount + tax_amount + tip_amount` must equal `total_amount`. This identity is enforced strictly (no rounding) for every `SALE`, `RETURN`, and `EXCHANGE` request body. A mismatch returns `validation_error` (HTTP `422`) with the offending sum in the error message.
-
-## Sign conventions are independent
-
-Decimal precision validation does not change the sign rules. `RETURN` operations carry negative amounts, `SALE` operations carry non-negative amounts, and `EXCHANGE` operations may net positive or negative. The precision check applies symmetrically to negative values: `-100.00 × 0.19 / 1.19 = -15.96638655462184874...`, rounded half-up at 8 dp to `-15.96638655`. See [Transaction lifecycle](/pos-operation-ingestion) for the full sign rules.
-
-Sign violations (for example, a negative `total_amount` on a `SALE`) are reported before the precision check fires, so the more fundamental error message surfaces first.
-
-## Future expansions
-
-Other derivable decimal fields (for example, `line_items[].total_amount = quantity × unit_price`, or operation-level reconciliation against the sum of per-line tax amounts) may gain similar request-time precision checks in future API versions. Such additions will be announced in the [Changelog](/changelog) before enforcement lands.
+The operation-level identity `pretax_amount + tax_amount + tip_amount = total_amount` is enforced separately and exactly.

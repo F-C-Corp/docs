@@ -89,12 +89,9 @@ All 409 responses share the envelope. The `code` field distinguishes the cause.
 
 ### Decimal precision
 
-These checks fire on the request body before any persistence or fiscalization step. See [Decimal precision](/decimal-precision) for the full rules and worked examples.
-
 | HTTP | `code` | When |
 | --- | --- | --- |
-| 422 | `decimal_precision_exceeded` | A decimal-string field carries more than 8 digits after the decimal point. The maximum precision accepted on the wire is 8 fractional digits. |
-| 422 | `tax_amount_precision_invalid` | A `line_items[].taxes[].tax_amount` does not match the value computed from the same line's `total_amount` (gross) and tax `rate` using the inclusive-tax formula `total_amount × rate / (1 + rate)`, rounded half-up to the precision of the submitted `tax_amount`. Multi-tax line items are skipped at this layer (see the doc page for the rationale). |
+| 422 | `tax_amount_precision_invalid` | A `line_items[].taxes[].tax_amount` doesn't match `total_amount × rate_i / (1 + Σ rate_j)` at 8 dp. See [Decimal precision](/decimal-precision). |
 
 ### Fiscalization preconditions
 
