@@ -1,18 +1,15 @@
 ---
 title: "Decimal precision"
-description: "How OpenFiskal validates monetary decimal values, the maximum precision accepted on the wire, and which derived fields are checked at request time."
+description: "How OpenFiskal stores monetary decimal values and the derived-field checks (tax_amount vs total_amount and rates) that run at request time."
 ---
 
 OpenFiskal stores and computes every monetary amount as an arbitrary-precision decimal — never as a `float`. Integrators send amounts as **decimal strings** (for example, `"100.00"`, `"-19.00"`, `"0.19"`) so values round-trip exactly across systems with different numeric representations.
 
-This page documents two boundaries you can rely on:
-
-1. The **maximum precision** the API accepts for a decimal field, and
-2. The **derived-field checks** that run at request time so a payload with internally inconsistent amounts is rejected before it can be persisted or fiscalized.
-
 ## Storage precision
 
-All monetary fields are stored as Postgres `NUMERIC` (unbounded precision) — there is no per-column scale that silently rounds your submission. Submit values at whatever precision your integration computes; the value you send is the value we persist.
+All monetary fields are stored as Postgres `NUMERIC` (unbounded precision) — there is no per-column scale that silently rounds your submission, and there is no wire-level cap on the number of fractional digits you can send. Submit values at whatever precision your integration computes; the value you send is the value we persist.
+
+The derived-field checks below (`tax_amount` consistency in particular) compare at a fixed 8 decimal places, so for fields they cover you should round to 8 dp before submitting — but that's a comparison rule, not a storage limit.
 
 ## Derived-field checks
 
