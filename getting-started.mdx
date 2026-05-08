@@ -43,7 +43,8 @@ These mechanics are identical regardless of the country guide you follow:
 
 - **API key format** — `of_{env}_{country}_{random}`, one key per country + environment.
 - **Request shape** — bearer auth on every request, `X-OpenFiskal-Merchant` on every merchant-scoped request, ETag + `If-Match` on mutating calls.
-- **Resource ordering** — merchant → location → register → fiscalize → operation → complete.
+- **Resource ordering** — merchant → location → register → fiscalize → session → operation → complete.
+- **POS sessions** — every `sale`, `return`, and `exchange` on a POS register must bind to an open session. See [Sessions](/sessions).
 - **Idempotency** — `Idempotency-Key` on `POST /operations` and `POST /operations/{id}/complete|void`.
 - **Money fields** — decimal strings, not integers. `pretax_amount + tax_amount + tip_amount = total_amount`.
 

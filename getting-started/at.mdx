@@ -3,7 +3,7 @@ title: "Getting started · 🇦🇹 Austria"
 description: "Onboard an Austrian merchant, fiscalize a register under RKSV, and complete a sale with an SCU-signed receipt."
 ---
 
-This guide walks the `v1` integration contract for Austria. You create an `aut` API key, onboard a merchant with an Austrian `fiscal_identity`, register a location and terminal, fiscalize the register under RKSV, start an operation, and complete it with the typed payment contract.
+This guide walks the `v1` integration contract for Austria. You create an `aut` API key, onboard a merchant with an Austrian `fiscal_identity`, register a location and terminal, fiscalize the register under RKSV, open a register session, start an operation, and complete it with the typed payment contract.
 
 <Info>
   Examples use `https://sandbox.api.openfiskal.com/v1`. Replace with `https://api.openfiskal.com/v1` when you go live.
@@ -126,6 +126,25 @@ Create these resources in order. The register cannot fiscalize until the merchan
 Once your register is fiscalized, you can create and complete sale operations. The request body is identical to other countries; the response's `fiscal_information` carries the RKSV-specific shape.
 
 <Steps>
+  <Step title="Open a session">
+    Every POS sale, return, or exchange must bind to an open register session. Send a `session_open` operation with the register, currency, and counted opening cash float. Without an open session, `POST /operations` with `source: POS` is rejected.
+
+    ```bash
+    curl -X POST https://sandbox.api.openfiskal.com/v1/operations \
+      -H "Authorization: Bearer of_test_aut_abc123..." \
+      -H "X-OpenFiskal-Merchant: merchant_01HXYZ" \
+      -H "Idempotency-Key: ses-2026-04-30-reg_01HXYZ-open" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "type": "session_open",
+        "register_id": "reg_01HXYZ",
+        "currency": "EUR",
+        "opening_balance_amount": "50.00"
+      }'
+    ```
+
+    Persist the returned `session_id`. See [Sessions](/sessions) for cash adjustments, end-of-shift counting, and closing.
+  </Step>
   <Step title="Start an operation">
     `POST /operations` is a single-shot create. All monetary fields are decimal strings, not integers. `pretax_amount + tax_amount + tip_amount` must equal `total_amount`. `line_items` is required with at least one entry.
 
