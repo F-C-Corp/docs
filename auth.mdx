@@ -70,6 +70,23 @@ Merchant-scoped resources include:
 
 You do not need `X-OpenFiskal-Merchant` when you create, update, delete, or read the merchant itself.
 
+## Response envelope
+
+Single-resource endpoints return the resource object directly. List endpoints wrap the array in a `data` field:
+
+```json
+{
+  "data": [
+    { "id": "merchant_01HXYZ", "legal_name": "Mustermann GmbH", "..." : "..." },
+    { "id": "merchant_01HABC", "legal_name": "Beispiel AG", "..." : "..." }
+  ]
+}
+```
+
+This applies to `GET /merchants`, `GET /registers`, and `GET /locations`. Single-resource responses (`GET /merchants/{id}`, `POST /operations`, etc.) return the object at the top level without a `data` wrapper.
+
+Error responses always use the [error envelope](/errors#response-shape), regardless of the endpoint.
+
 ## Idempotency
 
 For mutating requests that create or finalize state, send an `Idempotency-Key` header so retries remain safe:

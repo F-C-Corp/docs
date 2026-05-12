@@ -17,6 +17,21 @@ OpenFiskal publishes these current platform targets for the fiscalization API:
 | Rate limiting | `500 requests/second` per API key |
 | `429` behavior | Returns `Retry-After` in seconds and a stable `rate_limit_exceeded` error code |
 
+## Idempotency and concurrency per endpoint
+
+The table below shows which endpoints require `Idempotency-Key` and `If-Match` (ETag). Endpoints not listed here (all `GET`, `DELETE`, and `POST /registers/{id}/fiscalize`) require neither header.
+
+| Endpoint | `Idempotency-Key` | `If-Match` (ETag) |
+| --- | --- | --- |
+| `POST /operations` | **Required** | Not used |
+| `POST /operations/{id}/complete` | **Required** | **Required** |
+| `POST /operations/{id}/void` | **Required** | **Required** |
+| `PATCH /merchants/{id}` | Not used | Not used |
+| `PATCH /registers/{id}` | Not used | Not used |
+| `PATCH /locations/{id}` | Not used | Not used |
+
+`PATCH` endpoints for merchants, registers, and locations do not require `If-Match` or `Idempotency-Key`. These endpoints apply a last-writer-wins strategy — concurrency control is not enforced on resource metadata updates.
+
 ## Idempotency rules
 
 Send `Idempotency-Key` on every mutating operation request (`POST /operations`, `POST /operations/{id}/complete`, `POST /operations/{id}/void`).
@@ -31,6 +46,8 @@ The following are **Forward-looking platform rules**. Clients should code agains
 ## Concurrency rules
 
 Operation mutation endpoints (`POST /operations/{id}/complete`, `POST /operations/{id}/void`) require `If-Match` with the latest operation `ETag`. Omit it and the API returns `428 precondition_required`. Send a stale value and the API returns `412 precondition_failed`; the expected and current versions are included in `message` (e.g. `"Resource version mismatch. Expected 1, current is 2."`). The `If-Match` header value must be a quoted positive integer (e.g. `"1"`); a malformed value returns `400 invalid_request`.
+
+`PATCH` endpoints on merchants, registers, and locations accept updates without `If-Match`. These are metadata-only mutations where last-writer-wins is acceptable.
 
 ## Request tracing
 
