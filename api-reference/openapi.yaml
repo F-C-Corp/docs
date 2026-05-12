@@ -2227,6 +2227,13 @@ components:
     LineItemDto:
       type: object
       properties:
+        type:
+          type: string
+          enum:
+            - item
+            - gift_card
+          default: item
+          description: Classifies the line item. `gift_card` lines are multi-purpose vouchers (Mehrzweckgutschein) — all taxes must carry rate "0" and tax_amount "0".
         title:
           type: string
           example: Café Latte
@@ -2248,6 +2255,10 @@ components:
           example: TSHIRT-BLUE-M
           maxLength: 50
           description: "Identifies a unique number used to maintain and manage the item, product, or merchandise category in the company's systems. Example: A Tshirt has one sku for each size + color combination. At most 50 characters long."
+        gift_card_id:
+          type: string
+          example: gc_abc123
+          description: Integrator-supplied gift card identifier. Only meaningful when type is "gift_card". Flows through to DSFinV-K voucher_id.
         taxes:
           description: One entry per VAT rate applied to this line. At least one entry required.
           type: array
@@ -2782,6 +2793,13 @@ components:
       properties:
         id:
           type: string
+        type:
+          type: string
+          enum:
+            - item
+            - gift_card
+          default: item
+          description: Line item classification. `gift_card` = multi-purpose voucher (Mehrzweckgutschein).
         title:
           type: string
         quantity:
@@ -2794,12 +2812,17 @@ components:
           type: string
           example: TSHIRT-BLUE-M
           description: "Identifies a unique number used to maintain and manage the item, product, or merchandise category in the company's systems. Example: A Tshirt has one sku for each size + color combination."
+        gift_card_id:
+          type: string
+          nullable: true
+          description: Gift card identifier. Only present when type is "gift_card".
         taxes:
           type: array
           items:
             $ref: "#/components/schemas/LineItemTax"
       required:
         - id
+        - type
         - title
         - quantity
         - unit_price
