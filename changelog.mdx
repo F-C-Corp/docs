@@ -4,6 +4,17 @@ description: "API contract updates to the OpenFiskal Fiscalization API."
 rss: true
 ---
 
+<Update label="May 12, 2026" description="Fiscalization API" tags={["Addition"]}>
+  **Gift card line items**
+
+  Line items on `POST /operations` (for `sale`, `return`, `exchange`) now accept an optional `type` field with values `item` (default) or `gift_card`.
+
+  - `gift_card` lines represent multi-purpose voucher sales (Mehrzweckgutschein). All taxes on a `gift_card` line must carry `rate: "0"` and `tax_amount: "0"` — non-zero rates are rejected with `422 gift_card_tax_rate_must_be_zero`. VAT on multi-purpose vouchers is deferred to redemption.
+  - An optional `gift_card_id` field carries the integrator-supplied gift card identifier.
+  - The same `type` and `gift_card_id` fields are returned on line items in operation responses.
+  - For German fiscalization: `gift_card` lines emit `MehrzweckgutscheinKauf` (instead of `Umsatz`) in the DSFinV-K cashpoint-closing archive. No integrator action needed beyond setting `type`.
+</Update>
+
 <Update label="May 7, 2026" description="Fiscalization API" tags={["Addition"]}>
   **`tax_amount` consistency check**
 
