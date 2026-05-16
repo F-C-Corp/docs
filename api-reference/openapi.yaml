@@ -2846,12 +2846,7 @@ components:
         status:
           type: string
           enum:
-            - pending
-            - authorized
             - captured
-            - failed
-            - voided
-            - refunded
         processor:
           type: string
           nullable: true
@@ -2865,6 +2860,10 @@ components:
           type: string
           format: date-time
           nullable: true
+        gift_card_id:
+          type: string
+          nullable: true
+          description: Gift card identifier. Only present when method is "gift_card".
       required:
         - id
         - payment_id
@@ -3579,12 +3578,7 @@ components:
         status:
           type: string
           enum:
-            - pending
-            - authorized
             - captured
-            - failed
-            - voided
-            - refunded
           example: captured
         processor:
           type: string
@@ -3602,6 +3596,10 @@ components:
           type: string
           example: 2026-02-26T12:05:00Z
           description: When the payment was processed (ISO 8601)
+        gift_card_id:
+          type: string
+          example: gc_abc123
+          description: Integrator-supplied gift card identifier. Only meaningful when method is "gift_card". Flows through to DSFinV-K voucher_id on MehrzweckgutscheinEinloesung lines.
       required:
         - payment_id
         - method
