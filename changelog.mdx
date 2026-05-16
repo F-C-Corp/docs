@@ -4,6 +4,16 @@ description: "API contract updates to the OpenFiskal Fiscalization API."
 rss: true
 ---
 
+<Update label="May 16, 2026" description="Fiscalization API" tags={["Addition"]}>
+  **Gift card redemptions**
+
+  `payments[]` on `POST /operations/{id}/complete` now accepts an optional `gift_card_id` field — the integrator-supplied identifier of the voucher being redeemed.
+
+  - `gift_card_id` is **required** when `method: "gift_card"`. Sending a `gift_card` payment without it (or with empty/whitespace) returns `422 gift_card_id_required`.
+  - The same field is returned on payments in the operation response.
+  - For German fiscalization: each `gift_card` payment on a `sale` now emits a `MehrzweckgutscheinEinloesung` line in the DSFinV-K cashpoint-closing archive, carrying the redeemed amount (negative) and `voucher_id`. Per §3 Abs. 15 Satz 2 UStG, the redemption is anti-payment rather than revenue, so the gift-card leg is no longer reported under `payment_types`; the SALE's `full_amount_incl_vat` is reduced by the redeemed total and a balancing entry is added to `amounts_per_vat_id` at the non-taxable bucket. No integrator action needed beyond setting `gift_card_id`.
+</Update>
+
 <Update label="May 12, 2026" description="Fiscalization API" tags={["Addition"]}>
   **Gift card line items**
 
