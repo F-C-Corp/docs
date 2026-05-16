@@ -2847,6 +2847,8 @@ components:
           type: string
           enum:
             - captured
+            - refunded
+          description: "Direction of money movement: `captured` for money-in (SALE legs, EXCHANGE legs with amount > 0), `refunded` for money-out (RETURN legs, EXCHANGE legs with amount < 0). Zero-amount EXCHANGE legs accept either."
         processor:
           type: string
           nullable: true
@@ -3579,6 +3581,7 @@ components:
           type: string
           enum:
             - captured
+            - refunded
           example: captured
         processor:
           type: string
