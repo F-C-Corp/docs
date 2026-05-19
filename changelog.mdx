@@ -4,6 +4,17 @@ description: "API contract updates to the OpenFiskal Fiscalization API."
 rss: true
 ---
 
+<Update label="May 19, 2026" description="Fiscalization API" tags={["Addition"]}>
+  **Cart-level discounts on SALE**
+
+  `POST /operations` for `type: "sale"` now accepts an optional `cart_level_discounts[]` array — discounts applied to the order as a whole, not apportioned onto specific line items.
+
+  - Each entry carries an optional `description` (free-text label, e.g. promo code) and a required positive `amount` decimal string.
+  - `line_items[].total_amount` values must already reflect their post-discount totals — `cart_level_discounts[]` is documentation of the order-level reduction, not a re-pricing instruction.
+  - The same array is returned on `sale` operation responses, with server-issued `id` per entry.
+  - For German fiscalization: each cart-level discount emits a separate `Rabatt` business case in the DSFinV-K cashpoint-closing archive, slotted between the line-item `Umsatz` lines and any gift-card `MehrzweckgutscheinEinloesung` lines. Descriptions over 255 characters are trimmed for the DSFinV-K text field; the original is preserved in the operation response.
+</Update>
+
 <Update label="May 16, 2026" description="Fiscalization API" tags={["Addition"]}>
   **Gift card redemptions**
 
