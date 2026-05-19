@@ -708,6 +708,20 @@ components:
         - total_amount
         - sku_identifier
         - taxes
+    CartLevelDiscountDto:
+      type: object
+      properties:
+        description:
+          type: string
+          example: WELCOME10
+          maxLength: 255
+          description: Free-text label shown on the receipt and audit trail. Trimmed to 255 characters in DSFinV-K exports.
+        amount:
+          type: string
+          example: "5.00"
+          description: Discount amount applied to the cart, as a positive decimal string.
+      required:
+        - amount
     CreateSaleOperationDto:
       type: object
       properties:
@@ -757,6 +771,11 @@ components:
           enum:
             - sale
           example: sale
+        cart_level_discounts:
+          description: Cart-level (order-level) discounts applied across the SALE, not apportioned onto specific line items. Each entry surfaces as a separate `Rabatt` business case in DSFinV-K. Line-item totals must already reflect their post-discount values.
+          type: array
+          items:
+            $ref: "#/components/schemas/CartLevelDiscountDto"
       required:
         - source
         - currency
@@ -1310,6 +1329,21 @@ components:
         - amount
         - currency
         - status
+    CartLevelDiscount:
+      type: object
+      properties:
+        id:
+          type: string
+        description:
+          type: string
+          nullable: true
+          description: Free-text label for the discount (e.g. promo code, campaign name).
+        amount:
+          type: string
+          description: Discount amount as a positive decimal string.
+      required:
+        - id
+        - amount
     SaleOperation:
       type: object
       properties:
@@ -1412,6 +1446,11 @@ components:
           enum:
             - sale
           example: sale
+        cart_level_discounts:
+          description: Cart-level (order-level) discounts applied across the SALE. Empty array when none. Surfaced separately from line items so consumers do not need to back-derive from totals.
+          type: array
+          items:
+            $ref: "#/components/schemas/CartLevelDiscount"
       required:
         - id
         - merchant_id
@@ -1428,6 +1467,7 @@ components:
         - line_items
         - payments
         - type
+        - cart_level_discounts
     ExternalRelatedOperation:
       type: object
       properties:
