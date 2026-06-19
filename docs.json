@@ -1,11 +1,11 @@
 {
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
-  "name": "OpenFiskal API",
+  "name": "OpenFiskal Platform API",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#001A72",
+    "light": "#3D5BCC",
+    "dark": "#001052"
   },
   "favicon": "/images/web-app-manifest-512x512.png",
   "navigation": {
@@ -84,7 +84,7 @@
       },
       {
         "label": "Support",
-        "href": "mailto:support@openfiskal.com"
+        "href": "mailto:help@openfiskal.com"
       }
     ]
   },
@@ -105,7 +105,7 @@
       "destination": "/reporting-api-getting-started"
     }
   ],
-  "description": "OpenFiskal API docs.",
+  "description": "OpenFiskal's Platform API documentation",
   "logo": {
     "light": "/images/OpenFiskal_Logo_Main_Hori_Blue.svg",
     "dark": "/images/OpenFiskal_Logo_main_white.svg"
@@ -119,5 +119,13 @@
   },
   "metadata": {
     "timestamp": false
+  },
+  "background": {
+    "color": {
+      "dark": "#0A0F1F"
+    }
+  },
+  "fonts": {
+    "family": "Inter"
   }
 }
