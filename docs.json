@@ -105,9 +105,9 @@
       "destination": "/reporting-api-getting-started"
     }
   ],
-  "description": "OpenFiskal's Platform API documentation",
+  "description": "Documentation for the OpenFiskal Platform API, the compliance layer for POS. Learn how to issue compliant receipts, generate Z-reports, and produce audit exports for German, Austrian, and Italian fiscal requirements through one API.",
   "logo": {
-    "light": "/images/OpenFiskal_Logo_Main_Hori_Blue.svg",
+    "light": "/images/250817_OpenFiskal_Logo_main_type_Wortmake.svg",
     "dark": "/images/OpenFiskal_Logo_main_white.svg"
   },
   "integrations": {
@@ -127,5 +127,10 @@
   },
   "fonts": {
     "family": "Inter"
+  },
+  "thumbnails": {
+    "fonts": {
+      "family": "Inter"
+    }
   }
 }
