@@ -1,0 +1,158 @@
+---
+title: "German receipt requirements"
+description: "What a German KassenSichV receipt must contain, where each field comes from in the API, and how to print the TSE data QR code."
+---
+
+This page is for integrators who render their own German receipts. It maps each required receipt field to the API value that supplies it, and explains how to print the TSE data QR code.
+
+<Note>
+  If you use the [Hosted Receipts API](/hosted-receipts-api), OpenFiskal renders a compliant receipt for you and you can skip this page.
+</Note>
+
+## What a receipt must contain
+
+A German KassenSichV receipt must include the fields below, grouped by where they come from.
+
+**Commercial fields.** Always print these in readable form. They come from the operation and the merchant record you already hold.
+
+- **Full name and address of the merchant**: merchant record (`legal_name`, `address`).
+- **Date of issue**: your print time.
+- **Quantity and type of goods or services**: operation `line_items` (`title`, `quantity`).
+- **Total amount, tax amount, and tax rate** (or exemption note): operation totals and `line_items[].taxes[]`.
+
+**TSE fields.** These come from `fiscal_information` on the completed operation. You do not print all of them as text. Either print them as text or carry them in the TSE data QR code. The TSE data QR code contains all of them, so it alone covers this group. See [TSE data QR code](#tse-data-qr-code) below.
+
+- **Start of the transaction**: `start_event.signed_at`.
+- **End of the transaction**: `end_event.signed_at`.
+- **Transaction number**: `document_number`.
+- **Serial number of the recording system (Kasse)**: `pos_client_serial_number`.
+- **Serial number of the security module (TSE)**: `tss_serial_number`.
+- **Signature (Prüfwert) of the transaction end**: `end_event.signature`.
+- **Continuous signature counter**: `end_event.transaction_counter`.
+
+<Note>
+  `end_event.transaction_counter` is the signature counter (Signaturzähler), not the transaction number. The transaction number is `document_number`.
+</Note>
+
+## Serial numbers
+
+Two serial numbers are required: the serial number of the recording system (the cash register) and the serial number of the security module (the TSE).
+
+<Warning>
+  Print `pos_client_serial_number` as the recording-system serial. Do not use the register's `external_id`. That is your own identifier and is not signed into the TSE, so it does not match the DSFinV-K export.
+</Warning>
+
+`pos_client_serial_number` is the recording-system serial signed into the TSE. It is returned on every transaction and is stable for the lifetime of the register. `tss_serial_number` is the serial number of the TSE itself.
+
+## TSE data QR code
+
+`verification.qr_data` is the complete TSE data QR code string defined by the DSFinV-K (the `V0;…` format in Appendix I). It is ready to print as-is. The value is the content of the code, not a rendered image. Encode it to a QR code in your application logic.
+
+<Warning>
+  Encode the string exactly as returned, byte for byte. Do not trim, re-case, URL-encode, or wrap it. It contains the base64-encoded TSE signature, so a single changed character makes the signature fail verification during a tax audit (Kassennachschau).
+</Warning>
+
+The string is a list of fields separated by semicolons, in this order:
+
+1. Format version (`V0`)
+2. Recording-system serial (`pos_client_serial_number`)
+3. Process type (`Kassenbeleg-V1`)
+4. Process data (amounts per tax rate and payment type)
+5. Transaction number
+6. Signature counter
+7. Transaction start time
+8. Transaction end time
+9. Signature algorithm
+10. Time format
+11. Signature value
+12. TSE public key
+
+The TSE data QR code carries both serial numbers: the recording-system serial directly in the string (position 2), and the TSE serial through the embedded public key (position 12). The TSE serial number is the SHA-256 hash of the decoded public key bytes, not of the base64 string:
+
+```text
+tss_serial_number = SHA-256(base64decode(end_event.public_key))
+```
+
+Because the public key is in the code, a scan alone yields both serial numbers. This also satisfies the requirement, effective 1 January 2024, to show both serial numbers on the receipt.
+
+### Layout options
+
+You can print the receipt in any of three compliant layouts:
+
+- The TSE data QR code only.
+- All TSE fields as plain text.
+- The TSE data QR code plus any plain-text fields you choose.
+
+The two examples below show the same sale, and both are compliant.
+
+<Columns cols={2}>
+  <Column>
+
+**With the TSE data QR code.** The commercial fields are printed, and the TSE data QR code replaces the TSE text block.
+
+```text
+          Mustermann GmbH
+        Friedrichstraße 42
+          10117 Berlin
+
+ Beleg                 25.02.2026
+
+ 1x Lunch menu            42,50 €
+ ------------------------------
+ Netto                    39,72 €
+ MwSt 7 %                  2,78 €
+ Summe                    42,50 €
+ Karte                    42,50 €
+
+    +------------------+
+    |                  |
+    |  [ TSE data QR ] |
+    |   verification   |
+    |     .qr_data     |
+    |                  |
+    +------------------+
+```
+
+  </Column>
+  <Column>
+
+**With the TSE fields as plain text.** The same commercial fields are printed, with the TSE fields as labelled text instead of the code.
+
+```text
+          Mustermann GmbH
+        Friedrichstraße 42
+          10117 Berlin
+
+ Beleg                 25.02.2026
+
+ 1x Lunch menu            42,50 €
+ ------------------------------
+ Netto                    39,72 €
+ MwSt 7 %                  2,78 €
+ Summe                    42,50 €
+ Karte                    42,50 €
+
+ ------------------------------
+ TSE-Beginn:    2026-02-25T19:02:11
+ TSE-Ende:      2026-02-25T20:14:55
+ Transaktionsnummer: 2026-000123
+ Signaturzähler: 4822
+ Kasse-SN: ece21469-04b4-...
+ TSE-SN:   c625d4b41c12...
+ Signatur: dT+5jW/MlmQ...
+```
+
+  </Column>
+</Columns>
+
+The TSE values are abbreviated for readability; print them in full.
+
+### Confirm scannability
+
+To confirm scannability, print one receipt and scan its TSE data QR code with any QR scanner app. If one signed receipt scans cleanly, all of them will.
+
+## Related guides
+
+- [Getting started · Germany](/getting-started/de)
+- [Hosted Receipts API](/hosted-receipts-api)
+- [Transaction lifecycle](/pos-operation-ingestion)

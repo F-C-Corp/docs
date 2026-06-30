@@ -68,6 +68,7 @@
         "tab": "Hosted Receipts API",
         "pages": [
           "hosted-receipts-api",
+          "german-receipt-requirements",
           {
             "group": "Hosted Receipts API",
             "openapi": "api-reference/hosted-receipts-openapi.yaml"
