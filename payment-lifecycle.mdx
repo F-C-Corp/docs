@@ -12,13 +12,21 @@ Each payment entry represents one authorization, cash leg, voucher redemption, o
 | Field | Allowed values |
 | --- | --- |
 | `method` | `cash`, `card`, `voucher`, `gift_card`, `bank_transfer`, `digital_wallet`, `store_credit`, `other` |
-| `status` | `pending`, `authorized`, `captured`, `failed`, `voided`, `refunded` |
+| `status` | `captured`, `refunded` |
 
-All amounts are decimal strings (e.g. `"42.50"`), matching the operation's amount fields.
+Both `method` and `status` are required on every payment leg, and amounts are decimal strings (e.g. `"42.50"`) matching the operation's amount fields.
+
+`status` is paired with the direction of money movement, enforced per operation type at completion:
+
+- `captured` (money in) is required for every `SALE` leg, and for `EXCHANGE` legs with a positive amount.
+- `refunded` (money out) is required for every `RETURN` leg, and for `EXCHANGE` legs with a negative amount.
+- A zero-amount `EXCHANGE` leg accepts either status.
+
+A mismatch returns `422 payment_status_invalid_for_operation`.
 
 ## Split tender
 
-Use one payment object per tender leg. The sum of every `payments[].amount` must equal the operation's `total_amount` — the check is on the full array, regardless of each leg's `status`. A `pending` or `failed` leg counts toward the sum like any other.
+Use one payment object per tender leg. The sum of every `payments[].amount` must equal the operation's `total_amount`, checked across the full array. For a `SALE` every leg is `captured` with a non-negative amount; for a `RETURN` every leg is `refunded` with a non-positive amount.
 
 ```json
 {
@@ -47,13 +55,9 @@ Use one payment object per tender leg. The sum of every `payments[].amount` must
 
 Use `tip_amount` on the operation when the tip is part of the fiscalized sale. If your payment processor returns separate payment references for base amount and tip, keep separate payment entries and distinguish them through your own external payment metadata.
 
-## Asynchronous settlement
+## Settlement state
 
-Some payment methods settle after the operation is fiscally completed. In that case:
-
-- complete the operation with the latest known payment state (e.g. `authorized`)
-- poll the operation resource for later state changes when needed
-- retain the processor and payment references for reconciliation
+v1 records a single, final payment state per leg: `status` is either `captured` or `refunded`. There is no `authorized`, `pending`, or `failed` state, and a completed operation is immutable, so a leg's status never changes after completion. Report each leg with its settled status at completion, and keep `processor` and `processor_reference` on the leg for your own reconciliation against the payment processor.
 
 ## Returns on prior sales
 
