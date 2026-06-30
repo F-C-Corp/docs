@@ -48,18 +48,18 @@ Create these resources in order. The register cannot fiscalize until the merchan
       -H "Authorization: Bearer of_test_deu_abc123..." \
       -H "Content-Type: application/json" \
       -d '{
-        "legal_name": "Mustermann GmbH",
+        "legal_name": "Beispiel Handel GmbH",
         "country_code": "DEU",
         "address": {
-          "line1": "Friedrichstraße 42",
+          "line1": "Beispielstraße 12",
           "city": "Berlin",
-          "postal_code": "10117",
+          "postal_code": "10115",
           "country_code": "DEU"
         },
         "fiscal_identities": [
           {
             "country_code": "DEU",
-            "tax_number": "21/815/08150",
+            "tax_number": "12/345/67890",
             "vat_id": "DE123456789"
           }
         ]
@@ -79,9 +79,9 @@ Create these resources in order. The register cannot fiscalize until the merchan
       -d '{
         "name": "Berlin Mitte",
         "address": {
-          "line1": "Friedrichstraße 42",
+          "line1": "Beispielstraße 12",
           "city": "Berlin",
-          "postal_code": "10117",
+          "postal_code": "10115",
           "country_code": "DEU"
         },
         "timezone": "Europe/Berlin"
@@ -156,19 +156,49 @@ Once your register is fiscalized, you can create and complete sale operations.
         "type": "sale",
         "currency": "EUR",
         "external_id": "order-1001",
-        "pretax_amount": "39.72",
-        "tax_amount": "2.78",
+        "pretax_amount": "133.00",
+        "tax_amount": "22.30",
         "tip_amount": "0.00",
-        "total_amount": "42.50",
+        "total_amount": "155.30",
         "line_items": [
           {
-            "title": "Lunch menu",
-            "sku_identifier": "MENU-LUNCH",
+            "title": "Slim Fit Jeans",
+            "sku_identifier": "JEANS-001",
             "quantity": 1,
-            "unit_price": "42.50",
-            "total_amount": "42.50",
+            "unit_price": "79.00",
+            "total_amount": "79.00",
             "taxes": [
-              { "name": "MwSt. 7%", "rate": "0.07", "tax_amount": "2.78" }
+              { "name": "MwSt. 19%", "rate": "0.19", "tax_amount": "12.61" }
+            ]
+          },
+          {
+            "title": "Cotton T-Shirt",
+            "sku_identifier": "TSHIRT-WHT-M",
+            "quantity": 2,
+            "unit_price": "24.90",
+            "total_amount": "49.80",
+            "taxes": [
+              { "name": "MwSt. 19%", "rate": "0.19", "tax_amount": "7.95" }
+            ]
+          },
+          {
+            "title": "Espresso Beans 250 g",
+            "sku_identifier": "ESP-250",
+            "quantity": 1,
+            "unit_price": "8.50",
+            "total_amount": "8.50",
+            "taxes": [
+              { "name": "MwSt. 7%", "rate": "0.07", "tax_amount": "0.56" }
+            ]
+          },
+          {
+            "title": "Coffee Brewing Book",
+            "sku_identifier": "BOOK-CFE",
+            "quantity": 1,
+            "unit_price": "18.00",
+            "total_amount": "18.00",
+            "taxes": [
+              { "name": "MwSt. 7%", "rate": "0.07", "tax_amount": "1.18" }
             ]
           }
         ]
@@ -199,26 +229,59 @@ Once your register is fiscalized, you can create and complete sale operations.
       "status": "open",
       "type": "sale",
       "currency": "EUR",
-      "pretax_amount": "39.72",
-      "tax_amount": "2.78",
+      "pretax_amount": "133.00",
+      "tax_amount": "22.30",
       "tip_amount": "0.00",
-      "total_amount": "42.50",
+      "total_amount": "155.30",
       "line_items": [
         {
           "id": "li_01HXYZ",
-          "title": "Lunch menu",
-          "sku_identifier": "MENU-LUNCH",
+          "title": "Slim Fit Jeans",
+          "sku_identifier": "JEANS-001",
           "quantity": 1,
-          "unit_price": "42.50",
-          "total_amount": "42.50",
+          "unit_price": "79.00",
+          "total_amount": "79.00",
           "taxes": [
-            { "id": "lit_01HXYZ", "name": "MwSt. 7%", "rate": "0.07", "tax_amount": "2.78" }
+            { "id": "lit_01HXYZ", "name": "MwSt. 19%", "rate": "0.19", "tax_amount": "12.61" }
+          ]
+        },
+        {
+          "id": "li_02HXYZ",
+          "title": "Cotton T-Shirt",
+          "sku_identifier": "TSHIRT-WHT-M",
+          "quantity": 2,
+          "unit_price": "24.90",
+          "total_amount": "49.80",
+          "taxes": [
+            { "id": "lit_02HXYZ", "name": "MwSt. 19%", "rate": "0.19", "tax_amount": "7.95" }
+          ]
+        },
+        {
+          "id": "li_03HXYZ",
+          "title": "Espresso Beans 250 g",
+          "sku_identifier": "ESP-250",
+          "quantity": 1,
+          "unit_price": "8.50",
+          "total_amount": "8.50",
+          "taxes": [
+            { "id": "lit_03HXYZ", "name": "MwSt. 7%", "rate": "0.07", "tax_amount": "0.56" }
+          ]
+        },
+        {
+          "id": "li_04HXYZ",
+          "title": "Coffee Brewing Book",
+          "sku_identifier": "BOOK-CFE",
+          "quantity": 1,
+          "unit_price": "18.00",
+          "total_amount": "18.00",
+          "taxes": [
+            { "id": "lit_04HXYZ", "name": "MwSt. 7%", "rate": "0.07", "tax_amount": "1.18" }
           ]
         }
       ],
       "payments": [],
-      "created_at": "2026-02-26T12:00:00Z",
-      "updated_at": "2026-02-26T12:00:00Z"
+      "created_at": "2026-05-21T10:14:20Z",
+      "updated_at": "2026-05-21T10:14:20Z"
     }
     ```
   </Step>
@@ -241,13 +304,13 @@ Once your register is fiscalized, you can create and complete sale operations.
           {
             "payment_id": "pay_1001_card",
             "method": "card",
-            "amount": "42.50",
+            "amount": "155.30",
             "currency": "EUR",
             "status": "captured",
             "processor": "sumup",
             "card_brand": "visa",
             "processor_reference": "ch_123",
-            "processed_at": "2026-02-26T12:05:00Z"
+            "processed_at": "2026-05-21T10:14:24Z"
           }
         ]
       }'
@@ -270,36 +333,36 @@ Once your register is fiscalized, you can create and complete sale operations.
         {
           "payment_id": "pay_1001_card",
           "method": "card",
-          "amount": "42.50",
+          "amount": "155.30",
           "currency": "EUR",
           "status": "captured",
           "processor": "sumup",
           "processor_reference": "ch_123",
           "card_brand": "visa",
-          "processed_at": "2026-02-26T12:05:00Z"
+          "processed_at": "2026-05-21T10:14:24Z"
         }
       ],
       "fiscal_information": {
         "regime": "KassenSichV",
-        "document_number": "2026-000123",
+        "document_number": "13",
         "document_type": "Kassenbeleg",
-        "tss_serial_number": "c625d4b41c12f9229f39072c0d0adeb064ba35363c79c77dfd197d680dcd585d",
-        "pos_client_serial_number": "ece21469-04b4-4140-be9b-d57b9f7efe28",
-        "signature_algorithm": "ecdsa-plain-SHA384",
-        "time_format": "utcTime",
+        "tss_serial_number": "ae1a722bb28fb4f88f5592abfc6b72ef425a3bc2643eb1330069b718eea5165a",
+        "pos_client_serial_number": "b187455f-a29c-4e99-8efc-083ea1302bab",
+        "signature_algorithm": "ecdsa-plain-SHA256",
+        "time_format": "unixTime",
         "start_event": {
-          "signed_at": "2026-02-25T19:02:11Z"
+          "signed_at": "2026-05-21T10:14:21Z"
         },
         "end_event": {
-          "signed_at": "2026-02-25T20:14:55Z",
-          "transaction_counter": 4822,
-          "signature": "base64encodedEndSignature==",
-          "public_key": "base64encodedPublicKey==",
+          "signed_at": "2026-05-21T10:14:24Z",
+          "transaction_counter": 50,
+          "signature": "BWdC1LCZyGnhYVB+AJ1um9QeLMs3Am5G2x8IAWqsQomo5/kAbuBklvadO4/m7IZVfSEz85t6Yhi0h262txHJUw==",
+          "public_key": "BAXXi19q02bz3nPTYkcpvHsTkH9KtjPBv3jdqZiOlyyQKSTvceqLkrTL7ZWsc4RhzSmc7uNIeBtGvd3XQPXnLy8=",
           "process_type": "Kassenbeleg-V1",
-          "process_data": "Beleg^42.50_0.00_0.00_0.00_0.00^42.50:Bar"
+          "process_data": "Beleg^128.80_26.50_0.00_0.00_0.00^155.30:Unbar"
         },
         "verification": {
-          "qr_data": "V0;ece21469-04b4-4140-be9b-d57b9f7efe28;Kassenbeleg-V1;Beleg^42.50_0.00_0.00_0.00_0.00^42.50:Bar;2026-000123;4822;2026-02-25T19:02:11;2026-02-25T20:14:55;ecdsa-plain-SHA384;utcTime;base64encodedEndSignature==;base64encodedPublicKey=="
+          "qr_data": "V0;b187455f-a29c-4e99-8efc-083ea1302bab;Kassenbeleg-V1;Beleg^128.80_26.50_0.00_0.00_0.00^155.30:Unbar;13;50;2026-05-21T10:14:21;2026-05-21T10:14:24;ecdsa-plain-SHA256;unixTime;BWdC1LCZyGnhYVB+AJ1um9QeLMs3Am5G2x8IAWqsQomo5/kAbuBklvadO4/m7IZVfSEz85t6Yhi0h262txHJUw==;BAXXi19q02bz3nPTYkcpvHsTkH9KtjPBv3jdqZiOlyyQKSTvceqLkrTL7ZWsc4RhzSmc7uNIeBtGvd3XQPXnLy8="
         }
       }
     }
