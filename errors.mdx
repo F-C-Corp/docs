@@ -61,13 +61,15 @@ All 409 responses share the envelope. The `code` field distinguishes the cause.
 | `register_has_dependencies` | `DELETE /registers/{id}` | Register has operations recorded against it, or the register is fiscalized. Decommission first if applicable; otherwise the register cannot be removed. |
 | `register_already_fiscalized` | `POST /registers/{id}/fiscalize` | Register is already fiscalized, or a fiscalization is in progress. |
 | `register_invalid_fiscal_state` | `POST /registers/{id}/decommission` | Register is already decommissioned, or has not been fiscalized yet. Other decommission preconditions (non-KassenSichV regime, missing TSS/client metadata) surface as `validation_error` with `422`. |
-| `register_no_open_session` | POS operation endpoints | Register has no open session. Open a session first via `POST /operations` with `type: SESSION_OPEN`. |
+| `register_no_open_session` | POS operation endpoints | Register has no open session. Open a session first via `POST /operations` with `type: session_open`. |
 | `session_invalid_state` | Session lifecycle endpoints | Session-level state violation: a session is already open on the register, session counts or amounts are invalid, or the session cannot be closed in its current state. |
+| `session_already_counted` | `POST /operations` (`session_cash_count`, `session_close`) | The open session is already in the `COUNTED` state. A second `session_cash_count`, or any POS operation other than `session_close`, is rejected. Only `session_close` is permitted from the counted state. |
+| `session_not_counted` | `POST /operations` (`session_close`) | A `session_close` was posted against a session that has not been counted. Post a `session_cash_count` first. |
 | `operation_invalid_state` | `POST /operations/{id}/complete`, `POST /operations/{id}/void` | Operation is not in `OPEN` state. You cannot complete an already-completed or voided operation, and you cannot void what is not open. |
 
 ## Validation errors (`422`)
 
-422 responses currently emit `code: "validation_error"` for every case. The `message` field describes the specific violation.
+Most 422 responses emit `code: "validation_error"`, with the specific violation in `message`. A few conditions carry a dedicated `code`, called out below.
 
 ### Operation shape
 
@@ -86,6 +88,12 @@ All 409 responses share the envelope. The `code` field distinguishes the cause.
 | Each `line_items[].total_amount` must follow the same sign rule as the parent operation. | `SALE`, `RETURN` |
 | Each `payments[].amount` must follow the same sign rule as the parent operation. | All goods-movement types |
 | Sum of `payments[].amount` must match the operation `total_amount`. | All goods-movement types on `complete` |
+
+The payment-status pairing carries a dedicated `code` rather than the generic `validation_error`:
+
+| HTTP | `code` | When |
+| --- | --- | --- |
+| 422 | `payment_status_invalid_for_operation` | A `payments[].status` does not match the operation direction: `SALE` legs must be `captured`, `RETURN` legs `refunded`, and `EXCHANGE` legs `captured` when the amount is positive or `refunded` when negative. |
 
 ### Decimal precision
 
