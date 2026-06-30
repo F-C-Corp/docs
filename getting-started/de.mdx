@@ -309,15 +309,7 @@ Once your register is fiscalized, you can create and complete sale operations.
 
 ## Print the receipt
 
-A completed operation returns the data for the receipt under `fiscal_information`. The simplest compliant layout is to print your commercial fields (merchant, line items, amounts, and tax) plus the TSE data QR code.
-
-`verification.qr_data` is a ready-to-print TSE data QR code string. Encode it to a QR code exactly as returned, byte for byte. It carries the full TSE data, including both serial numbers, so the TSE data QR code alone covers the TSE requirements.
-
-<Warning>
-  Print `pos_client_serial_number` as the cash-register serial if you print it as text. Do not use the register's `external_id`. That is your own identifier and is not signed into the TSE.
-</Warning>
-
-For the full list of required receipt fields, where each one comes from, and an example layout, see [German receipt requirements](/german-receipt-requirements).
+A completed operation returns the receipt data under `fiscal_information`. Print `verification.qr_data` as a QR code on your receipt, exactly as returned, byte for byte. That code carries the full TSE data, including both serial numbers, so it covers the TSE requirements on its own. For the required fields, where each comes from, and example layouts, see [German receipt requirements](/german-receipt-requirements).
 
 ## Void an open operation
 
