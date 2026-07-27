@@ -74,6 +74,17 @@
             "openapi": "api-reference/hosted-receipts-openapi.yaml"
           }
         ]
+      },
+      {
+        "tab": "error demo",
+        "icon": "car-crash",
+        "hidden": true,
+        "menu": [
+          {
+            "item": "Untitled Item",
+            "openapi": "api-reference/error-demo-openapi.yaml"
+          }
+        ]
       }
     ]
   },
