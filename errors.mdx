@@ -15,57 +15,67 @@ Every error response uses the same envelope. Switch on `code` (machine-readable,
 }
 ```
 
-| Field | Type | Notes |
-| --- | --- | --- |
-| `code` | string | Stable machine-readable identifier. See the catalog below. |
-| `message` | string | Short human-readable label. Safe to log, not locale-stable, not a stable contract. |
-| `retryable` | boolean | Whether retrying the same request can succeed. `5xx`, `429`, and `412` are retryable. |
-| `details` | object | Optional structured context. `precondition_failed` (`412`) responses include `expected_resource_version` and `current_resource_version` here so clients can react without parsing `message`. Other endpoints may add their own structured payload (for example, `export_dsfinvk_build_pending` returns `unbuilt_session_ids`). Always check whether the field is present before reading it. |
+| Field       | Type    | Notes                                                                                                                                                                                                                                                                                                                                                                                       |
+| ----------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `code`      | string  | Stable machine-readable identifier. See the catalog below.                                                                                                                                                                                                                                                                                                                                  |
+| `message`   | string  | Short human-readable label. Safe to log, not locale-stable, not a stable contract.                                                                                                                                                                                                                                                                                                          |
+| `retryable` | boolean | Whether retrying the same request can succeed. `5xx`, `429`, and `412` are retryable.                                                                                                                                                                                                                                                                                                       |
+| `details`   | object  | Optional structured context. `precondition_failed` (`412`) responses include `expected_resource_version` and `current_resource_version` here so clients can react without parsing `message`. Other endpoints may add their own structured payload (for example, `export_dsfinvk_build_pending` returns `unbuilt_session_ids`). Always check whether the field is present before reading it. |
 
 The trace identifier is returned only in the `X-Request-Id` response header (e.g. `X-Request-Id: req_a1b2c3d4e5f60718293a`). It is not embedded in the error body. Persist it in your client logs and attach it to support cases.
 
 ## Retry guidance
 
-| Class | Retry? | How |
-| --- | --- | --- |
-| `5xx`, `rate_limit_exceeded`, `precondition_failed` | Yes | Resend the request. For `precondition_failed`, re-read the resource to refresh `ETag` first. For `rate_limit_exceeded`, honor `Retry-After`. |
-| All other `4xx` | No | Fix the request before resending. |
+| Class                                                     | Retry?    | How                                                                                            |
+| --------------------------------------------------------- | --------- | ---------------------------------------------------------------------------------------------- |
+| `5xx` (including `tse_signing_failed`, `tse_unavailable`) | Yes       | Resend the request, with backoff.                                                              |
+| `precondition_failed` (`412`)                             | Yes       | Re-read the resource to refresh its `ETag`, then retry with the new value.                     |
+| `register_busy` (`409`)                                   | Yes       | Transient lock contention on the register. Retry shortly.                                      |
+| `conflict` (`409`)                                        | Sometimes | May be transient lock contention. Retry once; if it persists, treat as permanent and escalate. |
+| All other `4xx`                                           | No        | Fix the request before resending.                                                              |
 
-The `retryable` field on each response reflects this rule: it is `true` for any `5xx`, `429`, or `412`, and `false` otherwise.
+The `retryable` field is derived from the HTTP status class: `true` for any `5xx`, `429`, or `412`, and `false` otherwise. It is therefore a good default but not a complete rule — `register_busy` and `conflict` are `409`, so they report `retryable: false` while in fact being worth a retry. Where this table and the field disagree, follow the table.
 
 ## Standard error codes
 
 These codes map directly to HTTP status codes and apply to every endpoint across the Fiscalization, Reporting, and Hosted Receipts APIs unless noted.
 
-| HTTP | `code` | Retryable | When |
-| --- | --- | --- | --- |
-| 400 | `invalid_request` | No | Request body, query, or path is malformed or fails schema validation. Includes missing required fields, wrong types, decimal vs. integer mismatches, invalid ISO 3166-1 alpha-3 country codes (`DEU` not `DE`), unknown discriminator values (e.g. unknown operation `type`), and a malformed `If-Match` header value (must be a quoted positive integer, e.g. `"1"`). |
-| 401 | `unauthorized` | No | Missing or malformed `Authorization` header, invalid API key, or API key environment mismatch (sandbox key against production or vice versa). |
-| 403 | `forbidden` | No | Authenticated caller is not allowed to access the requested tenant, country, or merchant. Most commonly: API key country does not match the merchant or location country. |
-| 404 | `not_found` | No | Resource does not exist or is not visible to the caller. |
-| 409 | `conflict` | No | Generic resource conflict. Specific 409 subtypes are listed below — `code` distinguishes the cause. |
-| 412 | `precondition_failed` | Yes | Stale `If-Match` on a mutation. Both the expected and current resource versions appear in `details` (`expected_resource_version`, `current_resource_version`) and in `message`. Re-read the resource and retry with the current `ETag`. |
-| 422 | `validation_error` | No | Request shape is valid but a field value is semantically wrong (amount sign mismatch, missing register reference, invalid timestamp range, etc.). See [Validation errors](#validation-errors-422) for the specific conditions. |
-| 428 | `precondition_required` | No | `If-Match` header is missing on a mutation that requires it (`POST /operations/{id}/complete`, `POST /operations/{id}/void`). |
-| 429 | `rate_limit_exceeded` | Yes | Per-API-key rate budget exceeded. Honor `Retry-After` and reduce concurrency. |
-| 500 | `internal_error` | Yes | Unhandled server error. Retry the request; escalate with `X-Request-Id` if sustained. |
-| 501 | `not_implemented` | Yes | The requested capability is registered in the schema but no handler is wired up. Today this only happens if a request lands for an export `type` with no matching exporter. |
+| HTTP | `code`                                    | Retryable | When                                                                                                                                                                                                                                                                                                                                                                   |
+| ---- | ----------------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 400  | `invalid_request`                         | No        | Request body, query, or path is malformed or fails schema validation. Includes missing required fields, wrong types, decimal vs. integer mismatches, invalid ISO 3166-1 alpha-3 country codes (`DEU` not `DE`), unknown discriminator values (e.g. unknown operation `type`), and a malformed `If-Match` header value (must be a quoted positive integer, e.g. `"1"`). |
+| 401  | `unauthorized`                            | No        | Missing or malformed `Authorization` header, invalid API key, or API key environment mismatch (sandbox key against production or vice versa).                                                                                                                                                                                                                          |
+| 403  | `forbidden`                               | No        | Authenticated caller is not allowed to access the requested tenant, country, or merchant. Most commonly: API key country does not match the merchant or location country.                                                                                                                                                                                              |
+| 403  | `fiscalization_not_supported_for_country` | No        | Fiscalization was requested for a location whose country has no fiscal regime wired up. Only `DEU` is supported today.                                                                                                                                                                                                                                                 |
+| 404  | `not_found`                               | No        | Resource does not exist or is not visible to the caller.                                                                                                                                                                                                                                                                                                               |
+| 409  | `conflict`                                | No        | Generic resource conflict. Specific 409 subtypes are listed below — `code` distinguishes the cause.                                                                                                                                                                                                                                                                    |
+| 412  | `precondition_failed`                     | Yes       | Stale `If-Match` on a mutation. Both the expected and current resource versions appear in `details` (`expected_resource_version`, `current_resource_version`) and in `message`. Re-read the resource and retry with the current `ETag`.                                                                                                                                |
+| 422  | `validation_error`                        | No        | Request shape is valid but a field value is semantically wrong (amount sign mismatch, missing register reference, invalid timestamp range, etc.). See [Validation errors](#validation-errors-422) for the specific conditions.                                                                                                                                         |
+| 428  | `precondition_required`                   | No        | `If-Match` header is missing on a mutation that requires it (`POST /operations/{id}/complete`, `POST /operations/{id}/void`).                                                                                                                                                                                                                                          |
+| 429  | `rate_limit_exceeded`                     | Yes       | Per-API-key rate budget exceeded. Honor `Retry-After` and reduce concurrency.                                                                                                                                                                                                                                                                                          |
+| 500  | `internal_error`                          | Yes       | Unhandled server error. Retry the request; escalate with `X-Request-Id` if sustained.                                                                                                                                                                                                                                                                                  |
+| 501  | `not_implemented`                         | Yes       | The requested capability is registered in the schema but no handler is wired up. Today this only happens if a request lands for an export `type` with no matching exporter.                                                                                                                                                                                            |
+| 502  | `bad_gateway`                             | Yes       | An upstream dependency returned an unusable response. See [TSE signing failures](#tse-signing-failures-502--503) for the signing-specific code.                                                                                                                                                                                                                        |
+| 503  | `service_unavailable`                     | Yes       | A dependency was unreachable. See [TSE signing failures](#tse-signing-failures-502--503) for the signing-specific code.                                                                                                                                                                                                                                                |
+| 504  | `gateway_timeout`                         | Yes       | An upstream dependency did not respond in time. Retry with backoff.                                                                                                                                                                                                                                                                                                    |
 
 ## Conflict (`409`) variants
 
 All 409 responses share the envelope. The `code` field distinguishes the cause.
 
-| `code` | Where | When |
-| --- | --- | --- |
-| `location_has_registers` | `DELETE /locations/{id}` | Location still has registers attached. Delete or reassign the registers first. |
-| `register_has_dependencies` | `DELETE /registers/{id}` | Register has operations recorded against it, or the register is fiscalized. Decommission first if applicable; otherwise the register cannot be removed. |
-| `register_already_fiscalized` | `POST /registers/{id}/fiscalize` | Register is already fiscalized, or a fiscalization is in progress. |
-| `register_invalid_fiscal_state` | `POST /registers/{id}/decommission` | Register is already decommissioned, or has not been fiscalized yet. Other decommission preconditions (non-KassenSichV regime, missing TSS/client metadata) surface as `validation_error` with `422`. |
-| `register_no_open_session` | POS operation endpoints | Register has no open session. Open a session first via `POST /operations` with `type: session_open`. |
-| `session_invalid_state` | Session lifecycle endpoints | Session-level state violation: a session is already open on the register, session counts or amounts are invalid, or the session cannot be closed in its current state. |
-| `session_already_counted` | `POST /operations` (`session_cash_count`, `session_close`) | The open session is already in the `COUNTED` state. A second `session_cash_count`, or any POS operation other than `session_close`, is rejected. Only `session_close` is permitted from the counted state. |
-| `session_not_counted` | `POST /operations` (`session_close`) | A `session_close` was posted against a session that has not been counted. Post a `session_cash_count` first. |
-| `operation_invalid_state` | `POST /operations/{id}/complete`, `POST /operations/{id}/void` | Operation is not in `OPEN` state. You cannot complete an already-completed or voided operation, and you cannot void what is not open. |
+| `code`                          | Where                                                                                     | When                                                                                                                                                                                                                                                                                     |
+| ------------------------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `location_has_registers`        | `DELETE /locations/{id}`                                                                  | Location still has registers attached. Delete or reassign the registers first.                                                                                                                                                                                                           |
+| `register_has_dependencies`     | `DELETE /registers/{id}`                                                                  | Register has operations recorded against it, or the register is fiscalized. Decommission first if applicable; otherwise the register cannot be removed.                                                                                                                                  |
+| `register_already_fiscalized`   | `POST /registers/{id}/fiscalize`                                                          | Register is already fiscalized, or a fiscalization is in progress.                                                                                                                                                                                                                       |
+| `register_invalid_fiscal_state` | `POST /registers/{id}/decommission`                                                       | Register is already decommissioned, or has not been fiscalized yet. Other decommission preconditions (non-KassenSichV regime, missing TSS/client metadata) surface as `validation_error` with `422`.                                                                                     |
+| `register_no_open_session`      | POS operation endpoints                                                                   | Register has no open session. Open a session first via `POST /operations` with `type: session_open`.                                                                                                                                                                                     |
+| `session_invalid_state`         | Session lifecycle endpoints                                                               | Session-level state violation: a session is already open on the register, session counts or amounts are invalid, or the session cannot be closed in its current state.                                                                                                                   |
+| `session_already_counted`       | `POST /operations` (`session_cash_count`, `session_close`)                                | The open session is already in the `COUNTED` state. A second `session_cash_count`, or any POS operation other than `session_close`, is rejected. Only `session_close` is permitted from the counted state.                                                                               |
+| `session_not_counted`           | `POST /operations` (`session_close`)                                                      | A `session_close` was posted against a session that has not been counted. Post a `session_cash_count` first.                                                                                                                                                                             |
+| `operation_invalid_state`       | `POST /operations/{id}/complete`, `POST /operations/{id}/void`                            | Operation is not in `OPEN` state. You cannot complete an already-completed or voided operation, and you cannot void what is not open.                                                                                                                                                    |
+| `register_busy`                 | `POST /operations`                                                                        | Another operation is mid-ingestion on the same register. **Transient: retry.** Note the envelope reports `retryable: false` because that field is derived from the status class and 409 is not retryable in general; this code is the exception, and the guidance here takes precedence. |
+| `register_decommissioned`       | `POST /operations`, `POST /operations/{id}/complete`, `POST /operations/{id}/void`        | The register was decommissioned. Decommissioning is terminal: the register accepts no further operations.                                                                                                                                                                                |
+| `conflict`                      | `POST /operations`, `POST /operations/{id}/complete`, `POST /registers/{id}/decommission` | Generic conflict, including transient contention when a concurrent request holds a lock on the same resource. A backstop rather than a classified cause: retry once, and if it persists escalate with `X-Request-Id`.                                                                    |
 
 ## Validation errors (`422`)
 
@@ -73,56 +83,83 @@ Most 422 responses emit `code: "validation_error"`, with the specific violation 
 
 ### Operation shape
 
-| Condition | Operation types |
-| --- | --- |
-| `ONLINE` operations must not specify a `register_id`. | `SALE`, `RETURN`, `EXCHANGE` |
-| `POS` operations must specify a `register_id`. | `SALE`, `RETURN`, `EXCHANGE` |
-| `SALE` operations must not specify `external_related_operation` or `related_operation_id`. | `SALE` |
-| `RETURN` and `EXCHANGE` operations must specify exactly one of `related_operation_id` or `external_related_operation`. | `RETURN`, `EXCHANGE` |
+| Condition                                                                                                              | Operation types              |
+| ---------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| `ONLINE` operations must not specify a `register_id`.                                                                  | `SALE`, `RETURN`, `EXCHANGE` |
+| `POS` operations must specify a `register_id`.                                                                         | `SALE`, `RETURN`, `EXCHANGE` |
+| `SALE` operations must not specify `external_related_operation` or `related_operation_id`.                             | `SALE`                       |
+| `RETURN` and `EXCHANGE` operations must specify exactly one of `related_operation_id` or `external_related_operation`. | `RETURN`, `EXCHANGE`         |
 
 ### Amount and payment validation
 
-| Condition | Operation types |
-| --- | --- |
-| `SALE` `total_amount` must be ≥ 0; `RETURN` `total_amount` must be ≤ 0. | `SALE`, `RETURN` |
-| Each `line_items[].total_amount` must follow the same sign rule as the parent operation. | `SALE`, `RETURN` |
-| Each `payments[].amount` must follow the same sign rule as the parent operation. | All goods-movement types |
-| Sum of `payments[].amount` must match the operation `total_amount`. | All goods-movement types on `complete` |
+| Condition                                                                                | Operation types                        |
+| ---------------------------------------------------------------------------------------- | -------------------------------------- |
+| `SALE` `total_amount` must be ≥ 0; `RETURN` `total_amount` must be ≤ 0.                  | `SALE`, `RETURN`                       |
+| Each `line_items[].total_amount` must follow the same sign rule as the parent operation. | `SALE`, `RETURN`                       |
+| Each `payments[].amount` must follow the same sign rule as the parent operation.         | All goods-movement types               |
+| Sum of `payments[].amount` must match the operation `total_amount`.                      | All goods-movement types on `complete` |
 
 The payment-status pairing carries a dedicated `code` rather than the generic `validation_error`:
 
-| HTTP | `code` | When |
-| --- | --- | --- |
-| 422 | `payment_status_invalid_for_operation` | A `payments[].status` does not match the operation direction: `SALE` legs must be `captured`, `RETURN` legs `refunded`, and `EXCHANGE` legs `captured` when the amount is positive or `refunded` when negative. |
+| HTTP | `code`                                 | When                                                                                                                                                                                                            |
+| ---- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 422  | `payment_status_invalid_for_operation` | A `payments[].status` does not match the operation direction: `SALE` legs must be `captured`, `RETURN` legs `refunded`, and `EXCHANGE` legs `captured` when the amount is positive or `refunded` when negative. |
+
+### Gift cards
+
+| HTTP | `code`                              | When                                                                                                                                                              |
+| ---- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 422  | `gift_card_id_required`             | A `payments[]` entry with `method: "gift_card"` is missing `gift_card_id`. Required because it flows through to the DSFinV-K `voucher_id` on the redemption line. |
+| 422  | `gift_card_tax_rate_must_be_zero`   | A gift-card line item declares a non-zero tax rate. Multi-purpose vouchers are untaxed at the point of sale.                                                      |
+| 422  | `gift_card_tax_amount_must_be_zero` | A gift-card line item declares a non-zero tax amount.                                                                                                             |
 
 ### Decimal precision
 
-| HTTP | `code` | When |
-| --- | --- | --- |
-| 422 | `tax_amount_precision_invalid` | A `line_items[].taxes[].tax_amount` doesn't match `total_amount × rate_i / (1 + Σ rate_j)` at 8 dp. See [Decimal precision](/decimal-precision). |
+| HTTP | `code`                         | When                                                                                                                                             |
+| ---- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 422  | `tax_amount_precision_invalid` | A `line_items[].taxes[].tax_amount` doesn't match `total_amount × rate_i / (1 + Σ rate_j)` at 8 dp. See [Decimal precision](/decimal-precision). |
 
 ### Fiscalization preconditions
 
-| Condition | Endpoint |
-| --- | --- |
-| Register is not fiscalized. Complete fiscalization before completing operations. | `POST /operations/{id}/complete` |
-| Register is missing active TSS or Client. Re-fiscalize the register. | `POST /operations/{id}/complete` |
-| Operation has no goods-movement details; cannot complete. | `POST /operations/{id}/complete` |
-| `POS` operation is missing a register reference. | `POST /operations/{id}/complete` |
-| Merchant is missing a German fiscal identity (`DEU`). | `POST /registers/{id}/fiscalize` |
-| Fiscalization is only supported for locations in Germany (`DEU`). | `POST /registers/{id}/fiscalize` |
-| Decommission is only supported for KassenSichV registers. | `POST /registers/{id}/decommission` |
-| Register has no active TSS or client to decommission. | `POST /registers/{id}/decommission` |
-| Active TSS is missing an admin PIN; cannot authenticate to decommission. | `POST /registers/{id}/decommission` |
-| TSE signing failed (phase 1) — TSS unreachable or rejected the request before the operation reached the device. | `POST /operations/{id}/complete` |
-| TSE signing failed (phase 2) — TSS rejected the operation after start. The operation is left in a recoverable state. | `POST /operations/{id}/complete` |
+| Condition                                                                        | Endpoint                            |
+| -------------------------------------------------------------------------------- | ----------------------------------- |
+| Register is not fiscalized. Complete fiscalization before completing operations. | `POST /operations/{id}/complete`    |
+| Register is missing active TSS or Client. Re-fiscalize the register.             | `POST /operations/{id}/complete`    |
+| Operation has no goods-movement details; cannot complete.                        | `POST /operations/{id}/complete`    |
+| `POS` operation is missing a register reference.                                 | `POST /operations/{id}/complete`    |
+| Merchant is missing a German fiscal identity (`DEU`).                            | `POST /registers/{id}/fiscalize`    |
+| Fiscalization is only supported for locations in Germany (`DEU`).                | `POST /registers/{id}/fiscalize`    |
+| Decommission is only supported for KassenSichV registers.                        | `POST /registers/{id}/decommission` |
+| Register has no active TSS or client to decommission.                            | `POST /registers/{id}/decommission` |
+| Active TSS is missing an admin PIN; cannot authenticate to decommission.         | `POST /registers/{id}/decommission` |
 
 ### Reporting API
 
-| Condition | Endpoint |
-| --- | --- |
+Export-specific codes on `POST /exports`. The readiness check runs synchronously, so these come back on the request rather than surfacing later on the job:
+
+| HTTP | `code`                              | Retryable | When                                                                                                                                                                                |
+| ---- | ----------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 400  | `register_id_required_for_dsfinvk`  | No        | A `dsfinvk` export was requested without a `register_id`. DSFinV-K archives are per register.                                                                                       |
+| 422  | `export_dsfinvk_no_closed_sessions` | No        | The requested window contains no closed sessions, so there is nothing to export. Close a session first, or widen the window.                                                        |
+| 422  | `export_dsfinvk_build_pending`      | No        | One or more sessions in the window have not finished building their DSFinV-K artefacts. `details.unbuilt_session_ids` lists them. Poll those sessions and retry once they complete. |
+
+| Condition                                          | Endpoint                                                    |
+| -------------------------------------------------- | ----------------------------------------------------------- |
 | `from` and `to` must be valid ISO-8601 timestamps. | Reporting export endpoints (returns `400 invalid_request`). |
-| `from` must be strictly before `to`. | Reporting export endpoints. |
+| `from` must be strictly before `to`.               | Reporting export endpoints.                                 |
+
+## TSE signing failures (`502` / `503`)
+
+Signing a KassenSichV operation calls the TSS. When that call fails, the response is a **`5xx`, not a `422`** — it is an upstream failure, not a problem with your request, and it is **retryable**.
+
+| HTTP | `code`               | Retryable | When                                                                                                                                |
+| ---- | -------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| 502  | `tse_signing_failed` | Yes       | The TSS was reached but rejected the signing request. The operation is left in a recoverable state; retry the same `complete` call. |
+| 503  | `tse_unavailable`    | Yes       | The TSS was unreachable (network-level failure). Retry with backoff.                                                                |
+
+Both are reachable on `POST /operations/{id}/complete`, and on `POST /operations` for the session-lifecycle types (`session_open`, `session_cash_adjustment`, `session_cash_count`), which sign at creation time because they auto-complete.
+
+Retry rather than treating the operation as lost. If the failure persists, escalate with the `X-Request-Id` from the response headers.
 
 ## Not-yet-implemented endpoints
 
@@ -132,14 +169,47 @@ Today the only path that can return HTTP `501 Not Implemented` is the export end
 
 The OpenAPI contract advertises these codes on relevant endpoints, but the runtime does not emit them yet. They are kept here so client switch statements can include them ahead of enforcement landing.
 
-| `code` | HTTP | Status |
-| --- | --- | --- |
-| `idempotency_key_conflict` | 409 | Documented on every mutating operation endpoint. Idempotency-Key replay is not enforced server-side today; reusing a key currently re-runs the request. Treat the documented behavior as forward-looking. |
-| `regime_validation_failed` | 422 | Documented for regime-specific rule failures (KassenSichV / RKSV / Fattura). Current handlers throw `UnprocessableEntityException` without a custom `code`, so these responses surface as `validation_error`. |
+| `code`                      | HTTP | Status                                                                                                                                                                                                    |
+| --------------------------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `idempotency_key_conflict`  | 409  | Documented on every mutating operation endpoint. Idempotency-Key replay is not enforced server-side today; reusing a key currently re-runs the request. Treat the documented behavior as forward-looking. |
+| `regime_validation_failed`  | 422  | Documented for regime-specific rule failures (KassenSichV / RKSV / Fattura). Current handlers surface these as `validation_error` instead.                                                                |
+| `rate_limit_exceeded`       | 429  | **No rate limiting is enforced yet, and no `Retry-After` header is sent.** Declared so clients can handle 429 ahead of enforcement landing. Until then this code cannot occur.                            |
+| `print_job_not_cancellable` | 409  | Cancelling a print job that has left the `ready` state currently returns the generic `conflict` code instead.                                                                                             |
+| `printer_username_taken`    | 409  | A colliding CloudPRNT printer username currently returns the generic `conflict` code instead.                                                                                                             |
 
 ## Idempotency and concurrency
 
 Idempotency keys, retention windows, and concurrency rules ([`If-Match` / `ETag`](/errors-and-limits#concurrency-rules)) are documented on the [Limits](/errors-and-limits) page. The errors those rules emit (`precondition_required`, `precondition_failed`) are in the standard table above; `idempotency_key_conflict` is forward-looking — see [Reserved codes](#reserved-codes-not-yet-emitted).
+
+## Code stability, and handling codes you do not know
+
+Each endpoint's OpenAPI response declares exactly the codes that endpoint can return, so a generated client can switch over them and have its compiler flag a missing case. Four guarantees make that safe to rely on:
+
+1. **A code never changes meaning.** Once published, a `code` keeps its meaning and its HTTP status forever. We will not repurpose one.
+2. **A code maps to exactly one HTTP status.** If you have seen `register_busy` as a `409`, it is always a `409`.
+3. **New codes are additive, in a minor version.** We may add a code to an existing endpoint. When we do, the spec version is bumped and the change is listed in the [changelog](/changelog), which is your signal to regenerate.
+4. **Codes are removed only in a major version.** A code marked reserved above may be removed if we decide not to implement it; that is a breaking change and will be announced.
+
+Because of (3), **always keep a `default` branch** in your error handling, even if your generated types say the switch is exhaustive:
+
+```ts
+switch (error.code) {
+  case "register_no_open_session":
+    return openSessionThenRetry();
+  case "register_busy":
+    return retryAfter(500);
+  default:
+    // A code added after your client was generated lands here.
+    // Route by HTTP status and `retryable` rather than failing closed.
+    return error.retryable
+      ? retryWithBackoff()
+      : reportToOperator(error.code, error.message);
+}
+```
+
+If you use a client that validates responses against the schema at runtime (pydantic, zod, some Java generators), configure it to tolerate unknown `code` values rather than raising. A newly added code is a valid response, not a malformed one.
+
+Two things not to build on: `message` is human-readable and changes without notice, and the absence of a code from an endpoint's list means we do not expect it there, not that it is impossible. Handle the unexpected by status class.
 
 ## Request tracing
 
