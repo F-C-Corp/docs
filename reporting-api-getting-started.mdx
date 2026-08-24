@@ -13,18 +13,20 @@ Germany (KassenSichV) has two export types today, and a tax audit typically asks
 
 Each type has **its own create endpoint**, because the parameters, the meaning of `register_id`, and the error codes differ per type.
 
-| Endpoint | Description |
-| --- | --- |
-| `POST /exports/dsfinvk` | Germany (KassenSichV) — DSFinV-K archive containing the CSV files, `index.xml`, and GDPdU DTD mandated by the German tax authority. Describes the **cash register**. |
-| `POST /exports/tse` | Germany (KassenSichV) — the TSE export: the signed Log Messages themselves, per BSI TR-03153. Describes the **security device**. |
+| Type | Create | Retrieve | Description |
+| --- | --- | --- | --- |
+| DSFinV-K | `POST /exports/dsfinvk` | `GET /exports/dsfinvk/{exportId}` | Germany (KassenSichV) — archive containing the CSV files, `index.xml`, and GDPdU DTD mandated by the German tax authority. Describes the **cash register**. |
+| TSE | `POST /exports/tse` | `GET /exports/tse/{exportId}` | Germany (KassenSichV) — the signed Log Messages themselves, per BSI TR-03153. Describes the **security device**. |
 
 Both require `register_id`, but it means different things:
 
 - **DSFinV-K** is per-register. `register_id` *is* the scope: the archive covers exactly that register.
 - **TSE** is per-device. `register_id` *resolves* which security device to export, and the archive covers that device in full. A Swissbit TSE is shared by every register at the same business premises and offers no filtered export, so a TSE archive contains the log messages of the other registers on that device too. A window spanning a device change resolves to both devices.
 
+Retrieving is type-specific too, so an id that names an export of a different type returns `404`. The path asserts what you believe you are reading rather than handing back a differently-shaped response.
+
 <Note>
-  `POST /exports` with a `type` field in the body still works but is **deprecated**. Use the type-specific endpoints above; they document their own parameters and errors.
+  The untyped `POST /exports` (with a `type` field in the body) and `GET /exports/{exportId}` still work but are **deprecated**. Use the type-specific endpoints above; they document their own parameters, responses and errors.
 </Note>
 
 ## Requesting an export
@@ -87,6 +89,8 @@ Both create endpoints validate the request before enqueuing the job, so a reques
 
 ### Polling and download
 
+Poll the retrieve endpoint for the type you created — `GET /exports/dsfinvk/{exportId}` or `GET /exports/tse/{exportId}`.
+
 If validation passes, the job is enqueued and the response carries `status: "pending"`:
 
 ```json
@@ -143,6 +147,6 @@ If the job fails, `status` is `failed` and the response carries an `error` objec
 ## Limitations today
 
 - DSFinV-K and TSE are the export types currently available, both Germany (KassenSichV)
-- There is no list endpoint; track the export IDs you create
+- There is no list endpoint; track the export IDs you create, along with their type
 - A TSE export cannot be narrowed to one register on a shared device — see the note under [Export types](#export-types)
 - AT (DEP7/RKSV) and IT (RT) export types will be added when those regimes ship
