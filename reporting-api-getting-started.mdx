@@ -65,7 +65,12 @@ That TAR contains one file per Log Message, named exactly as the security device
 
 ### Synchronous validation at create time
 
-Both create endpoints validate the request before enqueuing the job, so a request that cannot succeed fails immediately rather than as a failed job. The window is silently clamped to the register's fiscalized lifetime (`max(from, fiscalized_at)` to `min(to, decommissioned_at ?? now)`), which is why the `from` and `to` in the response may be narrower than what you sent.
+Both create endpoints validate the request before enqueuing the job, so a request that cannot succeed fails immediately rather than as a failed job. The `from` and `to` in the response may therefore be narrower than what you sent — always read them back rather than assuming your window was taken verbatim.
+
+Clamping differs by type, deliberately:
+
+- **DSFinV-K** clamps both bounds to the register's fiscalized lifetime: `max(from, fiscalized_at)` to `min(to, decommissioned_at ?? now)`. It describes the register's trading, which cannot predate its fiscalization.
+- **TSE** clamps only the upper bound, to `min(to, decommissioned_at ?? now)`. It describes the *device*, whose log legitimately predates any register being attached to it — the device's own `initialize` and `registerClient` messages are part of its tamper-evident chain, and clamping `from` would put them out of reach.
 
 **`POST /exports/dsfinvk`**
 
@@ -84,6 +89,7 @@ Both create endpoints validate the request before enqueuing the job, so a reques
 | `422 validation_error` | `validation_error` | Register is not on the KassenSichV regime |
 | `422 validation_error` | `export_tse_no_device_in_window` | The register was not bound to any security device during the clamped window |
 | `422 validation_error` | `export_tse_archive_pending` | No Log Messages are archived for that device over the window yet — retry shortly |
+| `422 validation_error` | `export_tse_window_too_large` | The window covers more Log Messages than one archive can hold. The message names the count and the limit; request a narrower window, back to back if you need the whole period |
 
 `export_dsfinvk_build_pending` and `export_tse_archive_pending` are both transient and both mean "the pipeline has not caught up". Retrying shortly is the right response. They exist so you never receive an archive that silently stops early.
 
@@ -149,4 +155,5 @@ If the job fails, `status` is `failed` and the response carries an `error` objec
 - DSFinV-K and TSE are the export types currently available, both Germany (KassenSichV)
 - There is no list endpoint; track the export IDs you create, along with their type
 - A TSE export cannot be narrowed to one register on a shared device — see the note under [Export types](#export-types)
+- A single TSE archive is capped at 100,000 Log Messages, roughly 47,000 signed operations. A busy register may need a period split across consecutive exports
 - AT (DEP7/RKSV) and IT (RT) export types will be added when those regimes ship
