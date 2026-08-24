@@ -1,11 +1,14 @@
 openapi: 3.0.0
 info:
-  title: OpenFiskal reporting API
+  title: OpenFiskal Cloud Printing API
   description: |-
-    Country-specific fiscal export endpoints for compliance reporting.
+    Server-to-server REST resources for Star CloudPRNT cloud printing: list
+    printers, enqueue print jobs, and manage the printer’s CloudPRNT login.
 
-    Exports are asynchronous: create a job, poll until ready, then download
-    the artifact before the retention deadline.
+    These `/v1/cloud-print/*` resources are called by the integrator
+    (merchant-scoped). The printer hardware itself is a separate consumer that
+    polls the unversioned `/cloud-print/star` endpoint over the CloudPRNT wire
+    protocol — that endpoint is intentionally not part of this documented API.
   version: 1.1.0
   contact: {}
   license:
@@ -16,18 +19,19 @@ servers:
   - url: https://sandbox.api.openfiskal.com/v1
     description: Sandbox
 tags:
-  - name: Exports
-    description: Create and inspect asynchronous fiscal export jobs.
+  - name: Cloud Printing
+    description: |-
+      Star CloudPRNT cloud printing.
+
+      Consumer: the integrator (server-to-server, merchant-scoped via the
+      `X-OpenFiskal-Merchant` header). The physical printer is a *separate* consumer —
+      it polls the unversioned `/cloud-print/star` endpoint using the CloudPRNT wire
+      protocol and is intentionally not part of this REST API.
 paths:
-  /exports/dsfinvk:
+  /cloud-print/print-jobs:
     post:
-      description: |-
-        Germany (KassenSichV). Produces the DSFinV-K archive: the mandated CSV files, `index.xml` and the GDPdU DTD for one register over a time window.
-
-        Asynchronous: returns `202 Accepted` with `status: pending`. Poll `GET /exports/{exportId}` until `status` is `completed` (then `download_url` is set) or `failed`.
-
-        The window is silently clamped to the period the register was live. Sessions still open in the window are skipped; a closed session whose DSFinV-K closing has not been built yet is rejected rather than omitted.
-      operationId: ExportsController_createDsfinvk
+      description: "Enqueues client-rendered content for printing. The bytes are stored verbatim and served to the printer as-is. Returns the job with `status: ready`; poll `GET /v1/cloud-print/print-jobs/{id}` until `done`."
+      operationId: PrintJobsController_create
       parameters:
         - &a1
           name: X-OpenFiskal-Merchant
@@ -36,201 +40,25 @@ paths:
           required: true
           schema:
             type: string
+        - name: Idempotency-Key
+          in: header
+          description: Unique key per endpoint, merchant, and tenant. Retained for at least 24 hours.
+          required: false
+          schema:
+            type: string
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateDsfinvkExportDto"
+              $ref: "#/components/schemas/CreatePrintJobDto"
       responses:
-        "202":
-          description: Export job enqueued
+        "201":
+          description: Print job enqueued
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Export"
-        "400":
-          description: Invalid request
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorDto"
-              examples:
-                default:
-                  summary: invalid_request
-                  value:
-                    code: invalid_request
-                    message: The request body is malformed.
-                    retryable: false
-        "401":
-          description: Authentication failed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorDto"
-              examples:
-                default:
-                  summary: unauthorized
-                  value:
-                    code: unauthorized
-                    message: Authentication failed.
-                    retryable: false
-        "403":
-          description: Authenticated caller is not allowed to access the requested tenant, country, or merchant.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorDto"
-              examples:
-                default:
-                  summary: forbidden
-                  value:
-                    code: forbidden
-                    message: The authenticated caller cannot access this resource.
-                    retryable: false
-        "404":
-          description: Register not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorDto"
-              examples:
-                default:
-                  summary: not_found
-                  value:
-                    code: not_found
-                    message: The requested resource does not exist.
-                    retryable: false
-        "422":
-          description: No closed sessions in the window (`export_dsfinvk_no_closed_sessions`), a closed session is not built yet (`export_dsfinvk_build_pending`), or the register is not on the KassenSichV regime (`validation_error`).
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorDto"
-              examples:
-                default:
-                  summary: regime_validation_failed
-                  value:
-                    code: regime_validation_failed
-                    message: The payload violates regime-specific validation rules.
-                    retryable: false
-      security: &a2
-        - BearerAuth: []
-      summary: Create a DSFinV-K export
-      tags: &a3
-        - Exports
-  /exports/tse:
-    post:
-      description: |-
-        Germany (KassenSichV). Produces the TSE export: the signed Log Messages themselves, per BSI TR-03151. This is the second artefact a Kassennachschau asks for, alongside DSFinV-K, and it describes the security device rather than the cash register.
-
-        Asynchronous: returns `202 Accepted` with `status: pending`. Poll `GET /exports/{exportId}` until `status` is `completed` (then `download_url` is set) or `failed`.
-
-        **Scope is the device, not the register.** A Swissbit TSE serves every register at the same business premises and offers no filtered export, so the archive contains their log messages too. Each `.log` entry is reproduced exactly as the device wrote it, under the filename the device gave it; only the containing archive is assembled by OpenFiskal, because a vendor export is incremental and no single one spans a requested period.
-      operationId: ExportsController_createTse
-      parameters:
-        - *a1
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateTseExportDto"
-      responses:
-        "202":
-          description: Export job enqueued
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Export"
-        "400":
-          description: Invalid request
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorDto"
-              examples:
-                default:
-                  summary: invalid_request
-                  value:
-                    code: invalid_request
-                    message: The request body is malformed.
-                    retryable: false
-        "401":
-          description: Authentication failed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorDto"
-              examples:
-                default:
-                  summary: unauthorized
-                  value:
-                    code: unauthorized
-                    message: Authentication failed.
-                    retryable: false
-        "403":
-          description: Authenticated caller is not allowed to access the requested tenant, country, or merchant.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorDto"
-              examples:
-                default:
-                  summary: forbidden
-                  value:
-                    code: forbidden
-                    message: The authenticated caller cannot access this resource.
-                    retryable: false
-        "404":
-          description: Register not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorDto"
-              examples:
-                default:
-                  summary: not_found
-                  value:
-                    code: not_found
-                    message: The requested resource does not exist.
-                    retryable: false
-        "422":
-          description: The register was on no TSE in the window (`export_tse_no_device_in_window`), no log messages are archived for it yet (`export_tse_archive_pending`), or the register is not on the KassenSichV regime (`validation_error`).
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorDto"
-              examples:
-                default:
-                  summary: regime_validation_failed
-                  value:
-                    code: regime_validation_failed
-                    message: The payload violates regime-specific validation rules.
-                    retryable: false
-      security: *a2
-      summary: Create a TSE export
-      tags: *a3
-  /exports:
-    post:
-      deprecated: true
-      description: "Deprecated. Use the type-specific routes instead: `POST /exports/dsfinvk`, `POST /exports/tse`. They document their own parameters, scoping rules and error codes, which this endpoint cannot because its body depends on `type`. Behaviour is otherwise identical; this route will be removed in a future release."
-      operationId: ExportsController_create
-      parameters:
-        - *a1
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateExportDto"
-      responses:
-        "202":
-          description: Export job enqueued
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Export"
+                $ref: "#/components/schemas/PrintJob"
         "400":
           description: Invalid request
           content:
@@ -296,30 +124,93 @@ paths:
                     code: regime_validation_failed
                     message: The payload violates regime-specific validation rules.
                     retryable: false
-      security: *a2
-      summary: Trigger an export (deprecated)
-      tags: *a3
-  /exports/dsfinvk/{exportId}:
+      security: &a2
+        - BearerAuth: []
+      summary: Enqueue a print job
+      tags: &a3
+        - Cloud Printing
     get:
-      description: |-
-        Returns the DSFinV-K export job. When `status` is `completed`, `download_url` is a signed URL to fetch the TAR archive, valid for 7 days from `completed_at`. When `status` is `failed`, `error.message` (and optional `error.details`) describe why.
-
-        An id that names an export of a different type returns `404`: the path asserts what you believe you are reading, so a mismatch is an error rather than a differently-shaped response.
-      operationId: ExportsController_getDsfinvk
+      description: Returns the merchant’s print jobs, newest first.
+      operationId: PrintJobsController_list
       parameters:
         - *a1
-        - name: exportId
+        - name: limit
+          required: false
+          in: query
+          description: Max results (default 50, max 100).
+          schema:
+            type: string
+        - name: register_id
+          required: false
+          in: query
+          description: Filter to a single register.
+          schema:
+            type: string
+        - name: status
+          required: false
+          in: query
+          schema:
+            enum:
+              - ready
+              - in_flight
+              - done
+              - cancelled
+            type: string
+      responses:
+        "200":
+          description: Print jobs returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PrintJob"
+        "401":
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: unauthorized
+                  value:
+                    code: unauthorized
+                    message: Authentication failed.
+                    retryable: false
+        "403":
+          description: Authenticated caller is not allowed to access the requested tenant, country, or merchant.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: forbidden
+                  value:
+                    code: forbidden
+                    message: The authenticated caller cannot access this resource.
+                    retryable: false
+      security: *a2
+      summary: List print jobs
+      tags: *a3
+  /cloud-print/print-jobs/{printJobId}:
+    get:
+      operationId: PrintJobsController_get
+      parameters:
+        - *a1
+        - name: printJobId
           required: true
           in: path
           schema:
             type: string
       responses:
         "200":
-          description: Export job returned
+          description: Print job returned
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Export"
+                $ref: "#/components/schemas/PrintJob"
         "401":
           description: Authentication failed
           content:
@@ -347,7 +238,7 @@ paths:
                     message: The authenticated caller cannot access this resource.
                     retryable: false
         "404":
-          description: No DSFinV-K export with this id
+          description: Print job not found
           content:
             application/json:
               schema:
@@ -360,29 +251,21 @@ paths:
                     message: The requested resource does not exist.
                     retryable: false
       security: *a2
-      summary: Retrieve a DSFinV-K export
+      summary: Retrieve a print job
       tags: *a3
-  /exports/tse/{exportId}:
-    get:
-      description: |-
-        Returns the TSE export job. When `status` is `completed`, `download_url` is a signed URL to fetch the TAR archive, valid for 7 days from `completed_at`. When `status` is `failed`, `error.message` (and optional `error.details`) describe why.
-
-        An id that names an export of a different type returns `404`: the path asserts what you believe you are reading, so a mismatch is an error rather than a differently-shaped response.
-      operationId: ExportsController_getTse
+    delete:
+      description: Cancels a job that has not yet been claimed by a printer. Only valid while `status` is `ready`.
+      operationId: PrintJobsController_cancel
       parameters:
         - *a1
-        - name: exportId
+        - name: printJobId
           required: true
           in: path
           schema:
             type: string
       responses:
-        "200":
-          description: Export job returned
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Export"
+        "204":
+          description: Print job cancelled
         "401":
           description: Authentication failed
           content:
@@ -410,7 +293,7 @@ paths:
                     message: The authenticated caller cannot access this resource.
                     retryable: false
         "404":
-          description: No TSE export with this id
+          description: Print job not found
           content:
             application/json:
               schema:
@@ -422,28 +305,263 @@ paths:
                     code: not_found
                     message: The requested resource does not exist.
                     retryable: false
+        "409":
+          description: Job already in-flight or printed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: print_job_not_cancellable
+                  value:
+                    code: print_job_not_cancellable
+                    message: Job already in-flight or printed
+                    retryable: false
       security: *a2
-      summary: Retrieve a TSE export
+      summary: Cancel a print job
       tags: *a3
-  /exports/{exportId}:
+  /cloud-print/printer-credentials:
     get:
-      deprecated: true
-      description: "Deprecated. Use the type-specific routes instead: `GET /exports/dsfinvk/{exportId}`, `GET /exports/tse/{exportId}`. Behaviour is otherwise identical, except that this route does not check the export's type against the path. It will be removed in a future release."
-      operationId: ExportsController_get
+      description: Returns the merchant’s CloudPRNT login (username + secret) and the endpoint URL to configure. The secret is generated by the platform on first access, so this always returns credentials.
+      operationId: PrinterCredentialsController_get
       parameters:
-        - *a1
-        - name: exportId
+        - &a4
+          name: X-OpenFiskal-Merchant
+          in: header
+          description: Merchant identifier returned by the merchants resource.
           required: true
-          in: path
           schema:
             type: string
       responses:
         "200":
-          description: Export job returned
+          description: Printer credentials
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Export"
+                $ref: "#/components/schemas/PrinterCredentials"
+        "401":
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: unauthorized
+                  value:
+                    code: unauthorized
+                    message: Authentication failed.
+                    retryable: false
+        "403":
+          description: Authenticated caller is not allowed to access the requested tenant, country, or merchant.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: forbidden
+                  value:
+                    code: forbidden
+                    message: The authenticated caller cannot access this resource.
+                    retryable: false
+      security: &a5
+        - BearerAuth: []
+      summary: Get printer credentials
+      tags: &a6
+        - Cloud Printing
+    put:
+      description: Sets a friendly Basic-auth username (e.g. the shop domain) for the printer login. The platform-owned secret is unchanged. Returns the full credentials.
+      operationId: PrinterCredentialsController_setUsername
+      parameters:
+        - *a4
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetPrinterUsernameDto"
+      responses:
+        "200":
+          description: Printer credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrinterCredentials"
+        "401":
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: unauthorized
+                  value:
+                    code: unauthorized
+                    message: Authentication failed.
+                    retryable: false
+        "403":
+          description: Authenticated caller is not allowed to access the requested tenant, country, or merchant.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: forbidden
+                  value:
+                    code: forbidden
+                    message: The authenticated caller cannot access this resource.
+                    retryable: false
+        "409":
+          description: Printer username already in use
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: resource_conflict
+                  value:
+                    code: resource_conflict
+                    message: Printer username already in use
+                    retryable: false
+        "422":
+          description: Domain validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: regime_validation_failed
+                  value:
+                    code: regime_validation_failed
+                    message: The payload violates regime-specific validation rules.
+                    retryable: false
+      security: *a5
+      summary: Set the printer username
+      tags: *a6
+  /cloud-print/printer-credentials/rotate:
+    post:
+      description: Generates a new secret. Any printer still configured with the old one must be reconfigured.
+      operationId: PrinterCredentialsController_rotate
+      parameters:
+        - *a4
+      responses:
+        "200":
+          description: Printer credentials with the new secret
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrinterCredentials"
+        "401":
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: unauthorized
+                  value:
+                    code: unauthorized
+                    message: Authentication failed.
+                    retryable: false
+        "403":
+          description: Authenticated caller is not allowed to access the requested tenant, country, or merchant.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: forbidden
+                  value:
+                    code: forbidden
+                    message: The authenticated caller cannot access this resource.
+                    retryable: false
+      security: *a5
+      summary: Rotate the printer secret
+      tags: *a6
+  /cloud-print/printers:
+    get:
+      description: Returns the printers the platform has seen for the merchant, most-recently-active first. A printer appears once it has polled the CloudPRNT endpoint at least once; health and telemetry reflect its latest poll.
+      operationId: PrintersController_list
+      parameters:
+        - &a7
+          name: X-OpenFiskal-Merchant
+          in: header
+          description: Merchant identifier returned by the merchants resource.
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Printers returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Printer"
+        "401":
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: unauthorized
+                  value:
+                    code: unauthorized
+                    message: Authentication failed.
+                    retryable: false
+        "403":
+          description: Authenticated caller is not allowed to access the requested tenant, country, or merchant.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDto"
+              examples:
+                default:
+                  summary: forbidden
+                  value:
+                    code: forbidden
+                    message: The authenticated caller cannot access this resource.
+                    retryable: false
+      security: &a8
+        - BearerAuth: []
+      summary: List printers
+      tags: &a9
+        - Cloud Printing
+  /cloud-print/printers/{printerId}:
+    patch:
+      description: Partial update of a printer — currently the operator-assigned nickname. A null or empty `name` clears it (display falls back to the MAC address). Register mapping is not settable here yet.
+      operationId: PrintersController_update
+      parameters:
+        - *a7
+        - name: printerId
+          required: true
+          in: path
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePrinterDto"
+      responses:
+        "200":
+          description: Updated printer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Printer"
         "401":
           description: Authentication failed
           content:
@@ -471,7 +589,7 @@ paths:
                     message: The authenticated caller cannot access this resource.
                     retryable: false
         "404":
-          description: Export not found
+          description: Printer not found
           content:
             application/json:
               schema:
@@ -483,9 +601,9 @@ paths:
                     code: not_found
                     message: The requested resource does not exist.
                     retryable: false
-      security: *a2
-      summary: Retrieve an export (deprecated)
-      tags: *a3
+      security: *a8
+      summary: Update a printer
+      tags: *a9
 components:
   securitySchemes:
     BearerAuth:
@@ -1043,7 +1161,7 @@ components:
           description: Required for POS, must be null for ONLINE.
         source:
           type: string
-          enum: &a4
+          enum: &a10
             - POS
             - ONLINE
           example: POS
@@ -1120,7 +1238,7 @@ components:
           description: Required for POS, must be null for ONLINE.
         source:
           type: string
-          enum: *a4
+          enum: *a10
           example: POS
         currency:
           type: string
@@ -1184,7 +1302,7 @@ components:
           description: Required for POS, must be null for ONLINE.
         source:
           type: string
-          enum: *a4
+          enum: *a10
           example: POS
         currency:
           type: string
@@ -1677,12 +1795,12 @@ components:
           description: The RegisterSession this Operation is bound to. Set on every POS Operation; null for ONLINE goods-movement (no register, hence no session). On session-event variants this is the session being opened, adjusted, or closed; on goods-movement variants it is the session the operation was rung up during.
         source:
           type: string
-          enum: &a5
+          enum: &a11
             - POS
             - ONLINE
         status:
           type: string
-          enum: &a6
+          enum: &a12
             - open
             - completed
             - voided
@@ -1700,7 +1818,7 @@ components:
         fiscal_information:
           nullable: true
           description: The Fiskaly signature attached to this Operation, when one exists. Null until the operation has been signed.
-          oneOf: &a7
+          oneOf: &a13
             - title: FiscalInformationKassenSichV
               allOf:
                 - $ref: "#/components/schemas/FiscalInformationKassenSichV"
@@ -1710,7 +1828,7 @@ components:
             - title: FiscalInformationRT
               allOf:
                 - $ref: "#/components/schemas/FiscalInformationRT"
-          discriminator: &a8
+          discriminator: &a14
             propertyName: regime
             mapping:
               KassenSichV: "#/components/schemas/FiscalInformationKassenSichV"
@@ -1813,10 +1931,10 @@ components:
           description: The RegisterSession this Operation is bound to. Set on every POS Operation; null for ONLINE goods-movement (no register, hence no session). On session-event variants this is the session being opened, adjusted, or closed; on goods-movement variants it is the session the operation was rung up during.
         source:
           type: string
-          enum: *a5
+          enum: *a11
         status:
           type: string
-          enum: *a6
+          enum: *a12
         currency:
           type: string
           description: ISO 4217 currency code.
@@ -1831,8 +1949,8 @@ components:
         fiscal_information:
           nullable: true
           description: The Fiskaly signature attached to this Operation, when one exists. Null until the operation has been signed.
-          oneOf: *a7
-          discriminator: *a8
+          oneOf: *a13
+          discriminator: *a14
         completed_at:
           type: string
           format: date-time
@@ -1921,10 +2039,10 @@ components:
           description: The RegisterSession this Operation is bound to. Set on every POS Operation; null for ONLINE goods-movement (no register, hence no session). On session-event variants this is the session being opened, adjusted, or closed; on goods-movement variants it is the session the operation was rung up during.
         source:
           type: string
-          enum: *a5
+          enum: *a11
         status:
           type: string
-          enum: *a6
+          enum: *a12
         currency:
           type: string
           description: ISO 4217 currency code.
@@ -1939,8 +2057,8 @@ components:
         fiscal_information:
           nullable: true
           description: The Fiskaly signature attached to this Operation, when one exists. Null until the operation has been signed.
-          oneOf: *a7
-          discriminator: *a8
+          oneOf: *a13
+          discriminator: *a14
         completed_at:
           type: string
           format: date-time
@@ -2029,10 +2147,10 @@ components:
           description: The RegisterSession this Operation is bound to. Set on every POS Operation; null for ONLINE goods-movement (no register, hence no session). On session-event variants this is the session being opened, adjusted, or closed; on goods-movement variants it is the session the operation was rung up during.
         source:
           type: string
-          enum: *a5
+          enum: *a11
         status:
           type: string
-          enum: *a6
+          enum: *a12
         currency:
           type: string
           description: ISO 4217 currency code.
@@ -2047,8 +2165,8 @@ components:
         fiscal_information:
           nullable: true
           description: The Fiskaly signature attached to this Operation, when one exists. Null until the operation has been signed.
-          oneOf: *a7
-          discriminator: *a8
+          oneOf: *a13
+          discriminator: *a14
         completed_at:
           type: string
           format: date-time
@@ -2109,10 +2227,10 @@ components:
           description: The RegisterSession this Operation is bound to. Set on every POS Operation; null for ONLINE goods-movement (no register, hence no session). On session-event variants this is the session being opened, adjusted, or closed; on goods-movement variants it is the session the operation was rung up during.
         source:
           type: string
-          enum: *a5
+          enum: *a11
         status:
           type: string
-          enum: *a6
+          enum: *a12
         currency:
           type: string
           description: ISO 4217 currency code.
@@ -2127,8 +2245,8 @@ components:
         fiscal_information:
           nullable: true
           description: The Fiskaly signature attached to this Operation, when one exists. Null until the operation has been signed.
-          oneOf: *a7
-          discriminator: *a8
+          oneOf: *a13
+          discriminator: *a14
         completed_at:
           type: string
           format: date-time
@@ -2190,10 +2308,10 @@ components:
           description: The RegisterSession this Operation is bound to. Set on every POS Operation; null for ONLINE goods-movement (no register, hence no session). On session-event variants this is the session being opened, adjusted, or closed; on goods-movement variants it is the session the operation was rung up during.
         source:
           type: string
-          enum: *a5
+          enum: *a11
         status:
           type: string
-          enum: *a6
+          enum: *a12
         currency:
           type: string
           description: ISO 4217 currency code.
@@ -2208,8 +2326,8 @@ components:
         fiscal_information:
           nullable: true
           description: The Fiskaly signature attached to this Operation, when one exists. Null until the operation has been signed.
-          oneOf: *a7
-          discriminator: *a8
+          oneOf: *a13
+          discriminator: *a14
         completed_at:
           type: string
           format: date-time
@@ -2278,10 +2396,10 @@ components:
           description: The RegisterSession this Operation is bound to. Set on every POS Operation; null for ONLINE goods-movement (no register, hence no session). On session-event variants this is the session being opened, adjusted, or closed; on goods-movement variants it is the session the operation was rung up during.
         source:
           type: string
-          enum: *a5
+          enum: *a11
         status:
           type: string
-          enum: *a6
+          enum: *a12
         currency:
           type: string
           description: ISO 4217 currency code.
@@ -2296,8 +2414,8 @@ components:
         fiscal_information:
           nullable: true
           description: The Fiskaly signature attached to this Operation, when one exists. Null until the operation has been signed.
-          oneOf: *a7
-          discriminator: *a8
+          oneOf: *a13
+          discriminator: *a14
         completed_at:
           type: string
           format: date-time

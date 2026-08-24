@@ -3677,23 +3677,9 @@ components:
           description: Reason for voiding the operation
       required:
         - reason
-    ExportType:
-      type: string
-      enum:
-        - dsfinvk
-      description: Country-specific fiscal export type.
-    CreateExportDto:
+    CreateDsfinvkExportDto:
       type: object
       properties:
-        type:
-          example: dsfinvk
-          description: Country-specific fiscal export type.
-          allOf:
-            - $ref: "#/components/schemas/ExportType"
-        register_id:
-          type: string
-          example: reg_01HABC
-          description: Optional register to scope the export to. When omitted, the export covers all eligible registers for the merchant under the matching fiscal regime.
         from:
           type: string
           format: date-time
@@ -3702,10 +3688,19 @@ components:
           type: string
           format: date-time
           example: 2026-03-31T23:59:59Z
+        register_id:
+          type: string
+          example: reg_01HABC
+          description: "Register to export. DSFinV-K is per-register: the archive covers exactly this register, and it must be on the KassenSichV regime. The window is silently clamped to the period the register was live."
       required:
-        - type
         - from
         - to
+        - register_id
+    ExportType:
+      type: string
+      enum:
+        - dsfinvk
+        - tse
     ExportError:
       type: object
       properties:
@@ -3718,6 +3713,64 @@ components:
           description: Structured error payload (e.g. provider error response). Shape varies by export type.
       required:
         - message
+    TseExportFreshDrain:
+      type: string
+      enum:
+        - not_needed
+        - completed
+        - timed_out
+        - failed
+      description: What draining was attempted when the archive was compiled. `not_needed` means the window closed before the data we already held, so the device was never contacted.
+    TseExportCoverageDto:
+      type: object
+      properties:
+        tse_serial_numbers:
+          description: Every security device that contributed. More than one when the window spans a device swap. A Swissbit TSE serves every till at a location, so an archive scoped to one register contains its neighbours at the same premises.
+          type: array
+          items:
+            type: string
+        signature_counter_first:
+          type: number
+          nullable: true
+          description: Lowest signature counter present.
+        signature_counter_last:
+          type: number
+          nullable: true
+          description: Highest signature counter present.
+        log_message_count:
+          type: number
+          description: How many log messages the archive contains.
+        covered_from:
+          type: string
+          format: date-time
+          nullable: true
+          description: Log time of the earliest message inside, not the requested window start.
+        covered_to:
+          type: string
+          format: date-time
+          nullable: true
+          description: Log time of the latest message inside, not the requested window end.
+        covers_requested_window:
+          type: boolean
+          description: "Whether coverage reached the requested end of the window. False means the archive stops early because the security device could not be drained in time. It does NOT mean the window was empty: a quiet period legitimately contains no messages while still being fully covered."
+        last_drained_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When log messages were last drained off the device, i.e. how current this archive is.
+        fresh_drain:
+          description: What draining was attempted when the archive was compiled. `not_needed` means the window closed before the data we already held, so the device was never contacted.
+          allOf:
+            - $ref: "#/components/schemas/TseExportFreshDrain"
+        gapless:
+          type: boolean
+          description: Whether the signature counters present form an unbroken run. A gap means a drain was lost, and because a vendor export is destructive it cannot be recovered.
+      required:
+        - tse_serial_numbers
+        - log_message_count
+        - covers_requested_window
+        - fresh_drain
+        - gapless
     Export:
       type: object
       properties:
@@ -3750,6 +3803,11 @@ components:
           description: Failure information. Present only when status is `failed`.
           allOf:
             - $ref: "#/components/schemas/ExportError"
+        coverage:
+          nullable: true
+          description: What the artifact covers. TSE exports only, and only once `completed`. Absent for other export types and while the export is still pending.
+          allOf:
+            - $ref: "#/components/schemas/TseExportCoverageDto"
         created_at:
           type: string
           format: date-time
@@ -3764,3 +3822,206 @@ components:
         - from
         - to
         - created_at
+    CreateTseExportDto:
+      type: object
+      properties:
+        from:
+          type: string
+          format: date-time
+          example: 2026-03-01T00:00:00Z
+        to:
+          type: string
+          format: date-time
+          example: 2026-03-31T23:59:59Z
+        register_id:
+          type: string
+          example: reg_01HABC
+          description: "Register whose signing device to export. NOT the scope: the register resolves to the TSE(s) it signed on during the window, and the archive covers those devices in full. A Swissbit TSE is shared by every register at the same business premises and offers no filtered export, so the archive contains their log messages too. A window spanning a device change resolves to both devices."
+      required:
+        - from
+        - to
+        - register_id
+    CreateExportDto:
+      type: object
+      properties:
+        type:
+          example: dsfinvk
+          description: Country-specific fiscal export type.
+          allOf:
+            - $ref: "#/components/schemas/ExportType"
+        register_id:
+          type: string
+          example: reg_01HABC
+          description: Optional register to scope the export to. When omitted, the export covers all eligible registers for the merchant under the matching fiscal regime.
+        from:
+          type: string
+          format: date-time
+          example: 2026-03-01T00:00:00Z
+        to:
+          type: string
+          format: date-time
+          example: 2026-03-31T23:59:59Z
+      required:
+        - type
+        - from
+        - to
+    CreatePrintJobDto:
+      type: object
+      properties:
+        media_type:
+          type: string
+          enum:
+            - application/vnd.star.starprnt
+            - application/vnd.star.line
+            - image/vnd.star.png
+            - image/png
+            - text/vnd.star.markup
+            - text/plain
+          example: text/plain
+          description: CloudPRNT content media type the bytes are encoded as.
+        content_base64:
+          type: string
+          description: The print job content, base64-encoded. Decoded and stored verbatim; served to the printer as-is.
+          example: SGVsbG8gcHJpbnRlcg==
+        register_id:
+          type: string
+          example: reg_01HABC
+          description: Target register. A printer mapped to this register prints the job; when omitted the job is merchant-wide.
+        printer_id:
+          type: string
+          example: kp_01HABC
+          description: Target printer (a printer id from the printers resource). When set, ONLY that printer prints the job — the client owns the routing decision, no register mapping needed. Takes precedence over `register_id`.
+        operation_id:
+          type: string
+          example: op_01HABC
+          description: Optional print-once handle. Reusing the same value returns the existing job instead of creating a duplicate.
+      required:
+        - media_type
+        - content_base64
+    PrintJob:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum:
+            - ready
+            - in_flight
+            - done
+            - cancelled
+        media_type:
+          type: string
+          description: CloudPRNT content media type of the stored bytes.
+        byte_size:
+          type: number
+          description: Size of the stored content in bytes.
+        register_id:
+          type: string
+          nullable: true
+          description: Target register, or null for a merchant-wide job.
+        operation_id:
+          type: string
+          nullable: true
+          description: Print-once handle supplied on creation, if any.
+        cancellation_reason:
+          type: string
+          nullable: true
+          description: Why a cancelled job was cancelled (BY_USER, TOO_OLD); null unless status is cancelled.
+        label:
+          type: string
+          description: Human-readable label shown in the console queue view.
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - status
+        - media_type
+        - byte_size
+        - label
+        - created_at
+    PrinterCredentials:
+      type: object
+      properties:
+        cloudprnt_url:
+          type: string
+          description: The CloudPRNT endpoint URL to configure on the printer.
+          example: https://api.openfiskal.com/cloud-print/star
+        username:
+          type: string
+          description: Basic-auth username.
+          example: demo-store.myshopify.com
+        secret:
+          type: string
+          description: Basic-auth secret (password).
+      required:
+        - cloudprnt_url
+        - username
+        - secret
+    SetPrinterUsernameDto:
+      type: object
+      properties:
+        username:
+          type: string
+          description: CloudPRNT Basic-auth username the printer is configured with. Unique per environment.
+          example: demo-store.myshopify.com
+          maxLength: 255
+      required:
+        - username
+    Printer:
+      type: object
+      properties:
+        id:
+          type: string
+        mac_address:
+          type: string
+          description: Printer MAC address — the stable device identity.
+        name:
+          type: string
+          nullable: true
+          description: Operator-assigned nickname (set in the console).
+        model:
+          type: string
+          nullable: true
+          description: Printer model, best-effort from the poll `clientType` (not every firmware reports it).
+        health_state:
+          type: string
+          enum:
+            - OK
+            - PAPER_LOW
+            - PAPER_EMPTY
+            - COVER_OPEN
+            - ERROR
+            - UNKNOWN
+          description: Device health derived from the last poll’s Star ASB status.
+        last_status_code:
+          type: string
+          nullable: true
+          description: Decoded status code from the last poll, e.g. "200 OK".
+        register_id:
+          type: string
+          nullable: true
+          description: The POS register this printer is mapped to, or null when it serves merchant-wide jobs.
+        register_name:
+          type: string
+          nullable: true
+          description: Name of the mapped register, for display.
+        last_seen_at:
+          type: string
+          format: date-time
+          description: When the platform last received a poll from this printer.
+      required:
+        - id
+        - mac_address
+        - health_state
+        - last_seen_at
+    UpdatePrinterDto:
+      type: object
+      properties:
+        name:
+          type: string
+          nullable: true
+          maxLength: 255
+          description: Operator-assigned nickname. Null or empty clears it (falls back to the MAC).
+          example: Front counter
